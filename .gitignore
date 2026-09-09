@@ -1,0 +1,14 @@
+# Dependencies / build
+node_modules/
+dist/
+
+# PRIVACY: real Tzivos Hashem soldier data — NEVER commit these.
+# The tracked src/data/roster.generated.js is the ANONYMIZED demo (fake soldiers).
+# If you regenerate the REAL roster locally, do NOT `git add` it.
+*soldiers*.html
+*soldiers*.zip
+/resources/
+
+# local/editor
+.DS_Store
+*.local

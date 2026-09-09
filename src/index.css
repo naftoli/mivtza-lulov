@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   Mivtza Lulav — "soldiers" theme: army green + gold on cream.
+   (Semantic token names like `navy`/`blue`/`cyan` are kept so class names
+   stay stable, but they all resolve to the green family here — gold is the
+   pop accent, red is reserved for danger/remove.)
+   ========================================================================= */
+@theme {
+  --color-ink: #1f2a17;
+  --color-navy: #2c3f20;        /* headings / primary text (army-800) */
+  --color-navy-dark: #24331c;   /* footer / dark bg (army-900) */
+  --color-blue: #46662b;        /* accents / links / counts (army-600) */
+  --color-blue-bright: #375024;
+  --color-cyan: #5c7f3a;        /* secondary accent (army-500) */
+  --color-red: #c0392b;         /* danger / remove only */
+  --color-gold: #e6b422;
+  --color-gold-dark: #c8951a;
+  --color-green: #46662b;
+  --color-orange: #d97706;
+  --color-purple: #5b3fa8;
+
+  --color-paper: #faf7ee;       /* page background (cream) */
+  --color-card: #ffffff;
+  --color-line: #e6ddc9;        /* warm hairline */
+  --color-muted: #5f6a4a;       /* muted olive text */
+  --color-track: #ece4d1;       /* progress tracks / chips / soft fills */
+
+  --font-display: "Georgia", "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-cond: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heb: "Frank Ruhl Libre", "Times New Roman", serif;
+
+  --shadow-card: 0 1px 2px rgba(31, 42, 23, 0.06), 0 8px 24px -12px rgba(31, 42, 23, 0.25);
+  --shadow-hover: 0 14px 30px -14px rgba(31, 42, 23, 0.35);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { line-height: 1.15; }
+
+/* cream canvas with soft green/gold glow */
+.bg-field {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(circle at 15% 18%, rgba(70, 102, 43, 0.06), transparent 45%),
+    radial-gradient(circle at 85% 8%, rgba(230, 180, 34, 0.09), transparent 42%);
+}
+
+/* subtle brand strip (used on login cards) */
+.band { height: 5px; display: block; background: linear-gradient(90deg, var(--color-gold), var(--color-green)); }
+.band > i { display: none; }
+
+/* small section label */
+.sh {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-gold-dark);
+}
+
+.kick { letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* buttons — soft, rounded, friendly.
+   In @layer components so Tailwind utilities (hidden, w-full, whitespace-*) win. */
+@layer components {
+  .btn {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    border: 0;
+    cursor: pointer;
+    padding: 10px 18px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: transform 0.12s, filter 0.12s, background 0.15s, color 0.15s;
+    text-decoration: none;
+  }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.04); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
+  .btn-p { background: var(--color-gold); color: var(--color-ink); box-shadow: 0 1px 2px rgba(31,42,23,.12); }
+  .btn-s { background: var(--color-navy); color: #fff; }
+  .btn-navy { background: var(--color-navy); color: #fff; }
+  .btn-red { background: var(--color-red); color: #fff; }
+  .btn-o { background: #fff; color: var(--color-navy); box-shadow: inset 0 0 0 1.5px var(--color-line); }
+  .btn-o:hover { background: var(--color-paper); }
+  .btn-o-white { background: rgba(255,255,255,.10); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
+  .btn-ghost { background: transparent; color: var(--color-navy); }
+  .btn-ghost:hover { background: rgba(44,63,32,.06); filter: none; }
+}
+
+/* hero — green gradient with a warm glow (class name kept for stability) */
+.hero-navy {
+  background:
+    radial-gradient(1000px 380px at 15% -25%, rgba(230,180,34,.18), transparent 60%),
+    linear-gradient(135deg, var(--color-navy) 0%, #1a2712 100%);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+/* animations */
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.animate-rise { animation: rise 0.35s ease-out both; }
+@keyframes pop { 0% { transform: scale(0.9); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.animate-pop { animation: pop 0.3s ease-out both; }
+@keyframes shake-lulav { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
+.animate-shake { display: inline-block; transform-origin: bottom center; animation: shake-lulav 0.45s ease-in-out 4; }
+
+.font-heb { font-family: var(--font-heb); direction: rtl; unicode-bidi: isolate; }
