@@ -108,7 +108,7 @@ export default function Home() {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button to="/login" variant="gold">I'm a Soldier — Log Shakes</Button>
-            <a href="#schools" className="btn btn-o-white">See the Campaigns</a>
+            <button type="button" onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })} className="btn btn-o-white">See the Campaigns</button>
           </div>
         </div>
       </section>
