@@ -4,8 +4,8 @@ import { Card, SectionHeader } from './ui.jsx'
 
 // Gallery of photos kids uploaded from the field ("Mivtzoim Pictures").
 export default function PhotoWall({ shakes }) {
-  // one tile per photo (an entry can carry several)
-  const photos = shakes.flatMap((s) => {
+  // one tile per photo (an entry can carry several) — only APPROVED photos show
+  const photos = shakes.filter((s) => s.photoApproved).flatMap((s) => {
     const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
     return imgs.map((img, i) => ({ ...s, photo: img, id: `${s.id}-${i}` }))
   })

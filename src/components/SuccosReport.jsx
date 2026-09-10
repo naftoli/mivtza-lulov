@@ -17,7 +17,7 @@ const DAYS = [
 
 const DEFAULTS = { days: [], minutes: '', peopleWithFriends: '', peoplePersonal: '', story: '', photos: [] }
 
-export default function SuccosReport({ kid }) {
+export default function SuccosReport({ kid, loggedShakes = 0 }) {
   const fileRef = useRef(null)
   const { data: report, loading } = useLiveData(() => getReport(kid.id), [kid.id])
   const [form, setForm] = useState(null)
@@ -27,7 +27,10 @@ export default function SuccosReport({ kid }) {
   // Prefill once the saved report has loaded.
   useEffect(() => {
     if (!loading && form === null) {
-      setForm(report ? { ...DEFAULTS, ...report, days: report.days || [] } : { ...DEFAULTS })
+      const base = report ? { ...DEFAULTS, ...report, days: report.days || [] } : { ...DEFAULTS }
+      // Link the two forms: default "people personally" to the shakes already logged.
+      if (base.peoplePersonal === '' || base.peoplePersonal == null) base.peoplePersonal = loggedShakes || ''
+      setForm(base)
       if (report?.updatedAt) setSavedAt(report.updatedAt)
     }
   }, [loading, report, form])
@@ -103,7 +106,7 @@ export default function SuccosReport({ kid }) {
           <Field label="People shaken — with friends" hint="Total together with your friend(s)">
             <Input type="number" min="0" value={form.peopleWithFriends} onChange={(e) => set('peopleWithFriends', e.target.value)} placeholder="e.g. 60" />
           </Field>
-          <Field label="People shaken — personally" hint="Your own share (if shared, divide the total)">
+          <Field label="People shaken — personally" hint={loggedShakes ? `Auto-filled from your ${loggedShakes} logged shakes — adjust if needed` : 'Your own share (if shared, divide the total)'}>
             <Input type="number" min="0" value={form.peoplePersonal} onChange={(e) => set('peoplePersonal', e.target.value)} placeholder="e.g. 30" />
           </Field>
         </div>

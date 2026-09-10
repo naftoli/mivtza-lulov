@@ -13,7 +13,7 @@
 
 import { SEED } from '../data/seed.js'
 
-const VERSION = 'v8'
+const VERSION = 'v9'
 const KEYS = {
   schools: `ml_${VERSION}_schools`,
   kids: `ml_${VERSION}_kids`,
@@ -153,22 +153,33 @@ export async function getLeaderboard(schoolId, limit = 10) {
     .slice(0, limit)
 }
 
-// Class/platoon standings: total shakes grouped by each soldier's grade.
-export async function getClassLeaderboard(schoolId, limit = 10) {
+// Class/platoon standings — each class has its OWN goal (kids in class × 5),
+// same automatic rule as schools.
+export async function getClassLeaderboard(schoolId, limit = 12) {
   await delay()
+  const kidsAll = read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
   const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
   const gradeOf = {}
-  for (const k of read(KEYS.kids, [])) gradeOf[k.id] = k.grade || '—'
-  const totals = {}
+  const classKids = {}
+  for (const k of kidsAll) {
+    const g = k.grade || '—'
+    gradeOf[k.id] = g
+    classKids[g] = (classKids[g] || 0) + 1
+  }
+  const shaken = {}
   for (const s of shakes) {
     const g = gradeOf[s.kidId] || '—'
-    if (!totals[g]) totals[g] = { grade: g, count: 0, soldiers: new Set() }
-    totals[g].count += s.count
-    totals[g].soldiers.add(s.kidId)
+    shaken[g] = (shaken[g] || 0) + s.count
   }
-  return Object.values(totals)
-    .map((t) => ({ grade: t.grade, count: t.count, soldiers: t.soldiers.size }))
-    .sort((a, b) => b.count - a.count)
+  const grades = new Set([...Object.keys(classKids), ...Object.keys(shaken)])
+  return [...grades]
+    .map((g) => {
+      const count = shaken[g] || 0
+      const kidCount = classKids[g] || 0
+      const goal = Math.max(1, kidCount * PER_KID)
+      return { grade: g, count, kidCount, goal, percent: Math.min(100, Math.round((count / goal) * 100)) }
+    })
+    .sort((a, b) => b.percent - a.percent || b.count - a.count)
     .slice(0, limit)
 }
 
@@ -260,6 +271,7 @@ export async function addShake({ kid, count, note, photos }) {
     note: note?.trim() || '', // the optional "story"
     photos: list,
     photo: list[0] || null, // first photo, for compact feed thumbnails
+    photoApproved: list.length === 0, // photos start PENDING; approved by an admin
     createdAt: new Date().toISOString(), // system-logged date + time
     hidden: false,
   }
@@ -283,6 +295,33 @@ export async function addShake({ kid, count, note, photos }) {
     }
   }
   return clone(entry)
+}
+
+// ---- photo approval ----
+export async function getPendingPhotos(schoolId) {
+  await delay()
+  return read(KEYS.shakes, [])
+    .filter((s) => s.schoolId === schoolId && !s.hidden && !s.photoApproved && (s.photos?.length || s.photo))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+}
+
+export async function approvePhotos(shakeId) {
+  await delay()
+  const shakes = read(KEYS.shakes, [])
+  const s = shakes.find((x) => x.id === shakeId)
+  if (s) s.photoApproved = true
+  write(KEYS.shakes, shakes)
+  return s ? clone(s) : null
+}
+
+// Reject = remove the photos (the shake entry + its count stay).
+export async function rejectPhotos(shakeId) {
+  await delay()
+  const shakes = read(KEYS.shakes, [])
+  const s = shakes.find((x) => x.id === shakeId)
+  if (s) { s.photos = []; s.photo = null; s.photoApproved = true }
+  write(KEYS.shakes, shakes)
+  return s ? clone(s) : null
 }
 
 export async function setShakeHidden(shakeId, hidden) {

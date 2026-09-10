@@ -12,6 +12,17 @@ import ClassLeaderboard from '../components/ClassLeaderboard.jsx'
 import SharePanel from '../components/SharePanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
+function Stat({ value, label, icon, color }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="grid h-12 w-12 flex-none place-items-center rounded-xl text-2xl" style={{ background: `${color}18` }}>{icon}</span>
+      <div className="min-w-0">
+        <div className="font-display text-2xl font-medium leading-tight tabular-nums text-navy">{value}</div>
+        <div className="whitespace-nowrap font-cond text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
@@ -33,6 +44,8 @@ export default function SchoolCampaign() {
   }
 
   const isMySchool = kid?.schoolId === school.id
+  const photoCount = (shakes || []).reduce((n, s) => n + (s.photos?.length || (s.photo ? 1 : 0)), 0)
+  const avgPerSoldier = school.soldierCount ? Math.round(school.total / school.soldierCount) : 0
 
   return (
     <div>
@@ -58,13 +71,12 @@ export default function SchoolCampaign() {
         {/* Left column */}
         <div className="space-y-6">
           <Card className="p-6" topColor={school.color}>
-            <GoalMeter school={school} />
-            <div className="mt-6 flex flex-wrap gap-3">
-              {isMySchool
+            <GoalMeter school={school} variant="wide"
+              actions={isMySchool
                 ? <Button to="/me" variant="gold">Log my shakes</Button>
                 : <Button to="/login" variant="gold">I'm a soldier here</Button>}
-              <Button variant="outline" onClick={() => setShowShare(true)}>↗ Share</Button>
-            </div>
+              centerAction={<Button variant="outline" onClick={() => setShowShare(true)}>↗ Share</Button>}
+            />
           </Card>
 
           {school.bonusActive ? (

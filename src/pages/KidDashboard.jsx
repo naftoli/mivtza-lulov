@@ -194,7 +194,7 @@ export default function KidDashboard() {
 
       {/* Succos report — the kid-facing version of the teacher checklist */}
       <div className="mt-6">
-        <SuccosReport kid={kid} />
+        <SuccosReport kid={kid} loggedShakes={myTotal} />
       </div>
 
       {mascotMsg && <Mascot message={mascotMsg} onDone={() => setMascotMsg('')} />}

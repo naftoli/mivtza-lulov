@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   updateSchool, setShakeHidden, addKid, resetDemoData, getReportsForSchool,
+  getPendingPhotos, approvePhotos, rejectPhotos,
 } from '../services/api.js'
 import ReportGrid from '../components/ReportGrid.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
@@ -103,6 +104,7 @@ function SchoolAdmin({ schoolId }) {
   const { data: shakes } = useLiveData(() => getShakes(schoolId, { includeHidden: true }), [schoolId])
   const { data: kids } = useLiveData(() => getKidsForSchool(schoolId), [schoolId])
   const { data: reports } = useLiveData(() => getReportsForSchool(schoolId), [schoolId])
+  const { data: pending } = useLiveData(() => getPendingPhotos(schoolId), [schoolId])
 
   if (!school) return <div className="mt-6"><Spinner /></div>
 
@@ -112,6 +114,7 @@ function SchoolAdmin({ schoolId }) {
         <CampaignSettings school={school} />
         <Roster schoolId={schoolId} kids={kids || []} />
       </div>
+      <PhotoApprovals shakes={pending || []} />
       <ReportGrid kids={kids || []} reports={reports || []} />
       <Moderation shakes={shakes || []} />
     </div>
@@ -212,6 +215,40 @@ function Roster({ schoolId, kids }) {
           </div>
         ))}
       </div>
+    </Section>
+  )
+}
+
+function PhotoApprovals({ shakes }) {
+  return (
+    <Section title="Photo Approvals" topColor="var(--color-gold)"
+      right={<Pill>{shakes.length} pending</Pill>}>
+      {shakes.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted">Nothing to review — all photos approved. ✓</p>
+      ) : (
+        <>
+          <p className="mb-4 text-xs text-muted">Photos are hidden from the public page until you approve them.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {shakes.map((s) => {
+              const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
+              return (
+                <div key={s.id} className="flex items-start gap-3 rounded-xl border border-line p-3">
+                  <img src={imgs[0]} alt="" className="h-16 w-16 flex-none rounded-lg object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs text-muted">· {imgs.length} photos</span>}</p>
+                    {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
+                    <p className="font-cond text-[11px] uppercase tracking-[0.08em] text-muted/70">{timeAgo(s.createdAt)}</p>
+                    <div className="mt-2 flex gap-2">
+                      <Button variant="gold" className="!px-3 !py-1.5 !text-[11px]" onClick={() => approvePhotos(s.id)}>✓ Approve</Button>
+                      <Button variant="outline" className="!px-3 !py-1.5 !text-[11px]" onClick={() => rejectPhotos(s.id)}>Reject</Button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </Section>
   )
 }
