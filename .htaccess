@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# Serve Vite's generated files from dist while keeping the public URL at
+# /mivtzoim/lulav/.
+RewriteRule ^dist(?:/|$) - [L]
+RewriteCond %{DOCUMENT_ROOT}/mivtzoim/lulav/dist/$1 -f
+RewriteRule ^(.+)$ dist/$1 [L]
+
+# React Router handles application routes such as /admin and /s/example.
+RewriteRule ^$ dist/index.html [L]
+RewriteRule . dist/index.html [L]
