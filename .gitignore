@@ -1,6 +1,5 @@
 # Dependencies / build
 node_modules/
-dist/
 
 # PRIVACY: real Tzivos Hashem soldier data — NEVER commit these.
 # The tracked src/data/roster.generated.js is the ANONYMIZED demo (fake soldiers).
