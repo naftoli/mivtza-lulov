@@ -8,7 +8,6 @@ import {
 import ReportGrid from '../components/ReportGrid.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, timeAgo } from '../lib/format.js'
-import { celebrate } from '../lib/celebrate.js'
 import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo } from '../components/ui.jsx'
 
 function Section({ title, children, right, topColor }) {
@@ -120,30 +119,28 @@ function SchoolAdmin({ schoolId }) {
 }
 
 function CampaignSettings({ school }) {
-  const [form, setForm] = useState({ goal: school.goal, bonusGoal: school.bonusGoal, motto: school.motto, endDate: school.endDate })
+  const [form, setForm] = useState({ motto: school.motto, endDate: school.endDate })
   const [saved, setSaved] = useState(false)
   useEffect(() => {
-    setForm({ goal: school.goal, bonusGoal: school.bonusGoal, motto: school.motto, endDate: school.endDate })
+    setForm({ motto: school.motto, endDate: school.endDate })
   }, [school.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save(e) {
     e.preventDefault()
-    await updateSchool(school.id, { goal: Number(form.goal), bonusGoal: Number(form.bonusGoal), motto: form.motto, endDate: form.endDate })
+    await updateSchool(school.id, { motto: form.motto, endDate: form.endDate })
     setSaved(true); setTimeout(() => setSaved(false), 1600)
-  }
-  async function toggleBonus() {
-    const turningOn = !school.bonusActive
-    await updateSchool(school.id, { bonusActive: turningOn })
-    if (turningOn) celebrate(1.6)
   }
 
   return (
     <Section title="Campaign Settings" topColor={school.color} right={<Pill>{school.percent}% of goal</Pill>}>
-      <form onSubmit={save} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Shake goal"><Input type="number" value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} /></Field>
-          <Field label="Bonus stretch goal"><Input type="number" value={form.bonusGoal} onChange={(e) => setForm({ ...form, bonusGoal: e.target.value })} /></Field>
-        </div>
+      {/* Goal is automatic — not something schools pick */}
+      <div className="rounded-xl bg-paper p-4">
+        <p className="font-cond text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Goal (automatic)</p>
+        <p className="font-display text-3xl font-medium text-navy">{fmt(school.goal)} <span className="text-lg text-muted">shakes</span></p>
+        <p className="mt-1 text-sm text-muted">{fmt(school.kidCount)} soldiers × 5 shakes each. It updates as soldiers are added.</p>
+      </div>
+
+      <form onSubmit={save} className="mt-4 space-y-4">
         <Field label="Motto"><Input value={form.motto} onChange={(e) => setForm({ ...form, motto: e.target.value })} /></Field>
         <Field label="End date"><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
         <div className="flex items-center gap-3">
@@ -153,19 +150,12 @@ function CampaignSettings({ school }) {
       </form>
 
       <div className="mt-5 rounded-xl bg-gold/8 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="sh !text-gold-dark">⭐ Bonus Round</p>
-            <p className="mt-1 text-sm text-navy">
-              {school.bonusActive ? `Active — chasing ${fmt(school.bonusGoal)} shakes.`
-                : school.goalReached ? 'Goal reached! You can launch the bonus round now.'
-                : `Unlocks once ${fmt(school.goal)} shakes are reached.`}
-            </p>
-          </div>
-          <Button variant={school.bonusActive ? 'outline' : 'gold'} onClick={toggleBonus} disabled={!school.goalReached && !school.bonusActive}>
-            {school.bonusActive ? 'End bonus' : 'Launch bonus 🚀'}
-          </Button>
-        </div>
+        <p className="sh !text-gold-dark">⭐ Bonus Rounds (automatic)</p>
+        <p className="mt-1 text-sm text-navy">
+          {school.bonusActive
+            ? `Round ${school.bonusLevel} — target ${fmt(school.activeGoal)} shakes (+1 per soldier each round).`
+            : `Once ${fmt(school.goal)} is reached, a bonus round starts on its own, adding ${fmt(school.kidCount)} (1 per soldier) each time.`}
+        </p>
       </div>
     </Section>
   )

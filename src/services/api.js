@@ -13,7 +13,7 @@
 
 import { SEED } from '../data/seed.js'
 
-const VERSION = 'v7'
+const VERSION = 'v8'
 const KEYS = {
   schools: `ml_${VERSION}_schools`,
   kids: `ml_${VERSION}_kids`,
@@ -85,18 +85,31 @@ function loggedTotal(schoolId, shakes) {
     .reduce((sum, s) => sum + s.count, 0)
 }
 
+// Goals are AUTOMATIC (never picked): 5 shakes per soldier for the base goal,
+// and every bonus round adds 1 more shake per soldier.
+const PER_KID = 5
+const kidCountOf = (s) => s.soldierCount || 0
+
 function decorateSchool(school, shakes) {
+  const kids = kidCountOf(school)
+  const bonusLevel = school.bonusLevel || 0
+  const goal = Math.max(1, kids * PER_KID)
+  const activeGoal = Math.max(goal, kids * (PER_KID + bonusLevel))
   // total = shakes already on record (baseline) + everything logged live
   const total = (school.baseline || 0) + loggedTotal(school.id, shakes)
-  const goalReached = total >= school.goal
-  const activeGoal = school.bonusActive ? school.bonusGoal : school.goal
+  const goalReached = total >= goal
   return {
     ...school,
+    kidCount: kids,
+    goal,
+    bonusGoal: activeGoal, // current bonus target
+    bonusActive: bonusLevel > 0,
+    bonusLevel,
     total,
     goalReached,
     activeGoal,
     percent: Math.min(100, Math.round((total / activeGoal) * 100)),
-    percentOfBase: Math.min(100, Math.round((total / school.goal) * 100)),
+    percentOfBase: Math.min(100, Math.round((total / goal) * 100)),
   }
 }
 
@@ -167,7 +180,7 @@ export async function getGlobalStats() {
   const baseline = schools.reduce((sum, s) => sum + (s.baseline || 0), 0)
   return {
     totalShakes: baseline + shakes.reduce((sum, s) => sum + s.count, 0),
-    totalGoal: schools.reduce((sum, s) => sum + (s.goal || 0), 0), // nationwide goal = sum of school goals
+    totalGoal: schools.reduce((sum, s) => sum + kidCountOf(s) * PER_KID, 0), // nationwide goal = every soldier × 5
     totalSchools: schools.length,
     activeSoldiers: kids.size,
     totalPhotos: shakes.filter((s) => s.photo).length,
@@ -253,16 +266,20 @@ export async function addShake({ kid, count, note, photos }) {
   shakes.push(entry)
   write(KEYS.shakes, shakes)
 
-  // Auto-launch the bonus round the moment the goal is reached, if the school
-  // has a bonus stretch goal preset (bonusGoal above the base goal).
+  // Auto-advance bonus rounds: each round adds 1 shake/kid to the target, so as
+  // soon as the current target is passed, the next round kicks in automatically.
   const schools = read(KEYS.schools, [])
   const si = schools.findIndex((s) => s.id === kid.schoolId)
   if (si >= 0) {
     const s = schools[si]
-    const total = (s.baseline || 0) + loggedTotal(s.id, shakes)
-    if (!s.bonusActive && s.bonusGoal > s.goal && total >= s.goal) {
-      schools[si] = { ...s, bonusActive: true }
-      write(KEYS.schools, schools)
+    const kids = kidCountOf(s)
+    if (kids > 0) {
+      const total = (s.baseline || 0) + loggedTotal(s.id, shakes)
+      const neededLevel = Math.max(0, Math.ceil(total / kids) - PER_KID)
+      if (neededLevel > (s.bonusLevel || 0)) {
+        schools[si] = { ...s, bonusLevel: neededLevel }
+        write(KEYS.schools, schools)
+      }
     }
   }
   return clone(entry)
@@ -304,6 +321,13 @@ export async function addKid(schoolId, { id, dob, firstName, lastName, grade }) 
   }
   kids.push(kid)
   write(KEYS.kids, kids)
+  // keep the school's headcount (which drives the auto goal) in step
+  const schools = read(KEYS.schools, [])
+  const si = schools.findIndex((s) => s.id === schoolId)
+  if (si >= 0) {
+    schools[si] = { ...schools[si], soldierCount: (schools[si].soldierCount || 0) + 1 }
+    write(KEYS.schools, schools)
+  }
   return clone(kid)
 }
 

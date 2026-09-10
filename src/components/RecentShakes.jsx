@@ -1,5 +1,5 @@
 import { fmt, timeAgo } from '../lib/format.js'
-import { Card, SectionHeader } from './ui.jsx'
+import { Card, SectionHeader, Avatar } from './ui.jsx'
 
 // The "recent donors" equivalent — a live feed of the latest shakes.
 export default function RecentShakes({ shakes }) {
@@ -18,11 +18,7 @@ export default function RecentShakes({ shakes }) {
         <ul className="space-y-3">
           {shakes.map((s) => (
             <li key={s.id} className="flex animate-rise items-center gap-3">
-              {s.photo ? (
-                <img src={s.photo} alt="" className="h-11 w-11 flex-none rounded-lg object-cover ring-1 ring-line" />
-              ) : (
-                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-lg bg-track text-lg">🌿</span>
-              )}
+              <Avatar name={s.kidName} src={s.kidPhoto} size={44} />
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] leading-tight">
                   <span className="font-semibold text-navy">{s.kidName}</span>

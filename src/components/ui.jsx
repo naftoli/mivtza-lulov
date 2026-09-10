@@ -52,6 +52,22 @@ export function SchoolLogo({ school, size = 56, className = '' }) {
 
 // `topColor` is accepted for call-site compatibility but intentionally not
 // rendered in this theme — the old design used clean cards with no top bar.
+// Profile picture: the kid's photo if we have one, else a colored initials
+// circle. (Real photos arrive from Mashpia; initials are the stand-in.)
+const AVATAR_BG = ['#46662b', '#c8951a', '#2f6f5f', '#375024', '#8a6d1f', '#1b4fd8']
+export function Avatar({ name = '', src, size = 40, className = '' }) {
+  const initials = name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+  if (src) {
+    return <img src={src} alt={name} style={{ height: size, width: size }} className={`shrink-0 rounded-full object-cover ring-1 ring-line ${className}`} />
+  }
+  const bg = AVATAR_BG[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_BG.length]
+  return (
+    <span style={{ height: size, width: size, background: bg }} className={`grid shrink-0 place-items-center rounded-full font-semibold text-white ring-1 ring-black/5 ${className}`}>
+      <span style={{ fontSize: size * 0.4 }}>{initials || '🎖️'}</span>
+    </span>
+  )
+}
+
 export function Card({ className = '', topColor, children }) {
   void topColor
   return (

@@ -6,7 +6,7 @@ import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, timeAgo, fileToScaledDataUrl } from '../lib/format.js'
 import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
-import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill } from '../components/ui.jsx'
+import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar } from '../components/ui.jsx'
 import SuccosReport from '../components/SuccosReport.jsx'
 import Mascot from '../components/Mascot.jsx'
 
@@ -74,7 +74,8 @@ export default function KidDashboard() {
       {/* Soldier ID card: First / Last / Serial */}
       <Card topColor={school?.color || 'var(--color-blue)'}>
         <div className="flex items-start gap-4 p-5">
-          {school && <SchoolLogo school={school} size={56} />}
+          <Avatar name={`${kid.firstName} ${kid.lastName}`} src={kid.photo} size={56} />
+          {school && <SchoolLogo school={school} size={40} className="hidden sm:block" />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-cond text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Soldier</p>
