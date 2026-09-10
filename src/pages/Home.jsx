@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSchools, getGlobalStats } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
-import { fmt, daysLeft } from '../lib/format.js'
+import { fmt, daysLeft, shortSchoolName } from '../lib/format.js'
 import { Button, Card, Spinner, Pill, SectionHeader, SchoolLogo } from '../components/ui.jsx'
+import GoalMeter from '../components/GoalMeter.jsx'
 
 function Stat({ value, label, icon, color }) {
   return (
@@ -64,7 +65,7 @@ function SchoolCard({ s }) {
         <div className="flex items-start gap-3 px-5 pt-5">
           <SchoolLogo school={s} size={48} />
           <div className="min-w-0 flex-1">
-            <h3 className="font-display text-xl font-medium text-navy">{s.name}</h3>
+            <h3 className="font-display text-xl font-medium text-navy">{shortSchoolName(s)}</h3>
             <p className="font-cond text-[11px] uppercase tracking-[0.12em] text-muted">{s.city}</p>
           </div>
           {s.bonusActive ? <Pill className="!bg-gold/20 !text-gold-dark">⭐ Bonus</Pill>
@@ -112,14 +113,31 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Global stats */}
+      {/* Nationwide goal + global stats */}
       {stats && (
         <section className="relative z-10 mx-auto -mt-8 max-w-5xl px-4">
-          <Card className="grid grid-cols-2 gap-5 p-6 sm:grid-cols-4">
-            <Stat icon="🌿" color="#46662b" value={fmt(stats.totalShakes)} label="Total Shakes" />
-            <Stat icon="🎖️" color="#c8951a" value={fmt(stats.activeSoldiers)} label="Soldiers" />
-            <Stat icon="🏫" color="#8a6d1f" value={fmt(stats.totalSchools)} label="Schools" />
-            <Stat icon="📸" color="#2f6f5f" value={fmt(stats.totalPhotos)} label="Field Photos" />
+          <Card className="p-6">
+            <SectionHeader>🌿 One Giant Mission · Nationwide</SectionHeader>
+            <div className="mt-3">
+              <GoalMeter
+                school={{
+                  name: 'Nationwide',
+                  total: stats.totalShakes,
+                  activeGoal: stats.totalGoal,
+                  goal: stats.totalGoal,
+                  percent: Math.min(100, Math.round((stats.totalShakes / Math.max(1, stats.totalGoal)) * 100)),
+                  goalReached: stats.totalShakes >= stats.totalGoal,
+                  bonusActive: false,
+                  color: 'var(--color-green)',
+                }}
+                celebrateMilestones={false}
+              />
+            </div>
+            <div className="mt-6 grid grid-cols-3 gap-5 border-t border-line pt-5">
+              <Stat icon="🎖️" color="#c8951a" value={fmt(stats.activeSoldiers)} label="Soldiers" />
+              <Stat icon="🏫" color="#8a6d1f" value={fmt(stats.totalSchools)} label="Schools" />
+              <Stat icon="📸" color="#2f6f5f" value={fmt(stats.totalPhotos)} label="Field Photos" />
+            </div>
           </Card>
         </section>
       )}

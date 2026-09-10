@@ -28,14 +28,14 @@ export default function GoalMeter({ school, celebrateMilestones = true }) {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex gap-8">
           <div>
-            <p className="font-cond text-[11.5px] font-semibold uppercase tracking-[0.16em] text-muted">Total Shakes</p>
-            <p className="font-display text-5xl font-medium tabular-nums text-navy">{fmt(total)}</p>
-          </div>
-          <div>
             <p className="font-cond text-[11.5px] font-semibold uppercase tracking-[0.16em] text-muted">
               Goal{bonusActive ? ' (Bonus)' : ''}
             </p>
             <p className="font-display text-5xl font-medium tabular-nums text-muted/70">{fmt(activeGoal)}</p>
+          </div>
+          <div>
+            <p className="font-cond text-[11.5px] font-semibold uppercase tracking-[0.16em] text-muted">Total Shakes</p>
+            <p className="font-display text-5xl font-medium tabular-nums text-navy">{fmt(total)}</p>
           </div>
         </div>
         <div className="text-right">

@@ -167,6 +167,7 @@ export async function getGlobalStats() {
   const baseline = schools.reduce((sum, s) => sum + (s.baseline || 0), 0)
   return {
     totalShakes: baseline + shakes.reduce((sum, s) => sum + s.count, 0),
+    totalGoal: schools.reduce((sum, s) => sum + (s.goal || 0), 0), // nationwide goal = sum of school goals
     totalSchools: schools.length,
     activeSoldiers: kids.size,
     totalPhotos: shakes.filter((s) => s.photo).length,

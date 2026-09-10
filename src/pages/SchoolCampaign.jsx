@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getSchool, getShakes, getLeaderboard, getClassLeaderboard } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
-import { fmt, daysLeft } from '../lib/format.js'
+import { fmt, daysLeft, shortSchoolName } from '../lib/format.js'
 import { Button, Card, Spinner, Pill, SchoolLogo } from '../components/ui.jsx'
 import GoalMeter from '../components/GoalMeter.jsx'
 import RecentShakes from '../components/RecentShakes.jsx'
@@ -45,7 +45,7 @@ export default function SchoolCampaign() {
               <SchoolLogo school={school} size={72} className="ring-2 ring-white/20" />
               <div>
                 <p className="font-cond text-[12px] font-semibold uppercase tracking-[0.22em] text-gold">Mivtza Lulav</p>
-                <h1 className="font-display text-4xl font-normal text-white">{school.name}</h1>
+                <h1 className="font-display text-4xl font-normal text-white">{shortSchoolName(school)}</h1>
                 <p className="mt-0.5 text-white/85">{school.city} · “{school.motto}”</p>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { fmt } from './format.js'
+import { fmt, shortSchoolName } from './format.js'
 
 // Word-wrap a string into up to `maxLines` lines of ~`per` chars.
 function wrap(text, per, maxLines) {
@@ -20,7 +20,7 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 // Build a 1080×1080 shareable campaign card as an SVG string.
 export function buildShareSVG(school) {
   const { name, city, color = '#46662b', logo, total, activeGoal, percent, bonusActive } = school
-  const nameLines = wrap(name, 20, 2)
+  const nameLines = wrap(shortSchoolName(school), 20, 2)
   const barW = 936
   const fillW = Math.max(24, Math.round((barW * Math.min(percent, 100)) / 100))
   const nameY = nameLines.length > 1 ? 176 : 200

@@ -2,6 +2,20 @@ export function fmt(n) {
   return new Intl.NumberFormat('en-US').format(n || 0)
 }
 
+// When a school's city is shown underneath, drop that location from the name
+// so it isn't repeated (e.g. "Cheder Menachem LA" → "Cheder Menachem").
+const CITY_ALIASES = { 'Los Angeles': ['LA'] }
+export function shortSchoolName(school) {
+  const name = school?.name || ''
+  const loc = (school?.city || '').split(',')[0].trim()
+  if (!loc) return name
+  const tokens = [loc, ...(CITY_ALIASES[loc] || [])]
+  let out = name
+  for (const t of tokens) out = out.replace(new RegExp(`\\s*\\b${t}\\b`, 'ig'), ' ')
+  out = out.replace(/\s{2,}/g, ' ').trim()
+  return out || name
+}
+
 export function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime()
   const s = Math.round(diff / 1000)
