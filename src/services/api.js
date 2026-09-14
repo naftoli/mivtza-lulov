@@ -78,6 +78,24 @@ export function subscribe(cb) {
 const delay = (ms = 180) => new Promise((r) => setTimeout(r, ms))
 const clone = (x) => JSON.parse(JSON.stringify(x))
 
+// Opaque per-kid key for PUBLIC payloads. The serial (kid.id) is half of the
+// kid's login credential, so unauthenticated reads (school page feed, photo
+// wall, leaderboard) must never carry it — they only need a stable id to key
+// rows and to spot "my row". This is a one-way hash of the serial; the real
+// backend must issue the same kind of key server-side (e.g. an HMAC with a
+// server secret) — see docs/mashpia-integration.md.
+function kidKey(serial) {
+  let h = 0x811c9dc5 // FNV-1a
+  const s = `ml:${serial}`
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
+}
+
+// Public view of a shake entry: everything except the serial, plus the key.
+function publicShake({ kidId, ...rest }) {
+  return { ...rest, kidKey: kidKey(kidId) }
+}
+
 // ---- derived helpers ----
 function loggedTotal(schoolId, shakes) {
   return shakes
@@ -132,6 +150,7 @@ export async function getShakes(schoolId, { includeHidden = false } = {}) {
   return read(KEYS.shakes, [])
     .filter((s) => s.schoolId === schoolId && (includeHidden || !s.hidden))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map(publicShake)
 }
 
 export async function getRecentShakes(schoolId, limit = 8) {
@@ -144,7 +163,7 @@ export async function getLeaderboard(schoolId, limit = 10) {
   const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
   const totals = {}
   for (const s of shakes) {
-    if (!totals[s.kidId]) totals[s.kidId] = { kidId: s.kidId, name: s.kidName, count: 0, entries: 0 }
+    if (!totals[s.kidId]) totals[s.kidId] = { kidKey: kidKey(s.kidId), name: s.kidName, count: 0, entries: 0 }
     totals[s.kidId].count += s.count
     totals[s.kidId].entries += 1
   }
@@ -243,7 +262,8 @@ export async function verifyKid(id, dob) {
   const kid = read(KEYS.kids, []).find(
     (k) => k.id.trim() === id.trim() && k.dob === dob,
   )
-  return kid ? clone(kid) : null
+  // kidKey is what public rows carry instead of the serial (see publicShake).
+  return kid ? { ...clone(kid), kidKey: kidKey(kid.id) } : null
 }
 
 export async function verifyAdmin(username, password) {

@@ -16,7 +16,8 @@ function load(key) {
 }
 
 export function AuthProvider({ children }) {
-  const [kid, setKid] = useState(() => load(KID_KEY))
+  // A saved session from before the login response carried kidKey is stale — re-login.
+  const [kid, setKid] = useState(() => { const k = load(KID_KEY); return k?.kidKey ? k : null })
   const [admin, setAdmin] = useState(() => load(ADMIN_KEY))
 
   useEffect(() => {

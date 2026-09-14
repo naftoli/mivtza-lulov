@@ -35,7 +35,7 @@ async function req(path, { method = 'GET', body } = {}) {
 export async function verifyKid(serial, dob) {
   const { token, soldier } = await req('/soldier/login', { method: 'POST', body: { serial, dob } })
   authToken = token
-  return soldier // { serial→id, firstName, lastName, hebFirst, hebLast, dob, gender, grade, rank, schoolId }
+  return soldier // { serial→id, kidKey (opaque, server-issued), firstName, lastName, hebFirst, hebLast, dob, gender, grade, rank, schoolId }
 }
 export async function verifyAdmin(username, password) {
   const { token, admin } = await req('/admin/login', { method: 'POST', body: { username, password } })
@@ -60,3 +60,7 @@ export async function addShake(entry) { return req('/shakes', { method: 'POST', 
 // NOTE: getShakes, getLeaderboard, getClassLeaderboard, updateSchool, addKid,
 // setShakeHidden, getReportsForSchool, etc. map to the corresponding Mashpia
 // endpoints the same way — add them once the API is confirmed.
+//
+// PRIVACY: getShakes / getRecentShakes / getLeaderboard feed UNAUTHENTICATED
+// pages. Their rows must carry `kidKey` (the same opaque key the login response
+// returns) + display name — never the serial or DOB. See docs/mashpia-integration.md.

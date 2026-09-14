@@ -100,7 +100,7 @@ export default function SchoolCampaign() {
         {/* Right column */}
         <div className="space-y-6">
           <RecentShakes shakes={(shakes || []).slice(0, 8)} />
-          <Leaderboard rows={board || []} highlightKidId={kid?.id} />
+          <Leaderboard rows={board || []} highlightKidKey={kid?.kidKey} />
           <ClassLeaderboard rows={classBoard || []} highlightGrade={kid?.grade} />
         </div>
       </div>

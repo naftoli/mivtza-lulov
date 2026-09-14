@@ -34,6 +34,12 @@ components never change.
 - **Kid login** — verify **serial number + date of birth**, return the child's record
   (+ a session token scoped to that child).
   - App call: `verifyKid(serial, dob)` · suggested `POST /api/soldier/login`
+  - The response must also carry **`kidKey`**: an opaque, **server-issued, non-reversible**
+    key for the child (e.g. an HMAC of the serial with a server secret), stable across
+    logins. It is the only id public rows carry (see F); the app uses it just to highlight
+    the child's own leaderboard row. It must not be derivable from the serial client-side.
+  - This endpoint needs **rate limiting / lockout**: serials are sequential and a date of
+    birth has a small search space.
 - **School / staff login** — **use Mashpia's existing login** (SSO / same credentials as
   Mashpia.com), returning which school(s) the user administers and their role (HQ vs school).
   - App call: `verifyAdmin(...)`
@@ -77,6 +83,19 @@ checklist one-to-one:
   photos for a school, and approve/reject.
 - Accepted format (multipart upload or base64?) and size limit — please specify.
 
+### F. Public reads — never expose serials or DOB
+The school campaign page (recent-shakes feed, photo wall, leaderboard) and the home page are
+**unauthenticated**. Every row those endpoints return must contain **only**:
+`{ id, kidKey, kidName (first name + last initial), count, note, photos (approved only), createdAt }`
+— **never** `serial`, `dob`, or `gender`. The serial is half of the child's login credential,
+so a public name → serial mapping would materially lower the bar for logging in as a child.
+- `kidKey` is the same opaque key the login response returns (see A) — it is the only link
+  between a public row and the logged-in child.
+- App calls: `getShakes(schoolId)`, `getRecentShakes(schoolId)`, `getLeaderboard(schoolId)`
+  · suggested `GET /api/schools/:id/shakes`, `GET /api/schools/:id/leaderboard`
+- Roster reads that do include `serial` / `dob` (section B) are **admin-only** and must
+  require the staff token.
+
 ---
 
 ## Security (browser app)
@@ -89,11 +108,12 @@ checklist one-to-one:
 
 ## What I need from the Mashpia developer
 1. **Base URL** (+ test URL) and any API docs.
-2. **Kid auth**: verify serial + DOB → token (format/expiry).
+2. **Kid auth**: verify serial + DOB → token + `kidKey` (format/expiry); rate limiting on the login endpoint.
 3. **School/staff SSO**: how to authenticate against Mashpia's existing login; what it returns (role + schools).
 4. **Roster endpoints**: schools, **classes**, and children (with class mapping + **profile photo URL**).
 5. **Headcounts**: class / school / national counts (drive the automatic goals).
 6. **Report + shake write endpoints** + exact payloads — and confirmation they hit the same record as the teacher grid.
+   Plus the **public read endpoints** (shakes, leaderboard) in the no-serial / no-DOB shape from section F.
 7. **Photo endpoints**: submit-pending, list-pending, approve/reject; accepted format + size.
 8. **App→API auth** (per-user token vs. key+proxy) and **CORS** for our domain.
 
