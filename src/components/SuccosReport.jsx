@@ -23,6 +23,7 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [savedAt, setSavedAt] = useState(null)
+  const [error, setError] = useState('')
 
   // Prefill once the saved report has loaded.
   useEffect(() => {
@@ -47,24 +48,34 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
     try {
       const urls = await Promise.all(files.map((fl) => fileToScaledDataUrl(fl)))
       set('photos', [...form.photos, ...urls])
-    } catch { /* ignore bad image */ }
+      setError('')
+    } catch {
+      setError('Could not read one of those images — try another.')
+    }
     if (fileRef.current) fileRef.current.value = ''
   }
 
   async function save(e) {
     e.preventDefault()
     setBusy(true)
-    const saved = await saveReport(kid.id, {
-      schoolId: kid.schoolId,
-      days: form.days,
-      minutes: form.minutes === '' ? null : Number(form.minutes),
-      peopleWithFriends: form.peopleWithFriends === '' ? null : Number(form.peopleWithFriends),
-      peoplePersonal: form.peoplePersonal === '' ? null : Number(form.peoplePersonal),
-      story: form.story.trim(),
-      photos: form.photos,
-    })
-    setBusy(false)
-    setSavedAt(saved.updatedAt)
+    setError('')
+    try {
+      const saved = await saveReport(kid.id, {
+        schoolId: kid.schoolId,
+        days: form.days,
+        minutes: form.minutes === '' ? null : Number(form.minutes),
+        peopleWithFriends: form.peopleWithFriends === '' ? null : Number(form.peopleWithFriends),
+        peoplePersonal: form.peoplePersonal === '' ? null : Number(form.peoplePersonal),
+        story: form.story.trim(),
+        photos: form.photos,
+      })
+      setSavedAt(saved?.updatedAt || new Date().toISOString())
+    } catch (err) {
+      // Nothing was saved — keep the form so the kid can retry.
+      setError(err?.message || 'Could not save your report — please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -138,9 +149,10 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
           <Textarea rows={3} value={form.story} onChange={(e) => set('story', e.target.value)} placeholder="e.g. We went to the hospital and everyone was so happy to shake Lulav!" />
         </Field>
 
+        {error && <p className="animate-pop rounded-lg bg-red/8 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
         <div className="flex items-center gap-3">
           <Button type="submit" variant="gold" disabled={busy}>{busy ? 'Saving…' : 'Save my report'}</Button>
-          {savedAt && !busy && <span className="font-cond text-sm font-semibold uppercase text-green">✓ Saved</span>}
+          {savedAt && !busy && !error && <span className="font-cond text-sm font-semibold uppercase text-green">✓ Saved</span>}
         </div>
       </form>
     </Card>

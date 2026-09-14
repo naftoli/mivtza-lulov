@@ -38,8 +38,11 @@ function write(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch (e) {
-    // Most likely a storage-quota error from large photos.
+    // Most likely a storage-quota error from large photos. Fail loudly so the
+    // caller can tell the user — never emit() for data that was not saved.
     console.warn('Could not save to localStorage:', e)
+    const full = e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014
+    throw new Error(full ? 'Could not save — storage is full. Try fewer or smaller photos.' : 'Could not save — please try again.')
   }
   emit()
 }
@@ -51,13 +54,19 @@ function emit() {
   } catch { /* noop */ }
 }
 
-// Seed on first run.
+// Seed on first run. Guarded: this runs at module load, so blocked storage
+// (private mode, disabled site data) or a full quota must not crash the app
+// before React mounts — reads simply fall back to empty.
 function ensureSeed() {
-  if (!localStorage.getItem(KEYS.schools)) {
-    localStorage.setItem(KEYS.schools, JSON.stringify(SEED.schools))
-    localStorage.setItem(KEYS.kids, JSON.stringify(SEED.kids))
-    localStorage.setItem(KEYS.admins, JSON.stringify(SEED.admins))
-    localStorage.setItem(KEYS.shakes, JSON.stringify(SEED.shakes))
+  try {
+    if (!localStorage.getItem(KEYS.schools)) {
+      localStorage.setItem(KEYS.schools, JSON.stringify(SEED.schools))
+      localStorage.setItem(KEYS.kids, JSON.stringify(SEED.kids))
+      localStorage.setItem(KEYS.admins, JSON.stringify(SEED.admins))
+      localStorage.setItem(KEYS.shakes, JSON.stringify(SEED.shakes))
+    }
+  } catch (e) {
+    console.warn('Could not seed localStorage:', e)
   }
 }
 ensureSeed()
@@ -296,7 +305,7 @@ export async function addShake({ kid, count, note, photos }) {
     hidden: false,
   }
   shakes.push(entry)
-  write(KEYS.shakes, shakes)
+  write(KEYS.shakes, shakes) // throws if nothing was saved — nothing below runs
 
   // Auto-advance bonus rounds: each round adds 1 shake/kid to the target, so as
   // soon as the current target is passed, the next round kicks in automatically.

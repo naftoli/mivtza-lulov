@@ -49,13 +49,20 @@ export default function KidDashboard() {
     if (n > 500) { setFlash('That’s a lot at once! Please split very large counts into separate entries.'); return }
     setBusy(true)
     const before = school
-    await addShake({ kid, count: n, note: story, photos })
-    setBusy(false)
+    try {
+      await addShake({ kid, count: n, note: story, photos })
+    } catch (err) {
+      // Nothing was saved — keep the form (and photos) so the kid can retry.
+      setFlash(err?.message || 'Could not save your shakes — please try again.')
+      return
+    } finally {
+      setBusy(false)
+    }
     setCount(''); setStory(''); setPhotos([])
     setFlash(`🎉 ${n} shakes added! Yasher koach, ${kid.firstName}!`)
     setTimeout(() => setFlash(''), 5000)
 
-    const updated = await getSchool(kid.schoolId)
+    const updated = await getSchool(kid.schoolId).catch(() => null)
     // Big celebration for reaching the goal or auto-launching the bonus round;
     // medium for crossing a 25/50/75% milestone; a small burst otherwise.
     const reachedGoal = updated && !before?.goalReached && updated.goalReached

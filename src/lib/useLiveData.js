@@ -6,6 +6,7 @@ import { subscribe } from '../services/api.js'
 export function useLiveData(loader, deps = []) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const run = useCallback(loader, deps)
@@ -13,12 +14,22 @@ export function useLiveData(loader, deps = []) {
   useEffect(() => {
     let alive = true
     const refresh = () => {
-      run().then((d) => {
-        if (alive) {
-          setData(d)
-          setLoading(false)
-        }
-      })
+      run().then(
+        (d) => {
+          if (alive) {
+            setData(d)
+            setError(null)
+            setLoading(false)
+          }
+        },
+        (e) => {
+          // A rejected loader must not leave the page spinning forever.
+          if (alive) {
+            setError(e)
+            setLoading(false)
+          }
+        },
+      )
     }
     refresh()
     const unsub = subscribe(refresh)
@@ -28,5 +39,5 @@ export function useLiveData(loader, deps = []) {
     }
   }, [run])
 
-  return { data, loading }
+  return { data, loading, error }
 }
