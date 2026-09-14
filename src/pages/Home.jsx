@@ -12,7 +12,7 @@ function Stat({ value, label, icon, color }) {
       <span className="grid h-12 w-12 flex-none place-items-center rounded-xl text-2xl" style={{ background: `${color}18` }}>{icon}</span>
       <div className="min-w-0">
         <div className="font-display text-2xl font-medium leading-tight tabular-nums text-navy">{value}</div>
-        <div className="whitespace-nowrap font-cond text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</div>
+        <div className="font-cond text-[11px] font-semibold uppercase tracking-[0.08em] text-muted sm:whitespace-nowrap">{label}</div>
       </div>
     </div>
   )
@@ -133,7 +133,7 @@ export default function Home() {
                 celebrateMilestones={false}
               />
             </div>
-            <div className="mt-6 grid grid-cols-3 gap-5 border-t border-line pt-5">
+            <div className="mt-6 grid grid-cols-1 gap-4 border-t border-line pt-5 sm:grid-cols-3 sm:gap-5">
               <Stat icon="🎖️" color="#c8951a" value={fmt(stats.activeSoldiers)} label="Soldiers" />
               <Stat icon="🏫" color="#8a6d1f" value={fmt(stats.totalSchools)} label="Schools" />
               <Stat icon="📸" color="#2f6f5f" value={fmt(stats.totalPhotos)} label="Field Photos" />
