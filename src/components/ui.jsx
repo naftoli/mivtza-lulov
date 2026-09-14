@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { asset } from '../lib/asset.js'
 
 // The signature five-colour Tzivos Hashem brand band.
 export function Band({ className = '' }) {
@@ -9,17 +10,19 @@ export function Band({ className = '' }) {
   )
 }
 
-// Masthead logo lockup: real TH emblem + wordmark.
+// Masthead logo lockup: TH shield + two-line wordmark
+// ("MIVTZA LULAV" Exo bold caps in green-deep, "TZIVOS HASHEM" condensed caps).
 export function Brand({ size = 46, dark = false }) {
   return (
-    <span className="inline-flex items-center gap-3">
-      <img src="/th-logo.svg" alt="Tzivos Hashem" style={{ height: size, width: 'auto' }} className="shrink-0" />
-      <span className="leading-none">
-        <span className="block font-display text-[1.15rem] font-normal" style={{ color: dark ? '#fff' : 'var(--color-navy)' }}>
+    <span className="inline-flex items-center gap-2.5 sm:gap-3">
+      <img src={asset('th-logo.svg')} alt="Tzivos Hashem" style={{ height: size, width: 'auto' }} className="shrink-0" />
+      <span className="flex flex-col leading-none">
+        <span className="font-display text-[1.05rem] font-bold uppercase leading-none tracking-[-0.01em] sm:text-[1.5rem]"
+          style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
           Mivtza Lulav
         </span>
-        <span className="mt-0.5 block font-cond text-[0.68rem] font-semibold uppercase tracking-[0.22em]"
-          style={{ color: dark ? '#c9d6ef' : 'var(--color-muted)' }}>
+        <span className="mt-1 font-cond text-[11px] uppercase leading-none tracking-[0.06em] sm:text-[12px]"
+          style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
           Tzivos Hashem
         </span>
       </span>
@@ -51,10 +54,10 @@ export function SchoolLogo({ school, size = 56, className = '' }) {
 }
 
 // `topColor` is accepted for call-site compatibility but intentionally not
-// rendered in this theme — the old design used clean cards with no top bar.
+// rendered in this theme — the design uses clean sky cards with no top bar.
 // Profile picture: the kid's photo if we have one, else a colored initials
 // circle. (Real photos arrive from Mashpia; initials are the stand-in.)
-const AVATAR_BG = ['#46662b', '#c8951a', '#2f6f5f', '#375024', '#8a6d1f', '#1b4fd8']
+const AVATAR_BG = ['#094b26', '#2f8a4d', '#1a4896', '#0e7f74', '#4873b3', '#001c4c']
 export function Avatar({ name = '', src, size = 40, className = '' }) {
   const initials = name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   if (src) {
@@ -68,10 +71,11 @@ export function Avatar({ name = '', src, size = 40, className = '' }) {
   )
 }
 
+// Sky card on the mint page: big radius, no border, only a whisper of shadow.
 export function Card({ className = '', topColor, children }) {
   void topColor
   return (
-    <div className={`overflow-hidden rounded-2xl border border-line bg-card shadow-card ${className}`}>
+    <div className={`overflow-hidden rounded-[28px] bg-card shadow-card ${className}`}>
       {children}
     </div>
   )
@@ -79,7 +83,8 @@ export function Card({ className = '', topColor, children }) {
 
 const btnClass = {
   primary: 'btn btn-p',
-  gold: 'btn btn-p',
+  gold: 'btn btn-gold',
+  green: 'btn btn-green',
   blue: 'btn btn-s',
   navy: 'btn btn-navy',
   red: 'btn btn-red',
@@ -102,7 +107,7 @@ export function SectionHeader({ children, className = '' }) {
 export function Field({ label, hint, children }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-cond text-xs font-semibold uppercase tracking-[0.1em] text-muted">{label}</span>
+      <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-muted/80">{hint}</span>}
     </label>
@@ -113,7 +118,7 @@ export function Input(props) {
   return (
     <input
       {...props}
-      className={`w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-[15px] text-ink outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
+      className={`w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
     />
   )
 }
@@ -122,14 +127,14 @@ export function Textarea(props) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-[15px] text-ink outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
+      className={`w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
     />
   )
 }
 
 export function Pill({ children, className = '' }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full bg-track px-3 py-1 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted ${className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full bg-track px-3 py-1 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-green ${className}`}>
       {children}
     </span>
   )
@@ -138,7 +143,7 @@ export function Pill({ children, className = '' }) {
 export function Spinner({ label = 'Loading…' }) {
   return (
     <div className="flex items-center justify-center gap-3 py-16 text-muted">
-      <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-blue" />
+      <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-green" />
       <span className="font-cond text-sm font-semibold uppercase tracking-wide">{label}</span>
     </div>
   )

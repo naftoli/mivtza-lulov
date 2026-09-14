@@ -1,38 +1,65 @@
 @import "tailwindcss";
 
 /* =========================================================================
-   Mivtza Lulav — "soldiers" theme: army green + gold on cream.
-   (Semantic token names like `navy`/`blue`/`cyan` are kept so class names
-   stay stable, but they all resolve to the green family here — gold is the
-   pop accent, red is reserved for danger/remove.)
+   Mivtza Lulav — 2026 redesign tokens (from the "Mivtza Lulav Homepage_1" PSD).
+   Navy + green-deep type, sky cards on a mint page, gold highlights on green.
+   Legacy semantic names (navy / blue / cyan / paper / card / track / line /
+   muted) are KEPT so existing class names stay stable — they now resolve to
+   the new palette, so the whole app re-themes through these tokens.
    ========================================================================= */
 @theme {
-  --color-ink: #1f2a17;
-  --color-navy: #2c3f20;        /* headings / primary text (army-800) */
-  --color-navy-dark: #24331c;   /* footer / dark bg (army-900) */
-  --color-blue: #46662b;        /* accents / links / counts (army-600) */
-  --color-blue-bright: #375024;
-  --color-cyan: #5c7f3a;        /* secondary accent (army-500) */
-  --color-red: #c0392b;         /* danger / remove only */
-  --color-gold: #e6b422;
-  --color-gold-dark: #c8951a;
-  --color-green: #46662b;
+  --color-ink: #001c4c;            /* body text = navy */
+  --color-navy: #001c4c;           /* headings / numbers / body on light */
+  --color-navy-dark: #094b26;      /* footer / dark grounds = green-deep */
+  --color-blue: #1a4896;           /* links / focus rings (blue-accent) */
+  --color-blue-bright: #2a5fb8;
+  --color-cyan: #11a294;           /* secondary accent (race teal) */
+  --color-red: #c0392b;            /* danger / remove only */
+  --color-gold: #ffde49;           /* highlight — only on green-deep / dark glass */
+  --color-gold-dark: #7a5d00;      /* legible "gold" for bonus labels on sky / mint */
+  --color-green: #094b26;          /* brand green-deep */
+  --color-green-mid: #51a05f;      /* progress fills, active pills */
+  --color-green-light: #68c07b;    /* gradient light end */
   --color-orange: #d97706;
   --color-purple: #5b3fa8;
 
-  --color-paper: #faf7ee;       /* page background (cream) */
-  --color-card: #ffffff;
-  --color-line: #e6ddc9;        /* warm hairline */
-  --color-muted: #5f6a4a;       /* muted olive text */
-  --color-track: #ece4d1;       /* progress tracks / chips / soft fills */
+  --color-sky: #c3ecff;            /* header bar / cards */
+  --color-mint: #deedda;           /* page background below the hero */
+  --color-blue-accent: #1a4896;    /* rank numerals 4, 5 */
 
-  --font-display: "Georgia", "Times New Roman", serif;
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-cond: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* race bar palette — one per school, in rank order */
+  --color-race-green: #68c07b;
+  --color-race-yellow: #fbcc4a;
+  --color-race-blue: #4873b3;
+  --color-race-red: #eb635d;
+  --color-race-teal: #11a294;
+
+  --color-paper: #deedda;          /* page background (mint) */
+  --color-card: #c3ecff;           /* cards (sky) */
+  --color-line: #a9dcf3;           /* hairlines — a slightly deeper sky */
+  --color-muted: #3a4d78;          /* muted text — navy-tinted mid */
+  --color-track: #9eddf9;          /* progress tracks / chips / soft fills */
+
+  --font-display: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Condensed caps (wordmark line, nav, buttons, toggle) — never body copy.
+     If a licensed Duke Fill arrives, add its @font-face and swap it in here. */
+  --font-cond: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
   --font-heb: "Frank Ruhl Libre", "Times New Roman", serif;
 
-  --shadow-card: 0 1px 2px rgba(31, 42, 23, 0.06), 0 8px 24px -12px rgba(31, 42, 23, 0.25);
-  --shadow-hover: 0 14px 30px -14px rgba(31, 42, 23, 0.35);
+  --shadow-card: 0 1px 2px rgba(0, 28, 76, 0.03), 0 12px 32px -22px rgba(0, 28, 76, 0.16);
+  --shadow-hover: 0 16px 36px -18px rgba(0, 28, 76, 0.28);
+}
+
+/* Shared gradients / glass (plain custom properties, referenced by class rules
+   and by inline styles in components). */
+:root {
+  --grad-cta-green: linear-gradient(90deg, #094b26 0%, #2f8a4d 100%);   /* "I'm a Soldier" CTA */
+  --grad-cta-gold: linear-gradient(90deg, #f7dc4c 0%, #51a05f 100%);    /* "See the Campaigns" CTA */
+  --grad-pill-green: linear-gradient(90deg, #68c07b 0%, #51a05f 100%);  /* nav login pill / toggle */
+  --grad-progress: linear-gradient(90deg, #68c07b 0%, #3f9a55 100%);    /* bar fills */
+  --grad-arrow: linear-gradient(90deg, #ffde49 0%, #51a05f 100%);       /* wide GoalMeter arrow */
+  --glass-green: rgba(9, 75, 38, 0.8);                                   /* hero glass panel */
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -51,69 +78,94 @@ body {
 
 h1, h2, h3, h4 { line-height: 1.15; }
 
-/* cream canvas with soft green/gold glow */
+@layer base {
+  /* Bebas Neue ships one weight — don't let the browser fake a bold. */
+  .font-cond { font-synthesis-weight: none; }
+}
+
+/* mint canvas with a soft sky / gold glow */
 .bg-field {
   background-color: var(--color-paper);
   background-image:
-    radial-gradient(circle at 15% 18%, rgba(70, 102, 43, 0.06), transparent 45%),
-    radial-gradient(circle at 85% 8%, rgba(230, 180, 34, 0.09), transparent 42%);
+    radial-gradient(circle at 15% 18%, rgba(195, 236, 255, 0.55), transparent 45%),
+    radial-gradient(circle at 85% 8%, rgba(255, 222, 73, 0.10), transparent 42%);
 }
 
 /* subtle brand strip (used on login cards) */
-.band { height: 5px; display: block; background: linear-gradient(90deg, var(--color-gold), var(--color-green)); }
+.band { height: 6px; display: block; background: linear-gradient(90deg, var(--color-gold), var(--color-green-mid) 55%, var(--color-green)); }
 .band > i { display: none; }
 
-/* small section label */
+/* small section label / card eyebrow — green-deep Exo caps */
 .sh {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-gold-dark);
+  color: var(--color-green);
 }
 
 .kick { letter-spacing: 0.12em; text-transform: uppercase; }
 
-/* buttons — soft, rounded, friendly.
+/* buttons — fully rounded pills, condensed caps.
    In @layer components so Tailwind utilities (hidden, w-full, whitespace-*) win. */
 @layer components {
   .btn {
-    font-family: var(--font-sans);
-    font-size: 14px;
-    font-weight: 600;
+    font-family: var(--font-cond);
+    font-size: 18px;
+    font-weight: 400;
+    font-synthesis-weight: none;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
     border: 0;
     cursor: pointer;
-    padding: 10px 18px;
-    border-radius: 12px;
+    padding: 13px 24px;
+    border-radius: 9999px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     white-space: nowrap;
-    transition: transform 0.12s, filter 0.12s, background 0.15s, color 0.15s;
+    transition: transform 0.12s, filter 0.12s, background 0.15s, color 0.15s, box-shadow 0.15s;
     text-decoration: none;
   }
   .btn:hover { transform: translateY(-1px); filter: brightness(1.04); }
+  .btn:focus-visible { outline: 3px solid rgba(26, 72, 150, 0.45); outline-offset: 2px; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
-  .btn-p { background: var(--color-gold); color: var(--color-ink); box-shadow: 0 1px 2px rgba(31,42,23,.12); }
-  .btn-s { background: var(--color-navy); color: #fff; }
-  .btn-navy { background: var(--color-navy); color: #fff; }
+  /* primary CTA — green-deep -> #2f8a4d, white text */
+  .btn-p, .btn-s, .btn-navy { background: var(--grad-cta-green); color: #fff; box-shadow: 0 2px 8px rgba(0, 28, 76, 0.14); }
+  /* gold CTA — gold -> green-mid, green-deep text */
+  .btn-gold { background: var(--grad-cta-gold); color: var(--color-green); box-shadow: 0 2px 8px rgba(0, 28, 76, 0.10); }
+  /* light green pill — nav login item, toggles */
+  .btn-green { background: var(--grad-pill-green); color: var(--color-green); }
   .btn-red { background: var(--color-red); color: #fff; }
-  .btn-o { background: #fff; color: var(--color-navy); box-shadow: inset 0 0 0 1.5px var(--color-line); }
-  .btn-o:hover { background: var(--color-paper); }
-  .btn-o-white { background: rgba(255,255,255,.10); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
-  .btn-ghost { background: transparent; color: var(--color-navy); }
-  .btn-ghost:hover { background: rgba(44,63,32,.06); filter: none; }
+  /* outline — sky fill, green-deep text */
+  .btn-o { background: var(--color-sky); color: var(--color-green); box-shadow: inset 0 0 0 1.5px rgba(9, 75, 38, 0.28); }
+  .btn-o:hover { background: var(--color-track); }
+  /* for dark grounds (hero panel) */
+  .btn-o-white { background: rgba(255,255,255,.12); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45); }
+  .btn-ghost { background: transparent; color: var(--color-green); }
+  .btn-ghost:hover { background: rgba(9, 75, 38, 0.08); filter: none; }
 }
 
-/* hero — green gradient with a warm glow (class name kept for stability) */
+/* hero band — green-deep with a soft gold glow (class name kept for stability) */
 .hero-navy {
-  background:
-    radial-gradient(1000px 380px at 15% -25%, rgba(230,180,34,.18), transparent 60%),
-    linear-gradient(135deg, var(--color-navy) 0%, #1a2712 100%);
-  color: #fff;
   position: relative;
   overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(900px 360px at 12% -20%, rgba(255, 222, 73, 0.14), transparent 60%),
+    linear-gradient(135deg, #094b26 0%, #0d5c2f 60%, #2f8a4d 100%);
+}
+
+/* the comp's glass panel: green-deep at ~80% over the city photo, big radius, soft blur */
+.hero-glass {
+  color: #fff;
+  background: var(--glass-green);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-radius: 40px;
+  box-shadow: 0 24px 60px -30px rgba(0, 28, 76, 0.45);
 }
 
 /* animations */
