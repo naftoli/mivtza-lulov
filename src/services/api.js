@@ -119,6 +119,13 @@ function loggedTotal(schoolId, shakes) {
 const PER_KID = 5
 const kidCountOf = (s) => s.soldierCount || 0
 
+// Percent of a goal, floored and clamped to 0-100. It is 100 ONLY once the
+// total actually reaches the goal — 4,922 of 4,930 is "99%", never "100%".
+export function goalPercent(total, goal) {
+  if (total >= goal) return 100
+  return Math.max(0, Math.min(99, Math.floor((total / goal) * 100)))
+}
+
 function decorateSchool(school, shakes) {
   const kids = kidCountOf(school)
   const bonusLevel = school.bonusLevel || 0
@@ -137,8 +144,8 @@ function decorateSchool(school, shakes) {
     total,
     goalReached,
     activeGoal,
-    percent: Math.min(100, Math.round((total / activeGoal) * 100)),
-    percentOfBase: Math.min(100, Math.round((total / goal) * 100)),
+    percent: goalPercent(total, activeGoal),
+    percentOfBase: goalPercent(total, goal),
   }
 }
 
@@ -207,7 +214,7 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
       const count = shaken[g] || 0
       const kidCount = classKids[g] || 0
       const goal = Math.max(1, kidCount * PER_KID)
-      return { grade: g, count, kidCount, goal, percent: Math.min(100, Math.round((count / goal) * 100)) }
+      return { grade: g, count, kidCount, goal, percent: goalPercent(count, goal) }
     })
     .sort((a, b) => b.percent - a.percent || b.count - a.count)
     .slice(0, limit)

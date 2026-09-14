@@ -16,7 +16,7 @@ import { asset } from '../lib/asset.js'
 // sizes) + a breathing gap. The marker then can never cross it: even at 100%
 // it stands centred on the bar's right edge, inside the gutter.
 export default function GoalBar({ percent, label = 'of goal', marker = true, className = '' }) {
-  const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)))
+  const p = Math.max(0, Math.min(100, Math.floor(Number(percent) || 0)))
   return (
     <div className={`relative ${className}`}>
       <div

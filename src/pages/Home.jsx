@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getSchools, getGlobalStats } from '../services/api.js'
+import { getSchools, getGlobalStats, goalPercent } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, daysLeft, shortSchoolName } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
@@ -133,7 +133,7 @@ export default function Home() {
   const { data: schools, loading } = useLiveData(() => getSchools(), [])
   const { data: stats } = useLiveData(() => getGlobalStats(), [])
 
-  const percent = stats ? Math.min(100, Math.round((stats.totalShakes / Math.max(1, stats.totalGoal)) * 100)) : 0
+  const percent = stats ? goalPercent(stats.totalShakes, Math.max(1, stats.totalGoal)) : 0
   const goalReached = !!stats && stats.totalShakes >= stats.totalGoal
 
   return (
