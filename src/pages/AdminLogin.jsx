@@ -3,6 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Button, Card, Field, Input, Band } from '../components/ui.jsx'
 import { asset } from '../lib/asset.js'
+import { SEED } from '../data/seed.js'
+
+// Dev-only login hint, derived from the seeded demo admins so it can't drift.
+// `import.meta.env.DEV` is false in `vite build`, so this never ships to production.
+function DemoHint() {
+  const hq = SEED.admins.find((a) => a.role === 'hq')
+  const school = SEED.admins.find((a) => a.role === 'school')
+  if (!hq || !school) return null
+  return (
+    <p className="mt-5 rounded-xl bg-white/55 px-3 py-2 text-center text-xs text-muted">
+      <strong className="text-navy">Demo:</strong> HQ → <code>{hq.username}</code> / <code>{hq.password}</code> · School → <code>{school.username}</code> / <code>{school.password}</code>
+    </p>
+  )
+}
 
 export default function AdminLogin() {
   const { loginAdmin } = useAuth()
@@ -33,15 +47,13 @@ export default function AdminLogin() {
           <p className="mt-1.5 text-center text-sm text-muted">For Tzivos Hashem HQ and school offices.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="hq or your school" required /></Field>
+            <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. oholei-torah" required /></Field>
             <Field label="Password"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
             {error && <p className="rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
             <Button type="submit" variant="navy" className="w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Button>
           </form>
 
-          <p className="mt-5 rounded-xl bg-white/55 px-3 py-2 text-center text-xs text-muted">
-            <strong className="text-navy">Demo:</strong> HQ → <code>hq</code> / <code>lulav</code> · School → <code>bais-rivkah</code> / <code>lulav</code>
-          </p>
+          {import.meta.env.DEV && <DemoHint />}
         </div>
       </Card>
     </div>

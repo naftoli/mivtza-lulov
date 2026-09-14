@@ -1,4 +1,5 @@
 import { Card, SectionHeader, Button } from '../components/ui.jsx'
+import { LULAV_DAYS, ordinal } from '../lib/succos.js'
 
 // Numbered step on a sky card: green-deep circle badge with a white Exo Black numeral
 // (page content, so not the condensed face).
@@ -46,7 +47,7 @@ export default function HowTo() {
             </p>
           </div>
           <p className="mt-3 text-sm text-muted">
-            On the <strong className="text-navy">first day</strong> of Succos, also say <strong className="text-navy">Shehecheyanu</strong>.
+            The <strong className="text-navy">first time</strong> you shake Lulav this Succos (the first day that isn't Shabbos — this year, the <strong className="text-navy">{ordinal(LULAV_DAYS[0])} day</strong>), also say <strong className="text-navy">Shehecheyanu</strong>.
           </p>
         </Card>
 

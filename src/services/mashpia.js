@@ -35,7 +35,11 @@ async function req(path, { method = 'GET', body } = {}) {
 export async function verifyKid(serial, dob) {
   const { token, soldier } = await req('/soldier/login', { method: 'POST', body: { serial, dob } })
   authToken = token
-  return soldier // { serial→id, kidKey (opaque, server-issued), firstName, lastName, hebFirst, hebLast, dob, gender, grade, rank, schoolId }
+  // soldier: { serial→id, kidKey (opaque, server-issued), firstName, lastName, hebFirst, hebLast, dob, gender, grade, rank, schoolId }
+  // The caller persists this in localStorage — strip the credential (dob) and
+  // gender before it leaves the adapter, same as the mock in ./api.js.
+  const { dob: _dob, gender: _g, ...safe } = soldier
+  return safe
 }
 export async function verifyAdmin(username, password) {
   const { token, admin } = await req('/admin/login', { method: 'POST', body: { username, password } })

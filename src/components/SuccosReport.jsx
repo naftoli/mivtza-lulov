@@ -2,25 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { getReport, saveReport } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fileToScaledDataUrl } from '../lib/format.js'
+import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
 import { asset } from '../lib/asset.js'
 import { Card, Field, Input, Textarea, Button, SectionHeader, Pill, Spinner } from './ui.jsx'
-
-// The six days Lulav is taken (the 5th day of Succos is Shabbos — skipped),
-// matching the teacher checklist.
-const DAYS = [
-  { n: 1, label: '1st' },
-  { n: 2, label: '2nd' },
-  { n: 3, label: '3rd' },
-  { n: 4, label: '4th' },
-  { n: 6, label: '6th' },
-  { n: 7, label: '7th' },
-]
 
 const DEFAULTS = { days: [], minutes: '', peopleWithFriends: '', peoplePersonal: '', story: '', photos: [] }
 
 // Small-label style (Exo semibold caps, navy) — matches the Field label; condensed
 // caps are reserved for buttons and nav.
 const LABEL = 'text-[12px] font-semibold uppercase tracking-[0.08em] text-navy'
+// Failure notice — the muted race-red tint the admin moderation card uses for hidden entries.
+const ERROR_NOTICE = 'animate-pop rounded-xl bg-race-red/12 px-3 py-2 text-sm font-semibold text-red ring-1 ring-race-red/45'
 
 export default function SuccosReport({ kid, loggedShakes = 0 }) {
   const fileRef = useRef(null)
@@ -28,11 +20,13 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [savedAt, setSavedAt] = useState(null)
+  const [error, setError] = useState('')
 
   // Prefill once the saved report has loaded.
   useEffect(() => {
     if (!loading && form === null) {
-      const base = report ? { ...DEFAULTS, ...report, days: report.days || [] } : { ...DEFAULTS }
+      // Drop any tick that isn't a Lulav day this year (e.g. saved under last year's calendar).
+      const base = report ? { ...DEFAULTS, ...report, days: (report.days || []).filter((n) => LULAV_DAYS.includes(n)) } : { ...DEFAULTS }
       // Link the two forms: default "people personally" to the shakes already logged.
       if (base.peoplePersonal === '' || base.peoplePersonal == null) base.peoplePersonal = loggedShakes || ''
       setForm(base)
@@ -52,24 +46,34 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
     try {
       const urls = await Promise.all(files.map((fl) => fileToScaledDataUrl(fl)))
       set('photos', [...form.photos, ...urls])
-    } catch { /* ignore bad image */ }
+      setError('')
+    } catch {
+      setError('Could not read one of those images — try another.')
+    }
     if (fileRef.current) fileRef.current.value = ''
   }
 
   async function save(e) {
     e.preventDefault()
     setBusy(true)
-    const saved = await saveReport(kid.id, {
-      schoolId: kid.schoolId,
-      days: form.days,
-      minutes: form.minutes === '' ? null : Number(form.minutes),
-      peopleWithFriends: form.peopleWithFriends === '' ? null : Number(form.peopleWithFriends),
-      peoplePersonal: form.peoplePersonal === '' ? null : Number(form.peoplePersonal),
-      story: form.story.trim(),
-      photos: form.photos,
-    })
-    setBusy(false)
-    setSavedAt(saved.updatedAt)
+    setError('')
+    try {
+      const saved = await saveReport(kid.id, {
+        schoolId: kid.schoolId,
+        days: form.days,
+        minutes: form.minutes === '' ? null : Number(form.minutes),
+        peopleWithFriends: form.peopleWithFriends === '' ? null : Number(form.peopleWithFriends),
+        peoplePersonal: form.peoplePersonal === '' ? null : Number(form.peoplePersonal),
+        story: form.story.trim(),
+        photos: form.photos,
+      })
+      setSavedAt(saved?.updatedAt || new Date().toISOString())
+    } catch (err) {
+      // Nothing was saved — keep the form so the kid can retry.
+      setError(err?.message || 'Could not save your report — please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -90,19 +94,19 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
           </span>
           <p className="mb-2 text-xs text-navy/70">I helped other Yidden shake Lulav &amp; Esrog on the…</p>
           <div className="flex flex-wrap gap-2">
-            {DAYS.map((d) => {
-              const on = form.days.includes(d.n)
+            {LULAV_DAYS.map((n) => {
+              const on = form.days.includes(n)
               return (
                 // Pill toggles: navy when selected; the deeper sky (track) when not, so
                 // they still read against the sky card.
-                <button type="button" key={d.n} onClick={() => toggleDay(d.n)} aria-pressed={on}
+                <button type="button" key={n} onClick={() => toggleDay(n)} aria-pressed={on}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition ${on ? 'bg-navy text-white shadow-sm' : 'bg-track text-navy ring-1 ring-transparent hover:ring-green-mid'}`}>
-                  {on ? '✓ ' : ''}{d.label} day
+                  {on ? '✓ ' : ''}{ordinal(n)} day
                 </button>
               )
             })}
           </div>
-          <p className="mt-2 text-xs text-navy/70">(The 5th day of Succos is Shabbos — no Lulav.)</p>
+          <p className="mt-2 text-xs text-navy/70">(The {ordinal(SHABBOS_DAY)} day of Succos is Shabbos — no Lulav.)</p>
         </div>
 
         {/* Numbers */}
@@ -121,7 +125,7 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
         {/* Photos */}
         <div>
           <span className={`mb-1.5 block ${LABEL}`}>Photos from the field</span>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple onChange={onFiles} className="hidden" id="reportPhotos" />
+          <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" id="reportPhotos" />
           <label htmlFor="reportPhotos"
             className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-track bg-white/70 px-4 py-5 text-center transition hover:border-green-mid hover:bg-white">
             <img src={asset('design/icon-camera.png')} alt="" className="h-11 w-auto" />
@@ -145,9 +149,10 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
           <Textarea rows={3} value={form.story} onChange={(e) => set('story', e.target.value)} placeholder="e.g. We went to the hospital and everyone was so happy to shake Lulav!" />
         </Field>
 
+        {error && <p className={ERROR_NOTICE}>{error}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="gold" disabled={busy}>{busy ? 'Saving…' : 'Save my report'}</Button>
-          {savedAt && !busy && <span className="text-sm font-semibold uppercase tracking-[0.06em] text-green">✓ Saved</span>}
+          {savedAt && !busy && !error && <span className="text-sm font-semibold uppercase tracking-[0.06em] text-green">✓ Saved</span>}
         </div>
       </form>
     </Card>

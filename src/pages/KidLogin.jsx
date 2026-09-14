@@ -46,9 +46,12 @@ export default function KidLogin() {
             </Button>
           </form>
 
-          <p className="mt-4 rounded-xl bg-white/70 px-3 py-2 text-center text-xs text-navy/80">
-            <strong>Demo:</strong> Serial <code>100000</code> · DOB <code>2015-01-01</code>
-          </p>
+          {/* Dev-only hint (kid 100000 / 2015-01-01 is the seeded "Demo Soldier"); dropped from `vite build`. */}
+          {import.meta.env.DEV && (
+            <p className="mt-4 rounded-xl bg-white/70 px-3 py-2 text-center text-xs text-navy/80">
+              <strong>Demo:</strong> Serial <code>100000</code> · DOB <code>2015-01-01</code>
+            </p>
+          )}
         </div>
       </Card>
     </div>

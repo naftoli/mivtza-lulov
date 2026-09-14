@@ -13,7 +13,9 @@
 
 import { SEED } from '../data/seed.js'
 
-const VERSION = 'v9'
+// Exported so the session keys in AuthContext can be versioned with the data:
+// a session saved against an older seed must not log a ghost soldier in.
+export const VERSION = 'v9'
 const KEYS = {
   schools: `ml_${VERSION}_schools`,
   kids: `ml_${VERSION}_kids`,
@@ -38,8 +40,11 @@ function write(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch (e) {
-    // Most likely a storage-quota error from large photos.
+    // Most likely a storage-quota error from large photos. Fail loudly so the
+    // caller can tell the user — never emit() for data that was not saved.
     console.warn('Could not save to localStorage:', e)
+    const full = e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014
+    throw new Error(full ? 'Could not save — storage is full. Try fewer or smaller photos.' : 'Could not save — please try again.')
   }
   emit()
 }
@@ -51,13 +56,19 @@ function emit() {
   } catch { /* noop */ }
 }
 
-// Seed on first run.
+// Seed on first run. Guarded: this runs at module load, so blocked storage
+// (private mode, disabled site data) or a full quota must not crash the app
+// before React mounts — reads simply fall back to empty.
 function ensureSeed() {
-  if (!localStorage.getItem(KEYS.schools)) {
-    localStorage.setItem(KEYS.schools, JSON.stringify(SEED.schools))
-    localStorage.setItem(KEYS.kids, JSON.stringify(SEED.kids))
-    localStorage.setItem(KEYS.admins, JSON.stringify(SEED.admins))
-    localStorage.setItem(KEYS.shakes, JSON.stringify(SEED.shakes))
+  try {
+    if (!localStorage.getItem(KEYS.schools)) {
+      localStorage.setItem(KEYS.schools, JSON.stringify(SEED.schools))
+      localStorage.setItem(KEYS.kids, JSON.stringify(SEED.kids))
+      localStorage.setItem(KEYS.admins, JSON.stringify(SEED.admins))
+      localStorage.setItem(KEYS.shakes, JSON.stringify(SEED.shakes))
+    }
+  } catch (e) {
+    console.warn('Could not seed localStorage:', e)
   }
 }
 ensureSeed()
@@ -262,8 +273,13 @@ export async function verifyKid(id, dob) {
   const kid = read(KEYS.kids, []).find(
     (k) => k.id.trim() === id.trim() && k.dob === dob,
   )
+  if (!kid) return null
+  // Never hand the credential back: dob is half of the login and gender is not
+  // needed by any screen. AuthContext persists this object, so what leaves
+  // here is what sits in localStorage.
+  const { dob: _dob, gender: _g, ...safe } = kid
   // kidKey is what public rows carry instead of the serial (see publicShake).
-  return kid ? { ...clone(kid), kidKey: kidKey(kid.id) } : null
+  return { ...clone(safe), kidKey: kidKey(kid.id) }
 }
 
 export async function verifyAdmin(username, password) {
@@ -296,7 +312,7 @@ export async function addShake({ kid, count, note, photos }) {
     hidden: false,
   }
   shakes.push(entry)
-  write(KEYS.shakes, shakes)
+  write(KEYS.shakes, shakes) // throws if nothing was saved — nothing below runs
 
   // Auto-advance bonus rounds: each round adds 1 shake/kid to the target, so as
   // soon as the current target is passed, the next round kicks in automatically.
@@ -332,6 +348,22 @@ export async function approvePhotos(shakeId) {
   if (s) s.photoApproved = true
   write(KEYS.shakes, shakes)
   return s ? clone(s) : null
+}
+
+// Bulk approve: flips every pending entry in the school (same set getPendingPhotos returns).
+// Returns the number of entries approved.
+export async function approveAllPhotos(schoolId) {
+  await delay()
+  const shakes = read(KEYS.shakes, [])
+  let n = 0
+  shakes.forEach((s) => {
+    if (s.schoolId === schoolId && !s.hidden && !s.photoApproved && (s.photos?.length || s.photo)) {
+      s.photoApproved = true
+      n++
+    }
+  })
+  if (n > 0) write(KEYS.shakes, shakes)
+  return n
 }
 
 // Reject = remove the photos (the shake entry + its count stay).
