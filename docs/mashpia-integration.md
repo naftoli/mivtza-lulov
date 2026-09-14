@@ -80,7 +80,11 @@ checklist one-to-one:
 ### E. Photos — approval workflow
 - Uploaded photos are submitted as **pending** and are **not shown publicly** until a school
   admin **approves** them. Mashpia needs endpoints to: submit a photo (pending), list pending
-  photos for a school, and approve/reject.
+  photos for a school, approve/reject one entry, and **approve all pending for a school** in one
+  call (the admin page has an "Approve all (N)" button — `approveAllPhotos(schoolId)`).
+- Approval is per **entry**, and an entry can carry several photos, so the pending list must
+  return **every** photo URL of each entry (not just the first) — the admin sees them all
+  before approving.
 - Accepted format (multipart upload or base64?) and size limit — please specify.
 
 ### F. Public reads — never expose serials or DOB

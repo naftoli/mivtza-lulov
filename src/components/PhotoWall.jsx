@@ -28,18 +28,25 @@ export default function PhotoWall({ shakes }) {
         ))}
       </div>
 
-      {active && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,16,34,.92)] p-4" onClick={() => setActive(null)}>
-          <div className="max-w-lg overflow-hidden rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
-            <img src={active.photo} alt="" className="max-h-[70vh] w-full bg-navy-dark object-contain" />
-            <div className="p-4">
-              <p className="font-semibold text-navy">{active.kidName} · {active.count} shakes</p>
-              {active.note && <p className="text-sm italic text-muted">“{active.note}”</p>}
-              <p className="mt-1 font-cond text-[11px] uppercase tracking-[0.08em] text-muted/70">{timeAgo(active.createdAt)}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <PhotoLightbox photo={active} onClose={() => setActive(null)} />
     </Card>
+  )
+}
+
+// Full-size viewer for one photo. `photo` is a shake entry with a single `photo`
+// URL picked out (see the flatMap above); shared with the admin approval card.
+export function PhotoLightbox({ photo: active, onClose }) {
+  if (!active) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,16,34,.92)] p-4" onClick={onClose}>
+      <div className="max-w-lg overflow-hidden rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
+        <img src={active.photo} alt="" className="max-h-[70vh] w-full bg-navy-dark object-contain" />
+        <div className="p-4">
+          <p className="font-semibold text-navy">{active.kidName} · {active.count} shakes</p>
+          {active.note && <p className="text-sm italic text-muted">“{active.note}”</p>}
+          <p className="mt-1 font-cond text-[11px] uppercase tracking-[0.08em] text-muted/70">{timeAgo(active.createdAt)}</p>
+        </div>
+      </div>
+    </div>
   )
 }

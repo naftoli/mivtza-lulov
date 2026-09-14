@@ -334,6 +334,22 @@ export async function approvePhotos(shakeId) {
   return s ? clone(s) : null
 }
 
+// Bulk approve: flips every pending entry in the school (same set getPendingPhotos returns).
+// Returns the number of entries approved.
+export async function approveAllPhotos(schoolId) {
+  await delay()
+  const shakes = read(KEYS.shakes, [])
+  let n = 0
+  shakes.forEach((s) => {
+    if (s.schoolId === schoolId && !s.hidden && !s.photoApproved && (s.photos?.length || s.photo)) {
+      s.photoApproved = true
+      n++
+    }
+  })
+  if (n > 0) write(KEYS.shakes, shakes)
+  return n
+}
+
 // Reject = remove the photos (the shake entry + its count stay).
 export async function rejectPhotos(shakeId) {
   await delay()

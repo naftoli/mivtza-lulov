@@ -4,9 +4,10 @@ import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   updateSchool, setShakeHidden, addKid, resetDemoData, getReportsForSchool,
-  getPendingPhotos, approvePhotos, rejectPhotos,
+  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos,
 } from '../services/api.js'
 import ReportGrid from '../components/ReportGrid.jsx'
+import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo } from '../components/ui.jsx'
@@ -114,7 +115,7 @@ function SchoolAdmin({ schoolId }) {
         <CampaignSettings school={school} />
         <Roster schoolId={schoolId} kids={kids || []} />
       </div>
-      <PhotoApprovals shakes={pending || []} />
+      <PhotoApprovals schoolId={schoolId} shakes={pending || []} />
       <ReportGrid kids={kids || []} reports={reports || []} />
       <Moderation shakes={shakes || []} />
     </div>
@@ -219,27 +220,54 @@ function Roster({ schoolId, kids }) {
   )
 }
 
-function PhotoApprovals({ shakes }) {
+function PhotoApprovals({ schoolId, shakes }) {
+  const [active, setActive] = useState(null) // photo open in the lightbox
+  const [busy, setBusy] = useState(false)
+
+  async function approveAll() {
+    if (!confirm(`Approve all ${shakes.length} pending entries? Every photo in them will show on the public page.`)) return
+    setBusy(true)
+    try { await approveAllPhotos(schoolId) } finally { setBusy(false) }
+  }
+
   return (
     <Section title="Photo Approvals" topColor="var(--color-gold)"
-      right={<Pill>{shakes.length} pending</Pill>}>
+      right={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Pill>{shakes.length} pending</Pill>
+          {shakes.length > 0 && (
+            <Button variant="gold" className="!px-3 !py-1.5 !text-[11px]" disabled={busy} onClick={approveAll}>
+              ✓ Approve all ({shakes.length})
+            </Button>
+          )}
+        </div>
+      }>
       {shakes.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">Nothing to review — all photos approved. ✓</p>
       ) : (
         <>
-          <p className="mb-4 text-xs text-muted">Photos are hidden from the public page until you approve them.</p>
+          <p className="mb-4 text-xs text-muted">Photos are hidden from the public page until you approve them. Approving an entry publishes every photo in it — tap a thumbnail to see it full size.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {shakes.map((s) => {
               const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
               return (
-                <div key={s.id} className="flex items-start gap-3 rounded-xl border border-line p-3">
-                  <img src={imgs[0]} alt="" className="h-16 w-16 flex-none rounded-lg object-cover" />
-                  <div className="min-w-0 flex-1">
+                <div key={s.id} className="rounded-xl border border-line p-3">
+                  {/* every photo in the entry — the admin must be able to see what Approve will publish */}
+                  <div className="flex flex-wrap gap-2">
+                    {imgs.map((img, i) => (
+                      <button key={i} type="button" onClick={() => setActive({ ...s, photo: img })}
+                        aria-label={`View photo ${i + 1} of ${imgs.length} full size`}
+                        className="h-16 w-16 flex-none overflow-hidden rounded-lg ring-1 ring-line transition hover:ring-gold">
+                        <img src={img} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 min-w-0">
                     <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs text-muted">· {imgs.length} photos</span>}</p>
                     {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
                     <p className="font-cond text-[11px] uppercase tracking-[0.08em] text-muted/70">{timeAgo(s.createdAt)}</p>
                     <div className="mt-2 flex gap-2">
-                      <Button variant="gold" className="!px-3 !py-1.5 !text-[11px]" onClick={() => approvePhotos(s.id)}>✓ Approve</Button>
+                      <Button variant="gold" className="!px-3 !py-1.5 !text-[11px]" onClick={() => approvePhotos(s.id)}>✓ Approve{imgs.length > 1 ? ` all ${imgs.length}` : ''}</Button>
                       <Button variant="outline" className="!px-3 !py-1.5 !text-[11px]" onClick={() => rejectPhotos(s.id)}>Reject</Button>
                     </div>
                   </div>
@@ -249,6 +277,7 @@ function PhotoApprovals({ shakes }) {
           </div>
         </>
       )}
+      <PhotoLightbox photo={active} onClose={() => setActive(null)} />
     </Section>
   )
 }
