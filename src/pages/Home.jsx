@@ -37,15 +37,16 @@ function SchoolsRace({ schools }) {
       </div>
       <div className="space-y-2.5">
         {ranked.map((s, i) => (
-          <Link key={s.id} to={`/s/${s.id}`} className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-paper">
+          <Link key={s.id} to={`/s/${s.id}`} className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg px-2 py-2 transition hover:bg-paper sm:flex-nowrap sm:gap-3">
             <span className="w-7 flex-none text-center text-lg font-bold text-navy">{['🥇', '🥈', '🥉'][i] || i + 1}</span>
             <SchoolLogo school={s} size={34} />
-            <span className="w-28 flex-none truncate font-semibold text-navy sm:w-40">{s.name}</span>
-            <span className="relative h-4 flex-1 overflow-hidden rounded-full bg-track">
+            <span className="min-w-0 flex-1 truncate font-semibold text-navy sm:w-40 sm:flex-none">{s.name}</span>
+            {/* Below sm the bar drops to its own full-width line so it can never be squeezed to 0px. */}
+            <span className="relative order-last h-4 basis-full overflow-hidden rounded-full bg-track sm:order-none sm:flex-1">
               <span className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
                 style={{ width: `${Math.max(s.percent, 3)}%`, background: s.color }} />
             </span>
-            <span className="w-20 flex-none text-right font-cond text-sm font-bold tabular-nums text-navy sm:w-24">
+            <span className="w-14 flex-none text-right font-cond text-sm font-bold tabular-nums text-navy sm:w-24">
               {sort === 'percent' ? `${s.percent}%` : fmt(s.total)}
             </span>
           </Link>
