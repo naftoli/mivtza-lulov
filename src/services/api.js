@@ -13,7 +13,9 @@
 
 import { SEED } from '../data/seed.js'
 
-const VERSION = 'v9'
+// Exported so the session keys in AuthContext can be versioned with the data:
+// a session saved against an older seed must not log a ghost soldier in.
+export const VERSION = 'v9'
 const KEYS = {
   schools: `ml_${VERSION}_schools`,
   kids: `ml_${VERSION}_kids`,
@@ -271,8 +273,13 @@ export async function verifyKid(id, dob) {
   const kid = read(KEYS.kids, []).find(
     (k) => k.id.trim() === id.trim() && k.dob === dob,
   )
+  if (!kid) return null
+  // Never hand the credential back: dob is half of the login and gender is not
+  // needed by any screen. AuthContext persists this object, so what leaves
+  // here is what sits in localStorage.
+  const { dob: _dob, gender: _g, ...safe } = kid
   // kidKey is what public rows carry instead of the serial (see publicShake).
-  return kid ? { ...clone(kid), kidKey: kidKey(kid.id) } : null
+  return { ...clone(safe), kidKey: kidKey(kid.id) }
 }
 
 export async function verifyAdmin(username, password) {
