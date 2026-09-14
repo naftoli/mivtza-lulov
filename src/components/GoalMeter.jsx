@@ -6,6 +6,12 @@ import { Pill } from './ui.jsx'
 // Thick angular "campaign" line that climbs with a couple of bends to a stub
 // arrowhead — with a gradient, glow, milestone markers, a pulsing progress dot,
 // and a sparkle at the goal.
+//
+// 2026 redesign: this is a RESKIN only. The path geometry, viewBox, stroke
+// widths and every overlay offset in the wide variant are client-tuned and
+// must stay exactly as they are — only colours and type changed (arrow now
+// runs gold -> green-mid over the sky track, navy-tinted arrowhead, gold
+// sparkles, green-deep progress dot).
 const TREND = 'M14,128 L120,80 L208,90 L300,28'
 // School (wide) variant: same shoulders, but the middle segment is dead level
 // (both points at the same height) instead of tilting.
@@ -38,14 +44,17 @@ function GoalTrend({ percent, d = TREND, sparkleAtTip = false }) {
   return (
     <svg viewBox="-14 -6 346 158" className="h-auto w-full" role="img" aria-label={`${p}% of goal`}>
       <defs>
+        {/* arrow fill: gold -> green-mid (the --grad-arrow pair, as SVG stops) */}
         <linearGradient id={gradId} x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="#f6c945" /><stop offset="1" stopColor="#ef8a2c" />
+          <stop offset="0" style={{ stopColor: 'var(--color-gold)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--color-green-mid)' }} />
         </linearGradient>
         <marker id={arrId} markerUnits="userSpaceOnUse" markerWidth="26" markerHeight="26" refX="7" refY="13" orient="auto">
-          <path d="M1,2 L24,13 L1,24 Z" fill="var(--color-line)" />
+          {/* navy-tinted stub arrowhead over the sky card */}
+          <path d="M1,2 L24,13 L1,24 Z" fill="var(--color-navy)" fillOpacity="0.38" />
         </marker>
         <filter id={glowId} x="-30%" y="-40%" width="160%" height="180%">
-          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#ef8a2c" floodOpacity="0.35" />
+          <feDropShadow dx="0" dy="3" stdDeviation="4" style={{ floodColor: 'var(--color-green)' }} floodOpacity="0.28" />
         </filter>
       </defs>
 
@@ -54,7 +63,7 @@ function GoalTrend({ percent, d = TREND, sparkleAtTip = false }) {
 
       {/* milestone markers on the track */}
       {pts?.ms.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="3.6" fill="#fff" stroke="var(--color-line)" strokeWidth="2" />
+        <circle key={i} cx={x} cy={y} r="3.6" fill="#fff" stroke="var(--color-navy)" strokeOpacity="0.35" strokeWidth="2" />
       ))}
 
       {/* progress line — gradient + glow, revealed to percent */}
@@ -64,25 +73,25 @@ function GoalTrend({ percent, d = TREND, sparkleAtTip = false }) {
       {/* pulsing "you are here" dot */}
       {pts && (
         <g>
-          <circle cx={pts.prog[0]} cy={pts.prog[1]} r="7" fill="none" stroke="#ef8a2c" strokeWidth="2" opacity="0.7">
+          <circle cx={pts.prog[0]} cy={pts.prog[1]} r="7" fill="none" stroke="var(--color-green-mid)" strokeWidth="2" opacity="0.7">
             <animate attributeName="r" values="7;16;7" dur="1.9s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="0.7;0;0.7" dur="1.9s" repeatCount="indefinite" />
           </circle>
           <circle cx={pts.prog[0]} cy={pts.prog[1]} r="7" fill="#fff" />
-          <circle cx={pts.prog[0]} cy={pts.prog[1]} r="4.5" fill="#ef8a2c" />
+          <circle cx={pts.prog[0]} cy={pts.prog[1]} r="4.5" fill="var(--color-green)" />
         </g>
       )}
 
-      {/* sparkles at the goal */}
+      {/* sparkles at the goal — gold */}
       {sparkleAtTip ? (
         pts?.tip && (
-          <g fill="#f6c945">
+          <g fill="var(--color-gold)">
             <path d={star(pts.tip[0] + 6, pts.tip[1] - 3, 6)} />
             <path d={star(pts.tip[0] - 7, pts.tip[1] - 10, 3.4)} opacity="0.85" />
           </g>
         )
       ) : (
-        <g fill="#f6c945">
+        <g fill="var(--color-gold)">
           <path d={star(306, 12, 6)} />
           <path d={star(287, 20, 3.4)} opacity="0.85" />
         </g>
@@ -108,38 +117,57 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
     prevReached.current = goalReached
   }, [percent, goalReached, celebrateMilestones])
 
-  // Experimental "wide" layout: the arrow spans the whole card, with the shake
-  // count in the top-left corner and the goal/percent in the bottom-right —
-  // the two empty corners the diagonal arrow leaves.
+  // "Wide" layout (school campaign card): the arrow spans the whole card, with
+  // the shake count in the top-left corner and the goal/percent in the
+  // bottom-right — the two empty corners the diagonal arrow leaves.
+  // Every offset in the sm-and-up overlay is client-tuned — do not move anything.
   if (variant === 'wide') {
+    // Shared by both layouts below so the phone flow and the desktop overlay
+    // can never drift apart.
+    const count = (
+      <>
+        <p className="flex items-baseline gap-2">
+          <span className="text-3xl">🌿</span>
+          <span className="pb-2 pr-1.5 font-display text-6xl font-black leading-[1.15] tabular-nums text-green">
+            {fmt(total)}
+          </span>
+        </p>
+        <p className="mt-1 text-sm font-semibold uppercase tracking-[0.18em] text-navy">
+          Total Shakes
+        </p>
+      </>
+    )
+    const panel = (
+      <>
+        <p className="font-display text-2xl font-black leading-none tabular-nums text-green">{percentOfBase ?? percent}%</p>
+        <p className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-navy">of goal · {fmt(goal)}</p>
+        {bonusActive ? (
+          <div className="mt-3 border-t border-navy/10 pt-2.5">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-gold-dark">Bonus · {fmt(bonusGoal)}</p>
+          </div>
+        ) : goalReached ? (
+          <p className="mt-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-green">🎉 Goal reached!</p>
+        ) : null}
+      </>
+    )
     return (
       <div className="relative mx-auto w-full max-w-[560px]">
+        {/* phones (below sm): stacked flow — count, arrow, then panel + buttons.
+            The arrow is only ~135px tall at 375px, so overlays would pile up. */}
+        <div className="mb-1 sm:hidden">{count}</div>
         <GoalTrend percent={percent} d={SCHOOL_TREND} sparkleAtTip />
-        <div className="pointer-events-none absolute inset-0">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 sm:hidden">
+          <div className="rounded-2xl bg-sky/95 px-3 py-2 text-center shadow-sm ring-1 ring-navy/10">{panel}</div>
+          {(actions || centerAction) && (
+            <div className="flex flex-wrap items-center gap-2">{actions}{centerAction}</div>
+          )}
+        </div>
+        {/* sm and up: the overlay composition (client-tuned — keep as is) */}
+        <div className="pointer-events-none absolute inset-0 hidden sm:block">
           {/* count — top left */}
-          <div className="absolute -left-8 -top-2 text-left">
-            <p className="flex items-baseline gap-2">
-              <span className="text-3xl">🌿</span>
-              <span className="bg-gradient-to-br from-[#f6c945] to-[#ef8a2c] bg-clip-text pb-2 pr-1.5 font-display text-6xl font-bold leading-[1.15] tabular-nums text-transparent">
-                {fmt(total)}
-              </span>
-            </p>
-            <p className="mt-1 font-cond text-sm font-semibold uppercase tracking-[0.18em] text-muted">
-              Total Shakes
-            </p>
-          </div>
+          <div className="absolute -left-8 -top-2 text-left">{count}</div>
           {/* goal — standing panel overlaying the arrow */}
-          <div className="pointer-events-none absolute bottom-[5%] -right-6 rounded-lg border border-line bg-card/90 px-3 py-6 text-center shadow-md backdrop-blur-sm">
-            <p className="font-display text-2xl font-bold leading-none tabular-nums text-navy">{percentOfBase ?? percent}%</p>
-            <p className="mt-1.5 font-cond text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">of goal · {fmt(goal)}</p>
-            {bonusActive ? (
-              <div className="mt-3 border-t border-line pt-2.5">
-                <p className="font-cond text-[9px] font-semibold uppercase tracking-[0.12em] text-gold-dark">Bonus · {fmt(bonusGoal)}</p>
-              </div>
-            ) : goalReached ? (
-              <p className="mt-2 font-cond text-[9px] font-semibold uppercase tracking-[0.12em] text-green">🎉 Goal reached!</p>
-            ) : null}
-          </div>
+          <div className="pointer-events-none absolute bottom-[5%] -right-6 rounded-2xl bg-sky/95 px-3 py-6 text-center shadow-md ring-1 ring-navy/10 backdrop-blur-sm">{panel}</div>
           {/* share — back in the valley, lower-left */}
           {actions && (
             <div className="pointer-events-auto absolute bottom-[13%] left-[30%]">{actions}</div>
@@ -158,26 +186,26 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
       <div className="w-full max-w-[460px] flex-1"><GoalTrend percent={percent} /></div>
 
       <div className="flex-none text-center sm:text-right">
-        <p className="font-cond text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-navy">
           {bonusActive ? `Bonus Round ×${bonusLevel}` : 'Total Shakes'}
         </p>
 
         <p className="mt-1 flex items-baseline justify-center gap-2 sm:justify-end">
           <span className="text-3xl">🌿</span>
-          <span className="bg-gradient-to-br from-[#f6c945] to-[#ef8a2c] bg-clip-text pb-2 pr-1.5 font-display text-6xl font-bold leading-[1.15] tabular-nums text-transparent">
+          <span className="pb-2 pr-1.5 font-display text-6xl font-black leading-[1.15] tabular-nums text-green">
             {fmt(total)}
           </span>
         </p>
 
-        <p className="mt-3 font-cond text-sm font-semibold uppercase tracking-[0.1em] text-muted">
+        <p className="mt-3 text-sm font-semibold uppercase tracking-[0.08em] text-navy">
           {percentOfBase ?? percent}% of goal · {fmt(goal)} shakes
         </p>
         {bonusActive ? (
-          <p className="font-cond text-sm font-semibold uppercase tracking-[0.1em] text-gold-dark">
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-gold-dark">
             Bonus goal · {fmt(bonusGoal)} shakes
           </p>
         ) : goalReached ? (
-          <Pill className="mt-2 !bg-green/15 !text-green">🎉 Goal reached!</Pill>
+          <Pill className="mt-2 !bg-green !text-white">🎉 Goal reached!</Pill>
         ) : null}
       </div>
     </div>

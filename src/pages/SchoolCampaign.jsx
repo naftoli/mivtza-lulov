@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { getSchool, getShakes, getLeaderboard, getClassLeaderboard } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, daysLeft, shortSchoolName } from '../lib/format.js'
-import { Button, Card, Spinner, Pill, SchoolLogo } from '../components/ui.jsx'
+import { asset } from '../lib/asset.js'
+import { Button, Card, Spinner, SchoolLogo } from '../components/ui.jsx'
 import GoalMeter from '../components/GoalMeter.jsx'
 import RecentShakes from '../components/RecentShakes.jsx'
 import PhotoWall from '../components/PhotoWall.jsx'
@@ -17,8 +18,8 @@ function Stat({ value, label, icon, color }) {
     <div className="flex items-center gap-3">
       <span className="grid h-12 w-12 flex-none place-items-center rounded-xl text-2xl" style={{ background: `${color}18` }}>{icon}</span>
       <div className="min-w-0">
-        <div className="font-display text-2xl font-medium leading-tight tabular-nums text-navy">{value}</div>
-        <div className="whitespace-nowrap font-cond text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</div>
+        <div className="font-display text-2xl font-black leading-tight tabular-nums text-navy">{value}</div>
+        <div className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-navy">{label}</div>
       </div>
     </div>
   )
@@ -37,7 +38,7 @@ export default function SchoolCampaign() {
   if (!school) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <h1 className="font-display text-2xl font-medium text-navy">School not found</h1>
+        <h1 className="font-display text-2xl font-black text-navy">School not found</h1>
         <Button to="/" className="mt-4" variant="navy">Back to campaigns</Button>
       </div>
     )
@@ -49,25 +50,37 @@ export default function SchoolCampaign() {
 
   return (
     <div>
-      {/* Hero: Mivtza Lulav + School Name + School Logo */}
-      <section className="hero-navy">
-        <div className="mx-auto max-w-6xl px-4 py-9">
-          <Link to="/" className="text-[12px] uppercase tracking-[0.14em] text-white/70 hover:text-white">← All campaigns</Link>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <SchoolLogo school={school} size={72} className="ring-2 ring-white/20" />
-              <div>
-                <p className="font-cond text-[12px] font-semibold uppercase tracking-[0.22em] text-gold">Mivtza Lulav</p>
-                <h1 className="font-display text-4xl font-normal text-white">{shortSchoolName(school)}</h1>
-                <p className="mt-0.5 text-white/85">{school.city} · “{school.motto}”</p>
+      {/* Hero: Mivtza Lulav + School Name + School Logo — the comp's treatment:
+          the city photo, dimmed under a green-deep wash, with the content in
+          the green glass panel (gold eyebrow, white Exo Black name). */}
+      <section className="relative overflow-hidden">
+        <img src={asset('design/hero-city.jpg')} alt="" aria-hidden="true" draggable="false"
+          className="absolute inset-0 h-full w-full select-none object-cover object-[50%_65%]" />
+        <div className="absolute inset-0 bg-green/55" aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-green/45 to-transparent" aria-hidden="true" />
+
+        <div className="relative mx-auto max-w-6xl px-4 py-6 sm:py-9">
+          <div className="hero-glass rounded-[28px] p-5 sm:rounded-[36px] sm:px-8 sm:py-7">
+            <Link to="/" className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/75 hover:text-white">← All campaigns</Link>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-4">
+                <SchoolLogo school={school} size={72} className="ring-2 ring-white/30" />
+                <div className="min-w-0">
+                  <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[16px]">Mivtza Lulav</p>
+                  <h1 className="font-display text-[26px] font-black uppercase leading-[1.1] text-white sm:text-4xl lg:text-[40px]">{shortSchoolName(school)}</h1>
+                  <p className="mt-1 font-display text-white/85 sm:text-[17px]">{school.city} · “{school.motto}”</p>
+                </div>
               </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-cond text-[16px] uppercase tracking-[0.04em] text-green"
+                style={{ background: 'var(--grad-pill-green)' }}>
+                ⏳ {daysLeft(school.endDate)} days left
+              </span>
             </div>
-            <Pill className="!bg-white/10 !text-white">⏳ {daysLeft(school.endDate)} days left</Pill>
           </div>
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[1.6fr_1fr]">
+      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[1.6fr_1fr] lg:gap-8 lg:py-10">
         {/* Left column */}
         <div className="space-y-6">
           <Card className="p-6" topColor={school.color}>
@@ -80,16 +93,16 @@ export default function SchoolCampaign() {
           </Card>
 
           {school.bonusActive ? (
-            <Card className="border-l-4 !border-l-gold bg-gold/5 p-5">
-              <p className="sh !text-gold-dark">⭐ Bonus Round is ON</p>
-              <p className="mt-1 text-sm text-navy">
+            <Card className="!bg-green p-5 text-white sm:p-6">
+              <p className="sh !text-gold">⭐ Bonus Round is ON</p>
+              <p className="mt-1 text-sm text-white/90">
                 {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward a
-                stretch goal of <strong>{fmt(school.bonusGoal)}</strong>. Keep going, soldiers!
+                stretch goal of <strong className="text-gold">{fmt(school.bonusGoal)}</strong>. Keep going, soldiers!
               </p>
             </Card>
           ) : school.goalReached ? (
-            <Card className="border-l-4 !border-l-green bg-green/5 p-5">
-              <p className="sh !text-green">🎉 Goal reached!</p>
+            <Card className="p-5 ring-2 ring-inset ring-green-mid/70 sm:p-6">
+              <p className="sh">🎉 Goal reached!</p>
               <p className="mt-1 text-sm text-navy">The goal is complete — the school can unlock a <strong>bonus round</strong> to push even further.</p>
             </Card>
           ) : null}

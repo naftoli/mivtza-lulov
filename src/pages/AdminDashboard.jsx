@@ -9,7 +9,18 @@ import {
 import ReportGrid from '../components/ReportGrid.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, timeAgo } from '../lib/format.js'
+import { asset } from '../lib/asset.js'
 import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo } from '../components/ui.jsx'
+
+// Shared bits of the admin skin (sky cards on mint, navy / green-deep type).
+const label = 'text-[11px] font-semibold uppercase tracking-[0.1em] text-navy'   // small Exo label
+const tile = 'rounded-2xl bg-white/55'                                          // soft inset panel on a sky card
+const smallBtn = '!px-4 !py-2 !text-[15px]'                                     // compact pill inside cards
+// muted red pill (#eb635d = race-red token) for reject / remove — white text
+const dangerBtn = `${smallBtn} !bg-race-red !text-white`
+// race bar palette in rank order (matches the Home race card)
+const RACE = ['var(--color-race-green)', 'var(--color-race-yellow)', 'var(--color-race-blue)', 'var(--color-race-red)', 'var(--color-race-teal)']
+const MEDALS = ['medal-gold.png', 'medal-silver.png', 'medal-bronze.png']
 
 function Section({ title, children, right, topColor }) {
   return (
@@ -40,8 +51,8 @@ export default function AdminDashboard() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-cond text-[11px] font-semibold uppercase tracking-[0.16em] text-red">{admin.role === 'hq' ? 'HQ Command Center' : 'School Admin'}</p>
-          <h1 className="font-display text-3xl font-medium text-navy">{admin.name}</h1>
+          <p className="sh">{admin.role === 'hq' ? 'HQ Command Center' : 'School Admin'}</p>
+          <h1 className="mt-0.5 font-display text-3xl font-black leading-tight text-navy">{admin.name}</h1>
         </div>
         <div className="flex gap-2">
           {admin.role === 'hq' && (
@@ -54,17 +65,22 @@ export default function AdminDashboard() {
       {admin.role === 'hq' && schools && (
         <div className="mt-6">
           <Section title="All Schools — the Race" topColor="var(--color-gold)">
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {[...schools].sort((a, b) => b.percent - a.percent).map((s, i) => (
                 <button key={s.id} onClick={() => setSelectedId(s.id)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-paper sm:gap-3 ${selectedId === s.id ? 'bg-paper ring-1 ring-line' : ''}`}>
-                  <span className="w-5 flex-none text-center font-bold text-navy sm:w-6">{['🥇', '🥈', '🥉'][i] || i + 1}</span>
+                  className={`flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition hover:bg-white/45 sm:gap-3 ${selectedId === s.id ? 'bg-white/55 ring-1 ring-green-mid/50' : ''}`}>
+                  <span className="grid w-5 flex-none place-items-center sm:w-8">
+                    {MEDALS[i]
+                      ? <img src={asset(`design/${MEDALS[i]}`)} alt={`Rank ${i + 1}`} className="h-5 w-5 object-contain sm:h-8 sm:w-8" />
+                      : <span className="font-display text-base font-bold italic text-blue-accent sm:text-lg">{i + 1}</span>}
+                  </span>
                   <SchoolLogo school={s} size={32} />
                   <span className="w-24 flex-none truncate font-semibold text-navy sm:w-36">{s.name}</span>
                   <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-track">
-                    <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(s.percent, 3)}%`, background: s.color }} />
+                    <span className="absolute inset-y-0 left-0 rounded-full"
+                      style={{ width: `${Math.max(s.percent, 3)}%`, background: `linear-gradient(90deg, rgba(255,255,255,.22), rgba(0,28,76,.16)), ${RACE[i % RACE.length]}` }} />
                   </span>
-                  <span className="w-20 flex-none text-right font-cond text-[13px] font-bold tabular-nums text-navy sm:w-28 sm:text-sm">{fmt(s.total)} · {s.percent}%</span>
+                  <span className="w-20 flex-none text-right text-[12px] font-bold tabular-nums text-green sm:w-28 sm:text-[13px]">{fmt(s.total)} · {s.percent}%</span>
                 </button>
               ))}
             </div>
@@ -75,18 +91,18 @@ export default function AdminDashboard() {
       {selectedId && (
         <div className="mt-6">
           {admin.role === 'hq' && (
-            <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+            <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4 sm:px-6">
               <div className="flex items-center gap-3">
                 {selectedSchool && <SchoolLogo school={selectedSchool} size={40} />}
                 <div>
-                  <p className="font-cond text-[11px] font-semibold uppercase tracking-[0.16em] text-gold-dark">Managing as HQ</p>
-                  <p className="font-display text-lg font-medium text-navy">{selectedSchool?.name}</p>
+                  <p className="sh text-[11px]">Managing as HQ</p>
+                  <p className="font-display text-lg font-bold text-navy">{selectedSchool?.name}</p>
                 </div>
               </div>
-              <label className="flex items-center gap-2">
-                <span className="font-cond text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Switch school</span>
+              <label className="flex max-w-full items-center gap-2">
+                <span className={`${label} flex-none whitespace-nowrap`}>Switch school</span>
                 <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}
-                  className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-blue focus:ring-2 focus:ring-blue/25">
+                  className="min-w-0 flex-1 rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-blue focus:ring-2 focus:ring-blue/25">
                   {schools.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </label>
@@ -137,9 +153,9 @@ function CampaignSettings({ school }) {
   return (
     <Section title="Campaign Settings" topColor={school.color} right={<Pill>{school.percent}% of goal</Pill>}>
       {/* Goal is automatic — not something schools pick */}
-      <div className="rounded-xl bg-paper p-4">
-        <p className="font-cond text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Goal (automatic)</p>
-        <p className="font-display text-3xl font-medium text-navy">{fmt(school.goal)} <span className="text-lg text-muted">shakes</span></p>
+      <div className={`${tile} p-4`}>
+        <p className={label}>Goal (automatic)</p>
+        <p className="font-display text-3xl font-black text-navy">{fmt(school.goal)} <span className="text-lg font-semibold text-muted">shakes</span></p>
         <p className="mt-1 text-sm text-muted">{fmt(school.kidCount)} soldiers × 5 shakes each. It updates as soldiers are added.</p>
       </div>
 
@@ -148,11 +164,11 @@ function CampaignSettings({ school }) {
         <Field label="End date"><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
         <div className="flex items-center gap-3">
           <Button type="submit" variant="navy">Save</Button>
-          {saved && <span className="font-cond text-sm font-semibold uppercase text-green">✓ Saved</span>}
+          {saved && <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-green">✓ Saved</span>}
         </div>
       </form>
 
-      <div className="mt-5 rounded-xl bg-gold/8 p-4">
+      <div className={`${tile} mt-5 p-4`}>
         <p className="sh !text-gold-dark">⭐ Bonus Rounds (automatic)</p>
         <p className="mt-1 text-sm text-navy">
           {school.bonusActive
@@ -192,7 +208,7 @@ function Roster({ schoolId, kids }) {
         <Field label="Date of birth"><Input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} required /></Field>
         <Field label="Grade / class"><Input value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="e.g. 5" /></Field>
         <div className="col-span-2">
-          {error && <p className="mb-2 rounded-lg bg-red/8 px-3 py-2 text-sm text-red">{error}</p>}
+          {error && <p className="mb-2 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
           <Button type="submit" variant="outline" className="w-full">+ Add soldier</Button>
         </div>
       </form>
@@ -200,14 +216,14 @@ function Roster({ schoolId, kids }) {
       <div className="mt-4 max-h-52 space-y-3 overflow-auto pr-1">
         {Object.keys(byGrade).sort().map((grade) => (
           <div key={grade}>
-            <p className="mb-1 font-cond text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Grade {grade}</p>
+            <p className={`${label} mb-1`}>Grade {grade}</p>
             <ul className="space-y-1">
               {byGrade[grade].map((k) => (
-                <li key={k.id} className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-1.5 text-sm">
+                <li key={k.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/55 px-3 py-1.5 text-sm">
                   <span className="truncate font-semibold text-navy">{k.firstName} {k.lastName}</span>
                   <span className="flex flex-none items-center gap-2">
-                    {k.rank && <span className="font-cond text-[10px] uppercase tracking-wide text-gold-dark">{k.rank}</span>}
-                    <span className="font-cond text-xs uppercase tracking-wide text-muted">#{k.id}</span>
+                    {k.rank && <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold-dark">{k.rank}</span>}
+                    <span className="text-[11px] font-semibold tabular-nums text-muted">#{k.id}</span>
                   </span>
                 </li>
               ))}
@@ -232,15 +248,15 @@ function PhotoApprovals({ shakes }) {
             {shakes.map((s) => {
               const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
               return (
-                <div key={s.id} className="flex items-start gap-3 rounded-xl border border-line p-3">
-                  <img src={imgs[0]} alt="" className="h-16 w-16 flex-none rounded-lg object-cover" />
+                <div key={s.id} className={`${tile} flex items-start gap-3 p-3`}>
+                  <img src={imgs[0]} alt="" className="h-16 w-16 flex-none rounded-xl object-cover" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs text-muted">· {imgs.length} photos</span>}</p>
+                    <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
                     {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
-                    <p className="font-cond text-[11px] uppercase tracking-[0.08em] text-muted/70">{timeAgo(s.createdAt)}</p>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
                     <div className="mt-2 flex gap-2">
-                      <Button variant="gold" className="!px-3 !py-1.5 !text-[11px]" onClick={() => approvePhotos(s.id)}>✓ Approve</Button>
-                      <Button variant="outline" className="!px-3 !py-1.5 !text-[11px]" onClick={() => rejectPhotos(s.id)}>Reject</Button>
+                      <Button variant="navy" className={smallBtn} onClick={() => approvePhotos(s.id)}>✓ Approve</Button>
+                      <Button variant="red" className={dangerBtn} onClick={() => rejectPhotos(s.id)}>Reject</Button>
                     </div>
                   </div>
                 </div>
@@ -264,16 +280,16 @@ function Moderation({ shakes }) {
           {shakes.map((s) => {
             const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
             return (
-              <div key={s.id} className={`flex items-start gap-3 rounded-xl border p-3 ${s.hidden ? 'border-red/40 bg-red/5' : 'border-line'}`}>
+              <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : 'bg-white/55'}`}>
                 {imgs[0]
-                  ? <img src={imgs[0]} alt="" className="h-14 w-14 flex-none rounded-lg object-cover" />
-                  : <span className="grid h-14 w-14 flex-none place-items-center rounded-lg bg-paper">🌿</span>}
+                  ? <img src={imgs[0]} alt="" className="h-14 w-14 flex-none rounded-xl object-cover" />
+                  : <span className="grid h-14 w-14 flex-none place-items-center rounded-xl bg-track">🌿</span>}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs text-muted">· {imgs.length} photos</span>}</p>
+                  <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
                   {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
-                  <p className="font-cond text-[11px] uppercase tracking-[0.08em] text-muted/70">{timeAgo(s.createdAt)}</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
                 </div>
-                <Button variant={s.hidden ? 'outline' : 'red'} className="!px-3 !py-1.5 !text-[11px]" onClick={() => setShakeHidden(s.id, !s.hidden)}>
+                <Button variant={s.hidden ? 'outline' : 'red'} className={s.hidden ? smallBtn : dangerBtn} onClick={() => setShakeHidden(s.id, !s.hidden)}>
                   {s.hidden ? 'Restore' : 'Remove'}
                 </Button>
               </div>

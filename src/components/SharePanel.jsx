@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { buildShareSVG, svgToPngBlob } from '../lib/shareCard.js'
+import { buildShareCard } from '../lib/shareCard.js'
+import { asset } from '../lib/asset.js'
 import { Button, SectionHeader } from './ui.jsx'
 import QrCode from './QrCode.jsx'
 
@@ -12,13 +13,14 @@ export default function SharePanel({ school, onClose }) {
 
   useEffect(() => {
     let alive = true
-    const svg = buildShareSVG(school)
-    svgToPngBlob(svg).then((blob) => {
+    let objectUrl = null
+    buildShareCard(school).then((blob) => {
+      if (!alive) return
       blobRef.current = blob
-      const dataUrl = URL.createObjectURL(blob)
-      if (alive) setPng({ blob, dataUrl })
-    }).catch(() => setToast('Could not build the image.'))
-    return () => { alive = false; if (png?.dataUrl) URL.revokeObjectURL(png.dataUrl) }
+      objectUrl = URL.createObjectURL(blob)
+      setPng({ blob, dataUrl: objectUrl })
+    }).catch(() => { if (alive) setToast('Could not build the image.') })
+    return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [school.id])
 
@@ -56,16 +58,20 @@ export default function SharePanel({ school, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(10,16,34,.6)] p-4" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-card p-5 shadow-card" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <SectionHeader>Share this campaign</SectionHeader>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full bg-track text-muted hover:bg-line">✕</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,28,76,0.55)] p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-5 shadow-card sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <SectionHeader className="flex items-center gap-2">
+            <img src={asset('design/lulav-esrog-small.png')} alt="" className="h-5 w-auto" />
+            Share this campaign
+          </SectionHeader>
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="grid h-9 w-9 flex-none place-items-center rounded-full bg-track text-green transition hover:bg-line">✕</button>
         </div>
 
         {/* Card preview */}
-        <div className="overflow-hidden rounded-xl ring-1 ring-line">
-          {png ? <img src={png.dataUrl} alt="Share card" className="w-full" />
+        <div className="overflow-hidden rounded-[20px] bg-track">
+          {png ? <img src={png.dataUrl} alt="Share card" className="block w-full" />
             : <div className="aspect-square w-full animate-pulse bg-track" />}
         </div>
 
@@ -78,15 +84,15 @@ export default function SharePanel({ school, onClose }) {
         </div>
 
         {/* QR */}
-        <div className="mt-5 flex items-center gap-4 rounded-xl bg-paper p-4">
-          <QrCode value={url} size={110} />
-          <div>
-            <p className="font-semibold text-navy">Scan to open</p>
+        <div className="mt-5 flex items-center gap-4 rounded-[20px] bg-paper p-4">
+          <QrCode value={url} size={110} className="flex-none" />
+          <div className="min-w-0">
+            <p className="font-display font-bold text-navy">Scan to open</p>
             <p className="text-sm text-muted">Great for flyers, signs, or sharing in person.</p>
           </div>
         </div>
 
-        {toast && <p className="mt-3 text-center font-cond text-sm font-semibold uppercase text-green">{toast}</p>}
+        {toast && <p className="mt-3 text-center text-sm font-semibold text-green">{toast}</p>}
       </div>
     </div>
   )

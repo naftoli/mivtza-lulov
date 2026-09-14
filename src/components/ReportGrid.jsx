@@ -15,8 +15,9 @@ export default function ReportGrid({ kids, reports }) {
   const sum = (f) => (reports || []).reduce((n, r) => n + (Number(r[f]) || 0), 0)
 
   const num = (v) => (v === null || v === undefined || v === '' ? '—' : fmt(v))
-  const th = 'px-2 py-2 font-cond text-[11px] font-semibold uppercase tracking-[0.08em] text-muted'
-  const td = 'px-2 py-2 border-t border-line'
+  // header: Exo semibold navy caps on the sky card; body rows zebra in a lighter sky
+  const th = 'px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-navy'
+  const td = 'px-2.5 py-2'
 
   return (
     <Card className="p-6" topColor="var(--color-cyan)">
@@ -31,8 +32,8 @@ export default function ReportGrid({ kids, reports }) {
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">No soldiers in this school yet.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-sm">
+        <div className="overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[760px] border-collapse text-sm text-navy">
             <thead>
               <tr className="text-left">
                 <th className={th}>Grade</th>
@@ -42,9 +43,9 @@ export default function ReportGrid({ kids, reports }) {
                 <th className={`${th} text-right`}>w/ Friends</th>
                 <th className={`${th} text-right`}>Personally</th>
               </tr>
-              <tr>
+              <tr className="border-b-2 border-navy/15">
                 <th /><th />
-                {DAYS.map((d) => <th key={d} className={`${th} text-center`}>{d}</th>)}
+                {DAYS.map((d) => <th key={d} className={`${th} pt-0 text-center`}>{d}</th>)}
                 <th /><th /><th />
               </tr>
             </thead>
@@ -52,12 +53,12 @@ export default function ReportGrid({ kids, reports }) {
               {rows.map((k) => {
                 const r = byKid[k.id]
                 return (
-                  <tr key={k.id} className={r ? '' : 'text-muted/60'}>
-                    <td className={`${td} whitespace-nowrap font-cond text-xs uppercase tracking-wide text-muted`}>{k.grade || '—'}</td>
+                  <tr key={k.id} className={`odd:bg-[#ddf3ff] ${r ? '' : 'text-muted/60'}`}>
+                    <td className={`${td} whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-muted`}>{k.grade || '—'}</td>
                     <td className={`${td} whitespace-nowrap font-semibold text-navy`}>{k.firstName} {k.lastName}</td>
                     {DAYS.map((d) => (
                       <td key={d} className={`${td} text-center`}>
-                        {r?.days?.includes(d) ? <span className="font-bold text-green">✓</span> : <span className="text-line">·</span>}
+                        {r?.days?.includes(d) ? <span className="font-bold text-green">✓</span> : <span className="text-navy/25">·</span>}
                       </td>
                     ))}
                     <td className={`${td} text-right tabular-nums`}>{num(r?.minutes)}</td>
@@ -68,8 +69,8 @@ export default function ReportGrid({ kids, reports }) {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-line font-semibold text-navy">
-                <td className={`${td} font-cond text-[11px] uppercase tracking-wide`} colSpan={2 + DAYS.length}>Totals</td>
+              <tr className="border-t-2 border-navy/15 font-semibold text-navy">
+                <td className={`${td} text-[11px] font-extrabold uppercase tracking-[0.08em] text-green`} colSpan={2 + DAYS.length}>Totals</td>
                 <td className={`${td} text-right tabular-nums`}>{fmt(sum('minutes'))}</td>
                 <td className={`${td} text-right tabular-nums`}>{fmt(sum('peopleWithFriends'))}</td>
                 <td className={`${td} text-right tabular-nums`}>{fmt(sum('peoplePersonal'))}</td>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getReport, saveReport } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fileToScaledDataUrl } from '../lib/format.js'
+import { asset } from '../lib/asset.js'
 import { Card, Field, Input, Textarea, Button, SectionHeader, Pill, Spinner } from './ui.jsx'
 
 // The six days Lulav is taken (the 5th day of Succos is Shabbos — skipped),
@@ -16,6 +17,10 @@ const DAYS = [
 ]
 
 const DEFAULTS = { days: [], minutes: '', peopleWithFriends: '', peoplePersonal: '', story: '', photos: [] }
+
+// Small-label style (Exo semibold caps, navy) — matches the Field label; condensed
+// caps are reserved for buttons and nav.
+const LABEL = 'text-[12px] font-semibold uppercase tracking-[0.08em] text-navy'
 
 export default function SuccosReport({ kid, loggedShakes = 0 }) {
   const fileRef = useRef(null)
@@ -71,31 +76,33 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
     <Card className="p-6" topColor="var(--color-cyan)">
       <div className="mb-1 flex items-center justify-between gap-2">
         <SectionHeader>My Succos Report</SectionHeader>
-        {savedAt && <Pill className="!bg-green/15 !text-green">✓ Saved {new Date(savedAt).toLocaleDateString()}</Pill>}
+        {savedAt && <Pill className="!bg-green !text-white">✓ Saved {new Date(savedAt).toLocaleDateString()}</Pill>}
       </div>
-      <p className="mb-5 text-sm text-muted">
+      <p className="mb-5 text-sm text-navy/80">
         Fill in your own Mivtza Lulav for Succos — you can update it any time.
       </p>
 
       <form onSubmit={save} className="space-y-6">
         {/* Days */}
         <div>
-          <span className="mb-2 block font-cond text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+          <span className={`mb-2 block ${LABEL}`}>
             Which days did you go on Mivtza Lulav?
           </span>
-          <p className="mb-2 text-xs text-muted/80">I helped other Yidden shake Lulav &amp; Esrog on the…</p>
+          <p className="mb-2 text-xs text-navy/70">I helped other Yidden shake Lulav &amp; Esrog on the…</p>
           <div className="flex flex-wrap gap-2">
             {DAYS.map((d) => {
               const on = form.days.includes(d.n)
               return (
-                <button type="button" key={d.n} onClick={() => toggleDay(d.n)}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${on ? 'bg-navy text-white shadow-sm' : 'bg-paper text-navy ring-1 ring-line hover:ring-blue'}`}>
+                // Pill toggles: navy when selected; the deeper sky (track) when not, so
+                // they still read against the sky card.
+                <button type="button" key={d.n} onClick={() => toggleDay(d.n)} aria-pressed={on}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${on ? 'bg-navy text-white shadow-sm' : 'bg-track text-navy ring-1 ring-transparent hover:ring-green-mid'}`}>
                   {on ? '✓ ' : ''}{d.label} day
                 </button>
               )
             })}
           </div>
-          <p className="mt-2 text-xs text-muted/70">(The 5th day of Succos is Shabbos — no Lulav.)</p>
+          <p className="mt-2 text-xs text-navy/70">(The 5th day of Succos is Shabbos — no Lulav.)</p>
         </div>
 
         {/* Numbers */}
@@ -113,18 +120,18 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
 
         {/* Photos */}
         <div>
-          <span className="mb-1.5 block font-cond text-xs font-semibold uppercase tracking-[0.1em] text-muted">Photos from the field</span>
+          <span className={`mb-1.5 block ${LABEL}`}>Photos from the field</span>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple onChange={onFiles} className="hidden" id="reportPhotos" />
           <label htmlFor="reportPhotos"
-            className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line bg-paper py-5 text-center transition hover:border-blue hover:bg-blue/5">
-            <span className="text-2xl">📷</span>
-            <span className="font-cond text-sm font-semibold uppercase tracking-wide text-navy">Tap to add photos</span>
+            className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-track bg-white/70 px-4 py-5 text-center transition hover:border-green-mid hover:bg-white">
+            <img src={asset('design/icon-camera.png')} alt="" className="h-11 w-auto" />
+            <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-navy">Tap to add photos</span>
           </label>
           {form.photos.length > 0 && (
             <div className="mt-3 grid grid-cols-5 gap-2">
               {form.photos.map((p, i) => (
                 <div key={i} className="relative aspect-square">
-                  <img src={p} alt="" className="h-full w-full rounded-lg object-cover ring-1 ring-line" />
+                  <img src={p} alt="" className="h-full w-full rounded-xl object-cover ring-2 ring-white" />
                   <button type="button" onClick={() => set('photos', form.photos.filter((_, j) => j !== i))}
                     className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red text-[11px] font-bold text-white shadow">×</button>
                 </div>
@@ -138,9 +145,9 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
           <Textarea rows={3} value={form.story} onChange={(e) => set('story', e.target.value)} placeholder="e.g. We went to the hospital and everyone was so happy to shake Lulav!" />
         </Field>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="gold" disabled={busy}>{busy ? 'Saving…' : 'Save my report'}</Button>
-          {savedAt && !busy && <span className="font-cond text-sm font-semibold uppercase text-green">✓ Saved</span>}
+          {savedAt && !busy && <span className="text-sm font-semibold uppercase tracking-[0.06em] text-green">✓ Saved</span>}
         </div>
       </form>
     </Card>

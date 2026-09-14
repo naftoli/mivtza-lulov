@@ -1,76 +1,312 @@
 import { fmt, shortSchoolName } from './format.js'
+import { asset } from './asset.js'
 
-// Word-wrap a string into up to `maxLines` lines of ~`per` chars.
-function wrap(text, per, maxLines) {
-  const words = String(text).split(/\s+/)
+// Shareable 1080×1080 campaign card in the redesign palette: a green-deep
+// header panel (school logo, name, gold eyebrow) over a sky card on mint with
+// navy/green numbers, the track+green progress bar with the lulav-esrog
+// marker, and the TH shield beside the gold wordmark in the footer band.
+//
+// It is drawn straight onto a canvas (not rasterized from an SVG string) so
+// the page's web fonts (Exo / Bebas Neue) are used and images load through
+// the same base-aware asset() path as the rest of the site.
+const SIZE = 1080
+
+// Palette mirrors the @theme tokens in src/index.css. Tailwind v4 only emits
+// the CSS variables that are actually used, so every read has the token's
+// own value as its fallback.
+function token(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    return v || fallback
+  } catch {
+    return fallback
+  }
+}
+
+function palette() {
+  return {
+    mint: token('--color-mint', '#deedda'),
+    sky: token('--color-sky', '#c3ecff'),
+    track: token('--color-track', '#9eddf9'),
+    navy: token('--color-navy', '#001c4c'),
+    muted: token('--color-muted', '#3a4d78'),
+    green: token('--color-green', '#094b26'),
+    greenLight: token('--color-green-light', '#68c07b'),
+    greenFillEnd: '#3f9a55', // dark end of --grad-progress
+    gold: token('--color-gold', '#ffde49'),
+  }
+}
+
+const EXO = 'Exo, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'
+const COND = '"Bebas Neue", "Arial Narrow", Impact, sans-serif'
+const exo = (weight, px, italic = false) => `${italic ? 'italic ' : ''}${weight} ${px}px ${EXO}`
+const cond = (px) => `400 ${px}px ${COND}`
+
+// ---- asset loading (cached across opens of the share panel) ----
+function loadImage(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null)
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+}
+
+const cache = new Map()
+function cached(key, loader) {
+  if (!cache.has(key)) {
+    cache.set(key, loader().then((img) => {
+      if (!img) cache.delete(key) // let a failed load retry next time
+      return img
+    }))
+  }
+  return cache.get(key)
+}
+
+// th-logo.svg carries only a viewBox; give it explicit dimensions so every
+// browser rasterizes it through drawImage at the size we ask for.
+function loadShield() {
+  return cached('shield', async () => {
+    try {
+      const res = await fetch(asset('th-logo.svg'))
+      if (!res.ok) return null
+      let svg = await res.text()
+      if (!/<svg\b[^>]*\swidth=/i.test(svg)) svg = svg.replace(/<svg\b/i, '<svg width="999" height="899"')
+      const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+      const img = await loadImage(url)
+      URL.revokeObjectURL(url)
+      return img
+    } catch {
+      return null
+    }
+  })
+}
+
+const loadMarker = () => cached('marker', () => loadImage(asset('design/lulav-esrog.png')))
+
+async function ensureFonts() {
+  if (typeof document === 'undefined' || !document.fonts?.load) return
+  const faces = [exo(900, 116), exo(900, 52), exo(700, 42, true), exo(600, 34), exo(600, 26), exo(400, 28), cond(30)]
+  await Promise.allSettled(faces.map((f) => document.fonts.load(f)))
+}
+
+// ---- drawing helpers ----
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
+}
+
+function drawContain(ctx, img, x, y, w, h) {
+  const iw = img.naturalWidth || img.width
+  const ih = img.naturalHeight || img.height
+  if (!iw || !ih) return
+  const s = Math.min(w / iw, h / ih)
+  const dw = iw * s
+  const dh = ih * s
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh)
+}
+
+// Word-wrap by measured width (uses the font currently set on ctx). When
+// `maxLines` is given the overflow is cut and the last line gets an ellipsis.
+function wrap(ctx, text, maxWidth, maxLines = Infinity) {
+  const words = String(text).split(/\s+/).filter(Boolean)
   const lines = []
   let cur = ''
   for (const w of words) {
-    if ((cur + ' ' + w).trim().length > per && cur) { lines.push(cur); cur = w }
-    else cur = (cur + ' ' + w).trim()
-    if (lines.length === maxLines - 1 && cur.length > per) break
+    const next = cur ? `${cur} ${w}` : w
+    if (cur && ctx.measureText(next).width > maxWidth) { lines.push(cur); cur = w }
+    else cur = next
   }
   if (cur) lines.push(cur)
-  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] += '…' }
-  return lines.slice(0, maxLines)
+  if (lines.length > maxLines) {
+    lines.length = maxLines
+    let last = lines[maxLines - 1]
+    while (last && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1).trimEnd()
+    lines[maxLines - 1] = `${last}…`
+  }
+  return lines
 }
 
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-// Build a 1080×1080 shareable campaign card as an SVG string.
-export function buildShareSVG(school) {
-  const { name, city, color = '#46662b', logo, total, activeGoal, percent, bonusActive } = school
-  const nameLines = wrap(shortSchoolName(school), 20, 2)
-  const barW = 936
-  const fillW = Math.max(24, Math.round((barW * Math.min(percent, 100)) / 100))
-  const nameY = nameLines.length > 1 ? 176 : 200
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1080" viewBox="0 0 1080 1080">
-  <defs>
-    <linearGradient id="hd" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2c3f20"/><stop offset="1" stop-color="#16210f"/>
-    </linearGradient>
-  </defs>
-  <rect width="1080" height="1080" fill="#faf7ee"/>
-  <rect width="1080" height="360" fill="url(#hd)"/>
-  <rect x="72" y="96" width="168" height="168" rx="22" fill="#ffffff"/>
-  ${logo ? `<image x="84" y="108" width="144" height="144" preserveAspectRatio="xMidYMid meet" xlink:href="${logo}"/>`
-      : `<text x="156" y="205" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="${color}" text-anchor="middle">${esc(name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</text>`}
-  <text x="272" y="128" font-family="Arial, sans-serif" font-size="26" letter-spacing="5" fill="#e6b422">MIVTZA LULAV</text>
-  ${nameLines.map((l, i) => `<text x="272" y="${nameY + i * 62}" font-family="Georgia, serif" font-size="56" font-weight="bold" fill="#ffffff">${esc(l)}</text>`).join('\n  ')}
-  <text x="272" y="${nameY + nameLines.length * 62 + 6}" font-family="Arial, sans-serif" font-size="26" fill="#c9d6bf">${esc(city || 'Tzivos Hashem')}</text>
-
-  <text x="72" y="470" font-family="Arial, sans-serif" font-size="28" letter-spacing="3" fill="#5f6a4a">TOTAL SHAKES${bonusActive ? ' · BONUS ROUND' : ''}</text>
-  <text x="72" y="580" font-family="Georgia, serif" font-size="120" font-weight="bold" fill="#2c3f20">${fmt(total)}</text>
-  <text x="1008" y="580" font-family="Georgia, serif" font-size="120" font-weight="bold" fill="${color}" text-anchor="end">${percent}%</text>
-  <text x="72" y="628" font-family="Arial, sans-serif" font-size="34" fill="#5f6a4a">of ${fmt(activeGoal)} shakes</text>
-
-  <rect x="72" y="680" width="${barW}" height="44" rx="22" fill="#ece4d1"/>
-  <rect x="72" y="680" width="${fillW}" height="44" rx="22" fill="${color}"/>
-
-  <text x="540" y="856" font-family="Georgia, serif" font-size="44" fill="#2c3f20" text-anchor="middle">Help ${esc(nameLines[0])} reach their goal! 🌿</text>
-  <text x="540" y="912" font-family="Arial, sans-serif" font-size="28" fill="#5f6a4a" text-anchor="middle">Every Yid, one more mitzvah</text>
-
-  <rect x="0" y="1000" width="1080" height="80" fill="#24331c"/>
-  <text x="540" y="1050" font-family="Arial, sans-serif" font-size="28" letter-spacing="3" fill="#e6b422" text-anchor="middle">TZIVOS HASHEM · SUKKOS 5787</text>
-</svg>`
+// Largest size (stepping down by 2px) at which `text` wraps into at most
+// `maxLines` lines that all fit `maxWidth`; falls back to the minimum size
+// with an ellipsis.
+function fitLines(ctx, text, fontOf, maxPx, minPx, maxWidth, maxLines) {
+  for (let px = maxPx; px >= minPx; px -= 2) {
+    ctx.font = fontOf(px)
+    const lines = wrap(ctx, text, maxWidth)
+    if (lines.length <= maxLines && lines.every((l) => ctx.measureText(l).width <= maxWidth)) return { px, lines }
+  }
+  ctx.font = fontOf(minPx)
+  return { px: minPx, lines: wrap(ctx, text, maxWidth, maxLines) }
 }
 
-// Rasterize an SVG string to a PNG Blob (for sharing / download).
-export function svgToPngBlob(svgString, scale = 1) {
+// Largest single-line size at which `text` fits `maxWidth`.
+function fitPx(ctx, text, fontOf, maxPx, minPx, maxWidth) {
+  for (let px = maxPx; px > minPx; px -= 2) {
+    ctx.font = fontOf(px)
+    if (ctx.measureText(text).width <= maxWidth) return px
+  }
+  return minPx
+}
+
+function setSpacing(ctx, value) {
+  if ('letterSpacing' in ctx) ctx.letterSpacing = value
+}
+
+// Build the share card and resolve with a PNG Blob (for preview / share / save).
+export async function buildShareCard(school) {
+  const { name, city, logo, total, activeGoal, percent, bonusActive } = school
+  const p = palette()
+  const [, shield, marker, logoImg] = await Promise.all([ensureFonts(), loadShield(), loadMarker(), loadImage(logo)])
+
+  const canvas = document.createElement('canvas')
+  canvas.width = SIZE
+  canvas.height = SIZE
+  const ctx = canvas.getContext('2d')
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'left'
+
+  // mint page
+  ctx.fillStyle = p.mint
+  ctx.fillRect(0, 0, SIZE, SIZE)
+
+  // ---- header panel (green-deep glass) ----
+  roundRect(ctx, 40, 40, 1000, 330, 40)
+  ctx.fillStyle = p.green
+  ctx.fill()
+
+  // school logo tile
+  roundRect(ctx, 80, 90, 150, 150, 22)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  if (logoImg) {
+    drawContain(ctx, logoImg, 92, 102, 126, 126)
+  } else {
+    const initials = String(name || '').split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+    ctx.font = exo(900, 60)
+    ctx.fillStyle = p.navy
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(initials, 155, 167)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+  }
+
+  // eyebrow — gold on green-deep
+  ctx.font = exo(600, 26)
+  ctx.fillStyle = p.gold
+  setSpacing(ctx, '2.6px')
+  ctx.fillText('MIVTZA LULAV', 262, 126)
+  setSpacing(ctx, '0px')
+
+  // school name — Exo Black, white, up to two lines
+  const nameMaxW = 1000 - 262
+  const { px: namePx, lines: nameLines } = fitLines(ctx, shortSchoolName(school), (s) => exo(900, s), 52, 36, nameMaxW, 2)
+  ctx.font = exo(900, namePx)
+  ctx.fillStyle = '#ffffff'
+  const nameLH = Math.round(namePx * 1.12)
+  const nameY = nameLines.length > 1 ? 184 : 200
+  nameLines.forEach((l, i) => ctx.fillText(l, 262, nameY + i * nameLH))
+
+  // city
+  ctx.font = exo(400, 28)
+  ctx.fillStyle = 'rgba(255,255,255,0.82)'
+  ctx.fillText(city || 'Tzivos Hashem', 262, nameY + (nameLines.length - 1) * nameLH + 46)
+
+  // ---- sky card ----
+  roundRect(ctx, 40, 400, 1000, 640, 40)
+  ctx.fillStyle = p.sky
+  ctx.fill()
+
+  const L = 96
+  const R = 984
+  const W = R - L
+
+  // label
+  ctx.font = exo(600, 26)
+  ctx.fillStyle = p.navy
+  setSpacing(ctx, '2px')
+  ctx.fillText(`TOTAL SHAKES${bonusActive ? ' · BONUS ROUND' : ''}`, L, 478)
+  setSpacing(ctx, '0px')
+
+  // big numbers — total left, percent right, both green-deep
+  ctx.font = exo(900, 116)
+  ctx.fillStyle = p.green
+  ctx.fillText(fmt(total), L, 600)
+  ctx.textAlign = 'right'
+  ctx.fillText(`${percent}%`, R, 600)
+  ctx.textAlign = 'left'
+
+  // goal line — navy
+  ctx.font = exo(600, 34)
+  ctx.fillStyle = p.navy
+  ctx.fillText(`of ${fmt(activeGoal)} shakes`, L, 652)
+
+  // progress bar — track + green gradient fill + lulav-esrog marker
+  const barY = 770
+  const barH = 44
+  roundRect(ctx, L, barY, W, barH, barH / 2)
+  ctx.fillStyle = p.track
+  ctx.fill()
+  const fillW = Math.max(barH, Math.round((W * Math.min(percent, 100)) / 100))
+  const grad = ctx.createLinearGradient(L, 0, L + fillW, 0)
+  grad.addColorStop(0, p.greenLight)
+  grad.addColorStop(1, p.greenFillEnd)
+  roundRect(ctx, L, barY, fillW, barH, barH / 2)
+  ctx.fillStyle = grad
+  ctx.fill()
+  if (marker) {
+    const mw = marker.naturalWidth || 38
+    const mh = marker.naturalHeight || 150
+    const cx = Math.min(Math.max(L + fillW - 10, L + mw / 2), R - mw / 2)
+    ctx.drawImage(marker, Math.round(cx - mw / 2), barY + barH + 4 - mh, mw, mh)
+  }
+
+  // tagline — Exo Bold Italic navy, shrunk to fit the card width
+  const tag = `Help ${nameLines[0]} reach their goal! 🌿`
+  ctx.textAlign = 'center'
+  const tagPx = fitPx(ctx, tag, (s) => exo(700, s, true), 42, 26, W)
+  ctx.font = exo(700, tagPx, true)
+  ctx.fillStyle = p.navy
+  ctx.fillText(tag, SIZE / 2, 884)
+  ctx.font = exo(400, 28)
+  ctx.fillStyle = p.muted
+  ctx.fillText('Every Yid, one more mitzvah', SIZE / 2, 928)
+  ctx.textAlign = 'left'
+
+  // ---- footer band (green-deep, clipped to the card's rounded bottom) ----
+  const footY = 966
+  const footH = 1040 - footY
+  ctx.save()
+  roundRect(ctx, 40, 400, 1000, 640, 40)
+  ctx.clip()
+  ctx.fillStyle = p.green
+  ctx.fillRect(40, footY, 1000, footH)
+  ctx.restore()
+
+  ctx.font = cond(30)
+  ctx.fillStyle = p.gold
+  setSpacing(ctx, '1.8px')
+  const label = 'TZIVOS HASHEM · SUKKOS 5787'
+  const labelW = ctx.measureText(label).width
+  const shieldH = 46
+  const shieldW = shield ? Math.round(shieldH * ((shield.naturalWidth || 999) / (shield.naturalHeight || 899))) : 0
+  const gap = shield ? 16 : 0
+  const startX = Math.round((SIZE - (shieldW + gap + labelW)) / 2)
+  if (shield) ctx.drawImage(shield, startX, footY + (footH - shieldH) / 2, shieldW, shieldH)
+  ctx.textBaseline = 'middle'
+  ctx.fillText(label, startX + shieldW + gap, footY + footH / 2 + 1)
+  ctx.textBaseline = 'alphabetic'
+  setSpacing(ctx, '0px')
+
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml' }))
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 1080 * scale
-      canvas.height = 1080 * scale
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      URL.revokeObjectURL(url)
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('render failed'))), 'image/png')
-    }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('svg load failed')) }
-    img.src = url
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('render failed'))), 'image/png')
   })
 }
