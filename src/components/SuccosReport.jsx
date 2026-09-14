@@ -2,18 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { getReport, saveReport } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fileToScaledDataUrl } from '../lib/format.js'
+import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
 import { Card, Field, Input, Textarea, Button, SectionHeader, Pill, Spinner } from './ui.jsx'
-
-// The six days Lulav is taken (the 5th day of Succos is Shabbos — skipped),
-// matching the teacher checklist.
-const DAYS = [
-  { n: 1, label: '1st' },
-  { n: 2, label: '2nd' },
-  { n: 3, label: '3rd' },
-  { n: 4, label: '4th' },
-  { n: 6, label: '6th' },
-  { n: 7, label: '7th' },
-]
 
 const DEFAULTS = { days: [], minutes: '', peopleWithFriends: '', peoplePersonal: '', story: '', photos: [] }
 
@@ -28,7 +18,8 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
   // Prefill once the saved report has loaded.
   useEffect(() => {
     if (!loading && form === null) {
-      const base = report ? { ...DEFAULTS, ...report, days: report.days || [] } : { ...DEFAULTS }
+      // Drop any tick that isn't a Lulav day this year (e.g. saved under last year's calendar).
+      const base = report ? { ...DEFAULTS, ...report, days: (report.days || []).filter((n) => LULAV_DAYS.includes(n)) } : { ...DEFAULTS }
       // Link the two forms: default "people personally" to the shakes already logged.
       if (base.peoplePersonal === '' || base.peoplePersonal == null) base.peoplePersonal = loggedShakes || ''
       setForm(base)
@@ -96,17 +87,17 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
           </span>
           <p className="mb-2 text-xs text-muted/80">I helped other Yidden shake Lulav &amp; Esrog on the…</p>
           <div className="flex flex-wrap gap-2">
-            {DAYS.map((d) => {
-              const on = form.days.includes(d.n)
+            {LULAV_DAYS.map((n) => {
+              const on = form.days.includes(n)
               return (
-                <button type="button" key={d.n} onClick={() => toggleDay(d.n)}
+                <button type="button" key={n} onClick={() => toggleDay(n)}
                   className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${on ? 'bg-navy text-white shadow-sm' : 'bg-paper text-navy ring-1 ring-line hover:ring-blue'}`}>
-                  {on ? '✓ ' : ''}{d.label} day
+                  {on ? '✓ ' : ''}{ordinal(n)} day
                 </button>
               )
             })}
           </div>
-          <p className="mt-2 text-xs text-muted/70">(The 5th day of Succos is Shabbos — no Lulav.)</p>
+          <p className="mt-2 text-xs text-muted/70">(The {ordinal(SHABBOS_DAY)} day of Succos is Shabbos — no Lulav.)</p>
         </div>
 
         {/* Numbers */}

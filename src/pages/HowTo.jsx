@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Card, SectionHeader, Button } from '../components/ui.jsx'
+import { LULAV_DAYS, ordinal } from '../lib/succos.js'
 
 function Step({ n, title, color, children }) {
   return (
@@ -45,7 +46,7 @@ export default function HowTo() {
             </p>
           </div>
           <p className="mt-3 text-sm text-muted">
-            On the <strong>first day</strong> of Succos, also say <strong>Shehecheyanu</strong>.
+            The <strong>first time</strong> you shake Lulav this Succos (the first day that isn't Shabbos — this year, the <strong>{ordinal(LULAV_DAYS[0])} day</strong>), also say <strong>Shehecheyanu</strong>.
           </p>
         </Card>
 

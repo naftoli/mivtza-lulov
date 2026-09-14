@@ -67,7 +67,7 @@ checklist one-to-one:
 
 | App field | Teacher-checklist column |
 |---|---|
-| `days: [1,2,3,4,6,7]` | went on מבצע לולב on the Nth day of Succos (5th = Shabbos, skipped) |
+| `days: number[]` | went on מבצע לולב on the Nth day of Succos — a subset of that year's six Lulav days (the Shabbos day is skipped; for 5787 day 1 is Shabbos, so `[2,3,4,5,6,7]`). The app derives the list from the Sukkos start date in `src/lib/succos.js`; store the day numbers as sent. |
 | `minutes` | minutes spent on מבצע לולב |
 | `peopleWithFriends` | people shaken **with friends** (total together) |
 | `peoplePersonal` | people shaken **personally** (divide if shared) |
