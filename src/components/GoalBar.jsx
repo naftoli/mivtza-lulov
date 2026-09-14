@@ -10,6 +10,11 @@ import { asset } from '../lib/asset.js'
 // few px below the track. It rises ~85px above the track, so give the bar
 // enough top margin at the call site (or sit it under a row whose text is
 // `relative z-10`, which keeps the numbers legible if the lulav lands under them).
+// Anything sitting at the right end of the row above (Home's big percent label)
+// needs a right gutter on the bar — `className="mr-…"` per breakpoint — of at
+// least that label's widest width + half the marker (9 / 13 / 15px at the three
+// sizes) + a breathing gap. The marker then can never cross it: even at 100%
+// it stands centred on the bar's right edge, inside the gutter.
 export default function GoalBar({ percent, label = 'of goal', marker = true, className = '' }) {
   const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)))
   return (

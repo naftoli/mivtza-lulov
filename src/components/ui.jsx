@@ -12,12 +12,14 @@ export function Band({ className = '' }) {
 
 // Masthead logo lockup: TH shield + two-line wordmark
 // ("MIVTZA LULAV" Exo bold caps in green-deep, "TZIVOS HASHEM" condensed caps).
-export function Brand({ size = 46, dark = false }) {
+// `size` is the shield's height from sm up; `phoneSize` (defaults to the same) applies
+// below sm, where the header bar is shorter and the login pill + menu toggle share the row.
+export function Brand({ size = 46, phoneSize = size, dark = false }) {
   return (
-    <span className="inline-flex items-center gap-2.5 sm:gap-3">
-      <img src={asset('th-logo.svg')} alt="Tzivos Hashem" style={{ height: size, width: 'auto' }} className="shrink-0" />
+    <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px` }}>
+      <img src={asset('th-logo.svg')} alt="Tzivos Hashem" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h)" />
       <span className="flex flex-col leading-none">
-        <span className="font-display text-[1.05rem] font-bold uppercase leading-none tracking-[-0.01em] sm:text-[1.5rem]"
+        <span className="font-display text-[1rem] font-bold uppercase leading-none tracking-[-0.01em] sm:text-[1.5rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
           Mivtza Lulav
         </span>

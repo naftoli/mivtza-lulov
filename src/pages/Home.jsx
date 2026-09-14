@@ -205,7 +205,11 @@ export default function Home() {
               <p className="ml-auto font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-sky)] sm:text-[40px] lg:text-[44px]">{percent}%</p>
             </div>
 
-            <GoalBar percent={percent} className="mt-5 sm:mt-6" />
+            {/* Right gutter (mr-*) per breakpoint = the widest percent label ("100%": 79 / 105 / 116px)
+                + half the marker (9 / 13 / 15px) + a ~24px gap, so the lulav standing on the fill's end
+                can never cross the label; at 100% it stands just left of it. Sized from the label's font
+                size at each breakpoint, so it holds at any viewport width. */}
+            <GoalBar percent={percent} className="mt-5 mr-[112px] sm:mt-6 sm:mr-[144px] lg:mr-[156px]" />
 
             <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8">
               <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.activeSoldiers)} label="Soldiers" />
