@@ -36,13 +36,16 @@ Then open the local URL (default http://localhost:5173).
 All screens read/write through a single module, [`src/services/api.js`](src/services/api.js),
 which is currently backed by the browser (localStorage) for a self-contained demo.
 
-The repo ships with **anonymized demo data** — [`src/data/roster.generated.js`](src/data/roster.generated.js)
+The repo ships with **anonymized demo data** — [`src/data/roster.demo.js`](src/data/roster.demo.js)
 contains **fake** soldiers. **No real children's data is in this repository.**
 
 To connect the real Tzivos Hashem platform (**Mashpia.com**), see
 [`docs/mashpia-integration.md`](docs/mashpia-integration.md) and the adapter skeleton at
 [`src/services/mashpia.js`](src/services/mashpia.js).
 
-> ⚠️ **Privacy:** never commit the real roster. The real-data files (`*soldiers*.html`,
-> `*soldiers*.zip`) are git-ignored; if you regenerate the real `roster.generated.js`
-> locally, do **not** `git add` it.
+> ⚠️ **Privacy:** never commit or build the real roster. The real-data files (`*soldiers*.html`,
+> `*soldiers*.zip`) and the converter's output path (`src/data/roster.generated.js`) are
+> git-ignored, and nothing in `src/` imports them. As a backstop, the roster guard in
+> [`vite.config.js`](vite.config.js) makes `vite build` (and the dev server) fail unless the
+> imported roster's first line carries the `ANONYMIZED DEMO DATA` marker — so a real export
+> cannot end up in the public bundle even by mistake.
