@@ -139,12 +139,12 @@ export default function KidDashboard() {
             {/* Big, phone-friendly photo button */}
             <div>
               <span className="mb-1.5 block font-cond text-xs font-semibold uppercase tracking-[0.1em] text-muted">Add photos</span>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple onChange={onFiles} className="hidden" id="photoInput" />
+              <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" id="photoInput" />
               <label htmlFor="photoInput"
                 className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line bg-paper py-6 text-center transition hover:border-blue hover:bg-blue/5">
                 <span className="text-3xl">📷</span>
                 <span className="font-cond text-sm font-semibold uppercase tracking-wide text-navy">Tap to take or upload photos</span>
-                <span className="text-xs text-muted">Opens your camera on a phone · add as many as you like</span>
+                <span className="text-xs text-muted">Take a new photo or pick from your gallery · add as many as you like</span>
               </label>
               {photos.length > 0 && (
                 <div className="mt-3 grid grid-cols-4 gap-2">

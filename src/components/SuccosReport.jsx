@@ -125,7 +125,7 @@ export default function SuccosReport({ kid, loggedShakes = 0 }) {
         {/* Photos */}
         <div>
           <span className="mb-1.5 block font-cond text-xs font-semibold uppercase tracking-[0.1em] text-muted">Photos from the field</span>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple onChange={onFiles} className="hidden" id="reportPhotos" />
+          <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" id="reportPhotos" />
           <label htmlFor="reportPhotos"
             className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line bg-paper py-5 text-center transition hover:border-blue hover:bg-blue/5">
             <span className="text-2xl">📷</span>
