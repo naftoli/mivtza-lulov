@@ -224,8 +224,8 @@ export default function Home() {
                 <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Total Shakes</p>
                 <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px] 2xl:mt-[18px] 2xl:text-[56px]">{fmt(stats.totalShakes)}</p>
               </div>
-              {/* sky halo (stroke painted under the fill) so the digits stay legible when the lulav marker rises behind them at high percentages */}
-              <p className="ml-auto font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-sky)] sm:text-[40px] lg:text-[44px] 2xl:text-[56px]">{percent}%</p>
+              {/* sm+: percent lives up here beside the numbers; on phones it moves inline with the bar (below). */}
+              <p className="ml-auto hidden font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-sky)] sm:block sm:text-[40px] lg:text-[44px] 2xl:text-[56px]">{percent}%</p>
             </div>
 
             {/* Right gutter (mr-*) per breakpoint = the widest percent label ("100%": 79 / 105 / 116px)
@@ -234,7 +234,12 @@ export default function Home() {
                 size at each breakpoint, so it holds at any viewport width. From 2xl the bar runs the card's
                 full inner width as in the comp; the label's sky halo + z-10 keep it legible if the marker
                 rises behind it at high percentages. */}
-            <GoalBar percent={percent} className="mt-5 mr-[112px] sm:mt-6 sm:mr-[144px] lg:mr-[156px] 2xl:mt-[15px] 2xl:mr-[150px]" />
+            {/* Phones: bar + percent on one row (no desktop gutter needed — the percent isn't above the bar here).
+                sm+ keeps the comp's full-width bar with the per-breakpoint right gutter that clears the marker. */}
+            <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
+              <GoalBar percent={percent} className="min-w-0 flex-1 sm:mt-6 sm:mr-[144px] lg:mr-[156px] 2xl:mt-[15px] 2xl:mr-[150px]" />
+              <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{percent}%</span>
+            </div>
 
             {/* From 2xl: three 320px columns from the card's inner left (the 3D icons overhang it by
                 10px in the comp), not stretched across the card. */}
