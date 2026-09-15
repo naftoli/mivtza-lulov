@@ -177,11 +177,11 @@ export default function Home() {
             {/* two equal-width pills, as in the comp — 225x38 from 2xl (20px condensed caps is the
                 largest Bebas size whose longest label still fits that width with 16px sides) */}
             <div className="mt-6 flex flex-wrap gap-3 sm:mt-7 sm:gap-4 2xl:mt-5 2xl:gap-5">
-              <Button to="/login" variant="navy" className="sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-[9px] 2xl:text-[20px]">I'm a Soldier — Log Shakes</Button>
+              <Button to="/login" variant="navy" className="sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-2 2xl:text-[22px] 2xl:tracking-normal">I'm a Soldier — Log Shakes</Button>
               <button
                 type="button"
                 onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })}
-                className="btn btn-gold sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-[9px] 2xl:text-[20px]"
+                className="btn btn-gold sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-2 2xl:text-[22px] 2xl:tracking-normal"
               >
                 See the Campaigns
               </button>
@@ -215,7 +215,7 @@ export default function Home() {
             </div>
 
             {/* labels + big numbers; kept above the lulav marker in the stacking order */}
-            <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12 2xl:mt-[18px] 2xl:gap-x-[30px]">
+            <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12 2xl:mt-[18px] 2xl:gap-x-[40px]">
               <div>
                 <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Goal</p>
                 <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px] 2xl:mt-[18px] 2xl:text-[56px]">{fmt(stats.totalGoal)}</p>
@@ -234,7 +234,7 @@ export default function Home() {
                 size at each breakpoint, so it holds at any viewport width. From 2xl the bar runs the card's
                 full inner width as in the comp; the label's sky halo + z-10 keep it legible if the marker
                 rises behind it at high percentages. */}
-            <GoalBar percent={percent} className="mt-5 mr-[112px] sm:mt-6 sm:mr-[144px] lg:mr-[156px] 2xl:mt-[15px] 2xl:mr-0" />
+            <GoalBar percent={percent} className="mt-5 mr-[112px] sm:mt-6 sm:mr-[144px] lg:mr-[156px] 2xl:mt-[15px] 2xl:mr-[150px]" />
 
             {/* From 2xl: three 320px columns from the card's inner left (the 3D icons overhang it by
                 10px in the comp), not stretched across the card. */}

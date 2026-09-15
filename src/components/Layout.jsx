@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 
 // Nav text: condensed caps in green-deep; the active page gets a green-mid underline.
 // 30px from 2xl is the comp's size; lg/xl sit at ~85% of it.
-const navText = 'font-cond text-[22px] uppercase leading-none tracking-[0.04em] text-green lg:text-[26px] 2xl:text-[30px]'
+const navText = 'font-cond text-[22px] uppercase leading-none tracking-[0.04em] text-green lg:text-[24px] 2xl:text-[26px]'
 const navLink = ({ isActive }) =>
   `hidden border-b-[3px] pb-0.5 transition sm:block ${navText} ${
     isActive ? 'border-green-mid' : 'border-transparent opacity-85 hover:opacity-100'

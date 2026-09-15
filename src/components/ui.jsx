@@ -20,11 +20,11 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
     <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
       <img src={asset('th-logo.svg')} alt="Tzivos Hashem" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
       <span className="flex flex-col leading-none">
-        <span className="font-display text-[1rem] font-bold uppercase leading-none tracking-[-0.01em] sm:text-[1.5rem]"
+        <span className="font-cond text-[1.35rem] uppercase leading-none tracking-[0.02em] sm:text-[2.1rem] 2xl:text-[2.25rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
           Mivtza Lulav
         </span>
-        <span className="mt-1 font-cond text-[11px] uppercase leading-none tracking-[0.06em] sm:text-[12px]"
+        <span className="mt-1 font-display text-[10px] font-semibold uppercase leading-none tracking-[0.04em] sm:text-[13px] 2xl:text-[15px]"
           style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
           Tzivos Hashem
         </span>
