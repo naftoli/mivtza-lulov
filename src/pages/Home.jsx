@@ -158,7 +158,7 @@ export default function Home() {
           draggable="false"
           className="absolute inset-0 h-full w-full select-none object-cover object-[62%_center]"
         />
-        <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 lg:px-10 2xl:max-w-[1552px] 2xl:items-end 2xl:px-4 2xl:pb-[70px]">
+        <div className="relative mx-auto flex w-full max-w-[1400px] flex-col items-center gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:flex-row lg:items-center lg:gap-0 lg:px-10 2xl:max-w-[1552px] 2xl:items-end 2xl:px-4 2xl:pb-[70px]">
           {/* 2xl rhythm is the comp's, measured on its canvas: eyebrow caps at y 287-301, the H1's three
               cap rows at 347 / 392 / 434 (Exo Black 36px — "ONE GIANT MISSION." is 353px wide in the
               comp, which 36px reproduces and 42px overshoots by 60px — on a 1.2 pitch), body lines on a
@@ -187,6 +187,14 @@ export default function Home() {
               </button>
             </div>
           </div>
+          {/* Phones/tablets: the full-height cutout can't sit beside a narrow panel, so the boy stands
+              below it (right-aligned); the nationwide card below still overlaps his feet. */}
+          <img
+            src={asset('design/hero-boy.png')}
+            alt=""
+            draggable="false"
+            className="pointer-events-none -mb-12 h-[240px] w-auto max-w-none select-none self-end sm:h-[320px] lg:hidden"
+          />
           {/* Top-anchored with its height tied to the hero so the PNG's flat top crop stays under the
               header. From 2xl the comp places the cutout at exactly the hero's height (470x636, x 1170-1640
               on a 1920 canvas): right edge 96px in from the container's padding box (184..1736), and its
