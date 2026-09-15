@@ -47,8 +47,10 @@
   --font-cond: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
   --font-heb: "Frank Ruhl Libre", "Times New Roman", serif;
 
-  --shadow-card: 0 1px 2px rgba(0, 28, 76, 0.03), 0 12px 32px -22px rgba(0, 28, 76, 0.16);
-  --shadow-hover: 0 16px 36px -18px rgba(0, 28, 76, 0.28);
+  /* No negative spread: large -spread box-shadows on rounded, overflow-hidden
+     cards render a doubled/offset "ghost" edge in Safari (iOS). Plain blur is safe. */
+  --shadow-card: 0 1px 2px rgba(0, 28, 76, 0.04), 0 10px 22px rgba(0, 28, 76, 0.07);
+  --shadow-hover: 0 14px 30px rgba(0, 28, 76, 0.15);
 }
 
 /* Shared gradients / glass (plain custom properties, referenced by class rules
