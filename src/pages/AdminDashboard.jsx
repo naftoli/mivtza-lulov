@@ -5,7 +5,12 @@ import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   updateSchool, setShakeHidden, addKid, resetDemoData, getReportsForSchool,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos,
+  getSettings, setPerKidGoal, setSchoolGoal,
 } from '../services/api.js'
+
+// Fixed campaign end (Isru Chag), shown read-only — e.g. "Mon, Oct 5".
+const prettyDate = (iso) =>
+  new Date(iso + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 import ReportGrid from '../components/ReportGrid.jsx'
 import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
@@ -86,6 +91,7 @@ export default function AdminDashboard() {
               ))}
             </div>
           </Section>
+          <div className="mt-6"><GlobalGoalSettings /></div>
         </div>
       )}
 
@@ -109,14 +115,14 @@ export default function AdminDashboard() {
               </label>
             </Card>
           )}
-          <SchoolAdmin key={selectedId} schoolId={selectedId} />
+          <SchoolAdmin key={selectedId} schoolId={selectedId} isHQ={admin.role === 'hq'} />
         </div>
       )}
     </div>
   )
 }
 
-function SchoolAdmin({ schoolId }) {
+function SchoolAdmin({ schoolId, isHQ }) {
   const { data: school } = useLiveData(() => getSchool(schoolId), [schoolId])
   const { data: shakes } = useLiveData(() => getShakes(schoolId, { includeHidden: true }), [schoolId])
   const { data: kids } = useLiveData(() => getKidsForSchool(schoolId), [schoolId])
@@ -128,7 +134,7 @@ function SchoolAdmin({ schoolId }) {
   return (
     <div className="mt-6 space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
-        <CampaignSettings school={school} />
+        <CampaignSettings school={school} isHQ={isHQ} />
         <Roster schoolId={schoolId} kids={kids || []} />
       </div>
       <PhotoApprovals schoolId={schoolId} shakes={pending || []} />
@@ -138,38 +144,101 @@ function SchoolAdmin({ schoolId }) {
   )
 }
 
-function CampaignSettings({ school }) {
-  const [form, setForm] = useState({ motto: school.motto, endDate: school.endDate })
+// HQ-only: the automatic goal per soldier, applied to every school, class and the
+// nationwide goal at once. (Schools never see this.)
+function GlobalGoalSettings() {
+  const { data: settings } = useLiveData(() => getSettings(), [])
+  const [val, setVal] = useState('')
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { if (settings) setVal(String(settings.perKidGoal)) }, [settings?.perKidGoal])
+
+  async function save(e) {
+    e.preventDefault()
+    if (Number(val) >= 1) {
+      await setPerKidGoal(val)
+      setSaved(true); setTimeout(() => setSaved(false), 1600)
+    }
+  }
+
+  return (
+    <Section title="Automatic Goal" topColor="var(--color-green)">
+      <p className="text-sm text-muted">
+        Every automatic goal is this many shakes per soldier — each school, every class, and the nationwide goal.
+        Change it and they all update at once. (Set a different number for one school under that school below.)
+      </p>
+      <form onSubmit={save} className="mt-3 flex flex-wrap items-end gap-3">
+        <Field label="Shakes per soldier">
+          <Input type="number" min="1" value={val} onChange={(e) => setVal(e.target.value)} className="w-28" />
+        </Field>
+        <Button type="submit" variant="navy">Save</Button>
+        {saved && <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-green">✓ Saved</span>}
+      </form>
+    </Section>
+  )
+}
+
+function CampaignSettings({ school, isHQ }) {
+  const autoGoal = school.kidCount * school.perKidGoal
+  const [motto, setMotto] = useState(school.motto)
+  // Blank = automatic; a number = an HQ custom goal for this school.
+  const [goalVal, setGoalVal] = useState(school.goalCustom ? String(school.goal) : '')
   const [saved, setSaved] = useState(false)
   useEffect(() => {
-    setForm({ motto: school.motto, endDate: school.endDate })
+    setMotto(school.motto)
+    setGoalVal(school.goalCustom ? String(school.goal) : '')
   }, [school.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save(e) {
     e.preventDefault()
-    await updateSchool(school.id, { motto: form.motto, endDate: form.endDate })
+    await updateSchool(school.id, { motto })
+    if (isHQ) await setSchoolGoal(school.id, goalVal) // '' clears back to automatic
     setSaved(true); setTimeout(() => setSaved(false), 1600)
   }
 
   return (
     <Section title="Campaign Settings" topColor={school.color} right={<Pill>{school.percent}% of goal</Pill>}>
-      {/* Goal is automatic — not something schools pick */}
-      <div className={`${tile} p-4`}>
-        <p className={label}>Goal (automatic)</p>
-        <p className="font-display text-3xl font-black text-navy">{fmt(school.goal)} <span className="text-lg font-semibold text-muted">shakes</span></p>
-        <p className="mt-1 text-sm text-muted">{fmt(school.kidCount)} soldiers × 5 shakes each. It updates as soldiers are added.</p>
-      </div>
+      {/* Goal: automatic (soldiers × per-kid) unless HQ sets a custom number. Schools can't. */}
+      {isHQ ? (
+        <div className={`${tile} p-4`}>
+          <p className={label}>Goal</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <Input type="number" min="1" value={goalVal} onChange={(e) => setGoalVal(e.target.value)}
+              placeholder={`${fmt(autoGoal)} (auto)`} className="w-40" />
+            <span className="text-sm font-semibold text-muted">shakes</span>
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            Leave blank for the automatic goal — {fmt(school.kidCount)} soldiers × {school.perKidGoal} = {fmt(autoGoal)}.
+            {school.goalCustom && ' This school is on a custom goal right now.'}
+          </p>
+        </div>
+      ) : (
+        <div className={`${tile} p-4`}>
+          <p className={label}>Goal {school.goalCustom ? '(set by HQ)' : '(automatic)'}</p>
+          <p className="font-display text-3xl font-black text-navy">{fmt(school.goal)} <span className="text-lg font-semibold text-muted">shakes</span></p>
+          <p className="mt-1 text-sm text-muted">
+            {school.goalCustom
+              ? 'Set by HQ for this school.'
+              : `${fmt(school.kidCount)} soldiers × ${school.perKidGoal} shakes each. It updates as soldiers are added.`}
+          </p>
+        </div>
+      )}
 
       <form onSubmit={save} className="mt-4 space-y-4">
-        <Field label="Motto"><Input value={form.motto} onChange={(e) => setForm({ ...form, motto: e.target.value })} /></Field>
-        <Field label="End date"><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
+        <Field label="Motto"><Input value={motto} onChange={(e) => setMotto(e.target.value)} /></Field>
         <div className="flex items-center gap-3">
           <Button type="submit" variant="navy">Save</Button>
           {saved && <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-green">✓ Saved</span>}
         </div>
       </form>
 
-      <div className={`${tile} mt-5 p-4`}>
+      {/* End date is fixed to Isru Chag — not editable by anyone. */}
+      <div className={`${tile} mt-4 p-4`}>
+        <p className={label}>Campaign ends</p>
+        <p className="mt-0.5 font-semibold text-navy">{prettyDate(school.endDate)} · Isru Chag Sukkos</p>
+        <p className="mt-1 text-sm text-muted">Set by the calendar — the same for every school.</p>
+      </div>
+
+      <div className={`${tile} mt-4 p-4`}>
         <p className="sh !text-gold-dark">⭐ Bonus Rounds (automatic)</p>
         <p className="mt-1 text-sm text-navy">
           {school.bonusActive

@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { SEED } from '../data/seed.js'
+import { ISRU_CHAG } from '../lib/succos.js'
 
 // Exported so the session keys in AuthContext can be versioned with the data:
 // a session saved against an older seed must not log a ghost soldier in.
@@ -22,6 +23,7 @@ const KEYS = {
   admins: `ml_${VERSION}_admins`,
   shakes: `ml_${VERSION}_shakes`,
   reports: `ml_${VERSION}_reports`,
+  settings: `ml_${VERSION}_settings`,
 }
 
 const listeners = new Set()
@@ -116,8 +118,41 @@ function loggedTotal(schoolId, shakes) {
 
 // Goals are AUTOMATIC (never picked): 5 shakes per soldier for the base goal,
 // and every bonus round adds 1 more shake per soldier.
-const PER_KID = 5
+// The per-soldier default. HQ can change it (setPerKidGoal) and it drives every
+// automatic goal — school, class and nationwide. Schools never set goals.
+const DEFAULT_PER_KID = 5
 const kidCountOf = (s) => s.soldierCount || 0
+
+// Current per-soldier default (read synchronously from the settings store).
+function perKid() {
+  const n = read(KEYS.settings, {}).perKidGoal
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : DEFAULT_PER_KID
+}
+
+// A school's BASE goal: an HQ-set custom override if present, else soldiers × per-kid.
+function baseGoalOf(school, pk = perKid()) {
+  const override = Number(school.goalOverride)
+  if (Number.isFinite(override) && override >= 1) return Math.floor(override)
+  return Math.max(1, kidCountOf(school) * pk)
+}
+
+// HQ: read / change the per-soldier default (applies everywhere at once).
+export async function getSettings() {
+  await delay()
+  return { perKidGoal: perKid() }
+}
+export async function setPerKidGoal(n) {
+  await delay()
+  const v = Math.max(1, Math.floor(Number(n) || 0))
+  write(KEYS.settings, { ...read(KEYS.settings, {}), perKidGoal: v })
+  return { perKidGoal: v }
+}
+
+// HQ: set an individual school's goal, or clear it (null / '' / 0) back to automatic.
+export async function setSchoolGoal(schoolId, goalOverride) {
+  const v = goalOverride === '' || goalOverride == null ? null : Math.max(1, Math.floor(Number(goalOverride) || 0)) || null
+  return updateSchool(schoolId, { goalOverride: v })
+}
 
 // Percent of a goal, floored and clamped to 0-100. It is 100 ONLY once the
 // total actually reaches the goal — 4,922 of 4,930 is "99%", never "100%".
@@ -128,15 +163,21 @@ export function goalPercent(total, goal) {
 
 function decorateSchool(school, shakes) {
   const kids = kidCountOf(school)
+  const pk = perKid()
   const bonusLevel = school.bonusLevel || 0
-  const goal = Math.max(1, kids * PER_KID)
-  const activeGoal = Math.max(goal, kids * (PER_KID + bonusLevel))
+  const goal = baseGoalOf(school, pk) // HQ override, else soldiers × per-kid
+  const goalCustom = Number.isFinite(Number(school.goalOverride)) && Number(school.goalOverride) >= 1
+  // Each bonus round adds one shake per soldier to the target.
+  const activeGoal = goal + kids * bonusLevel
   // total = shakes already on record (baseline) + everything logged live
   const total = (school.baseline || 0) + loggedTotal(school.id, shakes)
   const goalReached = total >= goal
   return {
     ...school,
+    endDate: ISRU_CHAG, // fixed campaign end (Isru Chag) — not set by anyone
     kidCount: kids,
+    perKidGoal: pk,
+    goalCustom,
     goal,
     bonusGoal: activeGoal, // current bonus target
     bonusActive: bonusLevel > 0,
@@ -194,6 +235,7 @@ export async function getLeaderboard(schoolId, limit = 10) {
 // same automatic rule as schools.
 export async function getClassLeaderboard(schoolId, limit = 12) {
   await delay()
+  const pk = perKid()
   const kidsAll = read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
   const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
   const gradeOf = {}
@@ -213,7 +255,7 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
     .map((g) => {
       const count = shaken[g] || 0
       const kidCount = classKids[g] || 0
-      const goal = Math.max(1, kidCount * PER_KID)
+      const goal = Math.max(1, kidCount * pk)
       return { grade: g, count, kidCount, goal, percent: goalPercent(count, goal) }
     })
     .sort((a, b) => b.percent - a.percent || b.count - a.count)
@@ -228,7 +270,7 @@ export async function getGlobalStats() {
   const baseline = schools.reduce((sum, s) => sum + (s.baseline || 0), 0)
   return {
     totalShakes: baseline + shakes.reduce((sum, s) => sum + s.count, 0),
-    totalGoal: schools.reduce((sum, s) => sum + kidCountOf(s) * PER_KID, 0), // nationwide goal = every soldier × 5
+    totalGoal: schools.reduce((sum, s) => sum + baseGoalOf(s), 0), // nationwide = sum of every school's base goal
     totalSchools: schools.length,
     activeSoldiers: kids.size,
     totalPhotos: shakes.filter((s) => s.photo).length,
@@ -330,7 +372,7 @@ export async function addShake({ kid, count, note, photos }) {
     const kids = kidCountOf(s)
     if (kids > 0) {
       const total = (s.baseline || 0) + loggedTotal(s.id, shakes)
-      const neededLevel = Math.max(0, Math.ceil(total / kids) - PER_KID)
+      const neededLevel = Math.max(0, Math.ceil((total - baseGoalOf(s)) / kids))
       if (neededLevel > (s.bonusLevel || 0)) {
         schools[si] = { ...s, bonusLevel: neededLevel }
         write(KEYS.schools, schools)

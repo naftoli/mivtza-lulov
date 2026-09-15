@@ -18,6 +18,12 @@ export const SHABBOS_DAY = ((SATURDAY - startWeekday + 7) % 7) + 1
 // The six days Lulav is taken, in order (matches the teacher checklist).
 export const LULAV_DAYS = [1, 2, 3, 4, 5, 6, 7].filter((n) => n !== SHABBOS_DAY)
 
+// The campaign runs through Isru Chag Sukkos — the day after Simchas Torah,
+// i.e. 24 Tishrei = 9 days after 15 Tishrei. Fixed by the calendar; the end
+// date is derived here and is NOT editable by anyone. (Date.UTC rolls the
+// day-of-month overflow into the right month.)
+export const ISRU_CHAG = new Date(Date.UTC(y, m - 1, d + 9)).toISOString().slice(0, 10)
+
 // 1 → "1st", 2 → "2nd", 3 → "3rd", 4 → "4th" …
 export function ordinal(n) {
   const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th'

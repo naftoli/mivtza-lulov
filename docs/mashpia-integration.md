@@ -19,9 +19,13 @@ components never change.
 3. **School/staff login** = the **same login they already use on Mashpia.com** (SSO).
 4. **Photos must be approved before they post** — uploads are held as *pending* and only
    appear publicly once an admin approves them.
-5. **Goals are automatic, never picked** — 5 shakes per child, and every bonus round adds
-   1 more shake per child. This runs at **three levels**: each **class**, each **school**,
+5. **Goals default to automatic; only HQ can change them** — the automatic goal is a
+   per-child number (default **5**) that HQ can change globally, plus HQ can set a custom
+   goal for an individual school. Schools never set goals. Every bonus round still adds
+   1 more shake per child. Goals run at **three levels**: each **class**, each **school**,
    and **Main Tzivos Hashem** (nationwide).
+6. **The campaign end date is fixed to Isru Chag Sukkos** — derived from the calendar
+   (the day after Simchas Torah), not editable by anyone.
 6. **Profile pictures**: each child's photo shows in Recent Shakes and when they log in.
 7. **Two-way**: everything entered in the app (shakes, reports, photos) **writes back into
    the Mashpia database**, landing where the teacher data already lives.
@@ -51,15 +55,21 @@ components never change.
   `{ serial, firstName, lastName, hebFirst, hebLast, dob, gender, class (=Platoon), rank, schoolId, photoUrl }`
   - **`photoUrl`** is the child's profile picture (used in Recent Shakes + on login).
 
-### C. Goals — automatic at every level (no one picks them)
-Preset formula, computed from headcount:
-- **Base goal = children × 5**
-- **Each bonus round = +1 shake per child** (×6, ×7, … and it auto-advances as targets are hit)
+### C. Goals — automatic by default, HQ-adjustable (schools never pick them)
+Computed from headcount:
+- **Base goal = children × per-child number** (default **5**; HQ can change this global number)
+- **HQ may override an individual school's goal** with a fixed number (blank = back to automatic)
+- **Each bonus round = +1 shake per child** (and it auto-advances as targets are hit)
 
 Applied to **each class** (children in that class), **each school** (all its children), and
-**Main TH** (all children nationwide). The app computes these from the roster counts, so
-Mashpia just needs to supply accurate **class/school/national headcounts** (and update them
-as children are added/moved).
+**Main TH** (sum of every school's base goal). The app computes these from the roster counts,
+so Mashpia needs to supply accurate **class/school/national headcounts**, and to persist two
+HQ-set values: the **global per-child number** and any **per-school goal override**.
+
+### C2. Campaign end date — fixed to Isru Chag
+The end date is **not stored per school and not editable**. The app derives it from the
+Sukkos start date (Isru Chag = the day after Simchas Torah) in `src/lib/succos.js`; update
+`SUKKOS_START` there once a year and the end date (and the Lulav days) follow.
 
 ### D. Reports & shakes (write — the two-way sync)
 Everything a child enters flows back to Mashpia. The Succos report mirrors the teacher
