@@ -167,7 +167,7 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
           {/* count — top left */}
           <div className="absolute -left-8 -top-2 text-left">{count}</div>
           {/* goal — standing panel overlaying the arrow */}
-          <div className="pointer-events-none absolute bottom-[5%] -right-6 rounded-2xl bg-sky/95 px-3 py-6 text-center shadow-md ring-1 ring-navy/10 backdrop-blur-sm">{panel}</div>
+          <div className="pointer-events-none absolute bottom-[5%] -right-6 rounded-2xl bg-sky/95 px-3 py-9 text-center shadow-md ring-1 ring-navy/10 backdrop-blur-sm">{panel}</div>
           {/* share — back in the valley, lower-left */}
           {actions && (
             <div className="pointer-events-auto absolute bottom-[13%] left-[30%]">{actions}</div>
