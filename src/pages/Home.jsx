@@ -149,7 +149,7 @@ export default function Home() {
           className="absolute inset-0 h-full w-full select-none object-cover object-[62%_center]"
         />
         <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 lg:px-10">
-          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[500px] lg:max-w-[640px] lg:p-10">
+          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[560px] lg:max-w-[520px] lg:p-10 xl:max-w-[640px]">
             <p className="font-display text-[14px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[18px]">
               Sukkos 5787 · Nationwide Mivtza
             </p>
@@ -176,7 +176,7 @@ export default function Home() {
             src={asset('design/hero-boy.png')}
             alt=""
             draggable="false"
-            className="pointer-events-none absolute -bottom-6 right-4 z-20 hidden h-[500px] w-auto select-none md:block lg:right-8 lg:h-[580px] xl:right-12 xl:h-[624px]"
+            className="pointer-events-none absolute right-6 top-0 z-20 hidden h-[calc(100%_+_24px)] w-auto select-none lg:block xl:right-12"
           />
         </div>
       </section>
