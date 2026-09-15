@@ -5,7 +5,8 @@ import { asset } from '../lib/asset.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 // Nav text: condensed caps in green-deep; the active page gets a green-mid underline.
-const navText = 'font-cond text-[22px] uppercase leading-none tracking-[0.04em] text-green lg:text-[26px]'
+// 30px from 2xl is the comp's size; lg/xl sit at ~85% of it.
+const navText = 'font-cond text-[22px] uppercase leading-none tracking-[0.04em] text-green lg:text-[26px] 2xl:text-[30px]'
 const navLink = ({ isActive }) =>
   `hidden border-b-[3px] pb-0.5 transition sm:block ${navText} ${
     isActive ? 'border-green-mid' : 'border-transparent opacity-85 hover:opacity-100'
@@ -42,10 +43,12 @@ export default function Layout({ children }) {
     <div className="flex min-h-screen flex-col bg-field">
       <header className="sticky top-0 z-40 bg-sky/95 backdrop-blur">
         {/* Below sm the row must hold brand + login pill + menu toggle on a 360px phone, so the
-            phone values are trimmed (44px logo, 8px gaps, 16px pill); every sm: value is the desktop as-is. */}
-        <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center justify-between gap-2 px-4 sm:min-h-[92px] sm:gap-3 sm:px-6 lg:px-10">
-          <Link to="/" className="shrink-0"><Brand size={52} phoneSize={44} /></Link>
-          <nav className="flex items-center gap-1.5 sm:gap-5 lg:gap-9">
+            phone values are trimmed (44px logo, 8px gaps, 16px pill); every sm: value is the desktop as-is.
+            From 2xl the bar is the comp's 100px, and the container is 1612px with a 46px left / 16px right gutter, so on a
+            1920 viewport the content spans x 200-1750 — the shield's left edge lands at x=200 and the nav ends at x=1750 as in the comp. */}
+        <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center justify-between gap-2 px-4 sm:min-h-[92px] sm:gap-3 sm:px-6 lg:px-10 2xl:min-h-[100px] 2xl:max-w-[1612px] 2xl:pl-[46px] 2xl:pr-4">
+          <Link to="/" className="shrink-0"><Brand size={52} phoneSize={44} wideSize={70} /></Link>
+          <nav className="flex items-center gap-1.5 sm:gap-5 lg:gap-9 2xl:gap-10">
             <NavLink to="/" end className={navLink}>
               Campaigns
             </NavLink>
@@ -53,10 +56,11 @@ export default function Layout({ children }) {
               How-To
             </NavLink>
             {/* px-3 + 16px caps below sm so the green pill + menu toggle fit beside the brand on 360px
-                phones; sm:px-6 / sm:text-[18px] restore .btn's defaults, so the desktop pill is unchanged. */}
+                phones; sm:px-6 / sm:text-[18px] restore .btn's defaults, so the desktop pill is unchanged.
+                From 2xl the pill is the comp's ~145x46: 24px caps (11px + 24 + 11) with 14px sides. */}
             {kid
-              ? <Button to="/me" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px]">My Missions</Button>
-              : <Button to="/login" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px]">Soldier Login</Button>}
+              ? <Button to="/me" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">My Missions</Button>
+              : <Button to="/login" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">Soldier Login</Button>}
             <Button to={admin ? '/admin' : '/admin/login'} variant="ghost"
               className={`hidden px-0 opacity-85 hover:opacity-100 sm:inline-flex ${navText}`}>
               {admin ? 'Admin' : 'School Admin'}

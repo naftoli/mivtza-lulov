@@ -14,7 +14,9 @@ import { asset } from '../lib/asset.js'
 // needs a right gutter on the bar — `className="mr-…"` per breakpoint — of at
 // least that label's widest width + half the marker (9 / 13 / 15px at the three
 // sizes) + a breathing gap. The marker then can never cross it: even at 100%
-// it stands centred on the bar's right edge, inside the gutter.
+// it stands centred on the bar's right edge, inside the gutter. (Home drops the
+// gutter from 2xl, where the comp runs the bar the card's full inner width and
+// relies on the label's sky halo instead.)
 export default function GoalBar({ percent, label = 'of goal', marker = true, className = '' }) {
   const p = Math.max(0, Math.min(100, Math.floor(Number(percent) || 0)))
   return (

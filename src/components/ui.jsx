@@ -13,11 +13,12 @@ export function Band({ className = '' }) {
 // Masthead logo lockup: TH shield + two-line wordmark
 // ("MIVTZA LULAV" Exo bold caps in green-deep, "TZIVOS HASHEM" condensed caps).
 // `size` is the shield's height from sm up; `phoneSize` (defaults to the same) applies
-// below sm, where the header bar is shorter and the login pill + menu toggle share the row.
-export function Brand({ size = 46, phoneSize = size, dark = false }) {
+// below sm, where the header bar is shorter and the login pill + menu toggle share the row;
+// `wideSize` (defaults to `size`) applies from 2xl, where the comp's 100px header carries a 70px shield.
+export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = false }) {
   return (
-    <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px` }}>
-      <img src={asset('th-logo.svg')} alt="Tzivos Hashem" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h)" />
+    <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
+      <img src={asset('th-logo.svg')} alt="Tzivos Hashem" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
       <span className="flex flex-col leading-none">
         <span className="font-display text-[1rem] font-bold uppercase leading-none tracking-[-0.01em] sm:text-[1.5rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>

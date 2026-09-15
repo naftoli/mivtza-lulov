@@ -48,50 +48,57 @@ function SchoolsRace({ schools }) {
   const ranked = [...schools].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.total - a.total))
   // Toggle: green pill, the active segment darker (spec: #549182 vs #69c07c) — in the
   // comp it shades sky -> teal-green from left to right. Condensed caps, green-deep text.
+  // From 2xl the toggle is the comp's 215x30 pill: 20px caps in 3px + 2px of padding.
   const seg = (active) =>
-    `rounded-full px-3.5 py-2 text-green transition sm:px-5 ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
+    `rounded-full px-3.5 py-2 text-green transition sm:px-5 2xl:px-2.5 2xl:py-0.5 ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
   const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6e0f6 0%, #6db58d 45%, #549182 100%)' } : undefined)
   return (
-    <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-7">
+    // 2xl: the comp's 1408x650 race card — padding 46/36 top/bottom, 63 at the sides — with rows on a
+    // 95px pitch (60px medal rows + 15px gaps) whose first centre lands at y~1300 on the comp's canvas.
+    <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14 2xl:px-[63px] 2xl:pb-[30px] 2xl:pt-[46px]">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-7 2xl:mb-3 2xl:items-center">
         <div className="min-w-0">
-          <Eyebrow icon={asset('design/flag.png')} iconClass="h-[22px]">The Race</Eyebrow>
-          <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
+          <Eyebrow icon={asset('design/flag.png')} iconClass="h-[22px] 2xl:h-6">The Race</Eyebrow>
+          <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px] 2xl:text-[36px]">Schools going head to head</h2>
         </div>
-        <div className="inline-flex rounded-full bg-[#69c07c] p-1 font-cond text-[15px] uppercase leading-none tracking-[0.04em] sm:text-[17px]">
+        <div className="inline-flex rounded-full bg-[#69c07c] p-1 font-cond text-[15px] uppercase leading-none tracking-[0.04em] sm:text-[17px] 2xl:p-[3px] 2xl:text-[20px]">
           <button type="button" onClick={() => setSort('percent')} className={seg(sort === 'percent')} style={segStyle(sort === 'percent')}>% of goal</button>
           <button type="button" onClick={() => setSort('total')} className={seg(sort === 'total')} style={segStyle(sort === 'total')}>Total shakes</button>
         </div>
       </div>
 
-      <div className="space-y-2 sm:space-y-3">
+      {/* 2xl row: medal slot 52 · logo 48 · name 235 · bar (fills the rest = 752 in the 1282px inner
+          width) · percent 91, with 26px gaps; the row's own 12px side padding is pulled outside the
+          card's inner edge so the medal sits flush with it while the hover wash keeps its inset. */}
+      <div className="space-y-2 sm:space-y-3 2xl:space-y-[15px]">
         {ranked.map((s, i) => (
           <Link
             key={s.id}
             to={`/s/${s.id}`}
-            className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl px-2 py-2.5 transition hover:bg-white/40 sm:flex sm:gap-4 sm:px-3 lg:gap-5"
+            className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl px-2 py-2.5 transition hover:bg-white/40 sm:flex sm:gap-4 sm:px-3 lg:gap-5 2xl:-mx-3 2xl:gap-[26px]"
           >
-            <span className="grid w-9 flex-none place-items-center sm:w-12 lg:w-14">
+            {/* the slot keeps the medal's 60px height from 2xl so numeral rows (ranks 4+) hold the same pitch */}
+            <span className="grid w-9 flex-none place-items-center sm:w-12 lg:w-14 2xl:h-[60px] 2xl:w-[52px]">
               {i < 3
-                ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} draggable="false" className="h-9 w-auto sm:h-[46px] lg:h-[52px]" />
+                ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} draggable="false" className="h-9 w-auto sm:h-[46px] lg:h-[52px] 2xl:h-[60px]" />
                 : <span className="font-display text-[20px] font-bold italic leading-none text-blue-accent sm:text-[24px]">{i + 1}</span>}
             </span>
-            <SchoolLogo school={s} size={44} />
-            <span className="min-w-0 truncate font-display text-[17px] font-semibold text-navy sm:w-40 sm:flex-none sm:text-[19px] lg:w-56 lg:text-[20px] xl:w-64">{s.name}</span>
-            <span className="relative col-span-4 h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1 order-last">
+            <SchoolLogo school={s} size={44} className="2xl:!h-12 2xl:!w-12" />
+            <span className="min-w-0 truncate font-display text-[17px] font-semibold text-navy sm:w-40 sm:flex-none sm:text-[19px] lg:w-56 lg:text-[20px] xl:w-64 2xl:w-[235px] 2xl:text-[22px]">{s.name}</span>
+            <span className="relative col-span-4 h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1 order-last 2xl:h-[22px]">
               <span
                 className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
                 style={{ width: `${Math.max(s.percent, 3)}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
               />
             </span>
-            <span className="text-right font-display text-[16px] font-bold tabular-nums text-green sm:w-16 sm:flex-none sm:text-[18px] lg:w-24 lg:text-[20px]">
+            <span className="text-right font-display text-[16px] font-bold tabular-nums text-green sm:w-16 sm:flex-none sm:text-[18px] lg:w-24 lg:text-[20px] 2xl:w-[91px] 2xl:text-[26px]">
               {sort === 'percent' ? `${s.percent}%` : fmt(s.total)}
             </span>
           </Link>
         ))}
       </div>
 
-      <p className="mt-5 font-display text-[13px] font-light italic text-navy sm:text-[14px]">
+      <p className="mt-5 font-display text-[13px] font-light italic text-navy sm:text-[14px] 2xl:ml-2.5 2xl:mt-2.5">
         Ranked by {sort === 'percent' ? 'percent of each school’s own goal — so every school competes fairly' : 'total shakes logged'}.
       </p>
     </Card>
@@ -141,50 +148,66 @@ export default function Home() {
       {/* Hero — full-bleed city photo, green glass panel left, soldier cutout right.
           `isolate` keeps the panel/boy z-order inside the hero, so the nationwide
           card (z-10, pulled up over the hero) paints over the boy's feet as in the comp. */}
-      <section className="relative isolate flex min-h-[520px] md:min-h-[600px]">
+      {/* 2xl (>= 1536px) is the comp's geometry on a 1920 canvas: hero 636 tall; the 1552px container
+          with a 16px gutter puts the glass panel's left edge at x=200; the panel (650 wide, ~410 tall)
+          sits on the hero's bottom edge with a 70px gap, so its top lands at y~255 under the 100px header. */}
+      <section className="relative isolate flex min-h-[520px] md:min-h-[600px] 2xl:min-h-[636px]">
         <img
           src={asset('design/hero-city.jpg')}
           alt=""
           draggable="false"
           className="absolute inset-0 h-full w-full select-none object-cover object-[62%_center]"
         />
-        <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 lg:px-10">
-          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[560px] lg:max-w-[520px] lg:p-10 xl:max-w-[640px]">
+        <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 lg:px-10 2xl:max-w-[1552px] 2xl:items-end 2xl:px-4 2xl:pb-[70px]">
+          {/* 2xl rhythm is the comp's, measured on its canvas: eyebrow caps at y 287-301, the H1's three
+              cap rows at 347 / 392 / 434 (Exo Black 36px — "ONE GIANT MISSION." is 353px wide in the
+              comp, which 36px reproduces and 42px overshoots by 60px — on a 1.2 pitch), body lines on a
+              29px pitch from y 500, pills at y 603-641, panel bottom at 666. */}
+          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[560px] lg:max-w-[520px] lg:p-10 xl:max-w-[640px] 2xl:max-w-[650px] 2xl:rounded-[40px] 2xl:px-10 2xl:pb-[25px] 2xl:pt-8">
             <p className="font-display text-[14px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[18px]">
               Sukkos 5787 · Nationwide Mivtza
             </p>
-            <h1 className="mt-4 font-display text-[26px] font-black uppercase leading-[1.15] text-white sm:text-[34px] lg:text-[38px]">
+            <h1 className="mt-4 font-display text-[26px] font-black uppercase leading-[1.15] text-white sm:text-[34px] lg:text-[38px] 2xl:mt-[30px] 2xl:text-[36px] 2xl:leading-[1.2]">
               Every soldier.<br />Every Lulav.<br /><span className="text-gold">One giant mission.</span>
             </h1>
-            <p className="mt-5 font-display text-[17px] leading-[1.35] text-white sm:text-[20px] lg:text-[22px]">
+            <p className="mt-5 font-display text-[17px] leading-[1.35] text-white sm:text-[20px] lg:text-[22px] 2xl:mt-7 2xl:text-[24px] 2xl:leading-[1.2]">
               Tzivos Hashem soldiers are hitting the streets to help every Yid shake the Lulav and Esrog.
               Pick your school, watch the count climb, and join the mivtza!
             </p>
-            {/* two equal-width pills, as in the comp */}
-            <div className="mt-6 flex flex-wrap gap-3 sm:mt-7 sm:gap-4">
-              <Button to="/login" variant="navy" className="sm:min-w-[250px] sm:text-[21px]">I'm a Soldier — Log Shakes</Button>
+            {/* two equal-width pills, as in the comp — 225x38 from 2xl (20px condensed caps is the
+                largest Bebas size whose longest label still fits that width with 16px sides) */}
+            <div className="mt-6 flex flex-wrap gap-3 sm:mt-7 sm:gap-4 2xl:mt-5 2xl:gap-5">
+              <Button to="/login" variant="navy" className="sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-[9px] 2xl:text-[20px]">I'm a Soldier — Log Shakes</Button>
               <button
                 type="button"
                 onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })}
-                className="btn btn-gold sm:min-w-[250px] sm:text-[21px]"
+                className="btn btn-gold sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-[9px] 2xl:text-[20px]"
               >
                 See the Campaigns
               </button>
             </div>
           </div>
+          {/* Top-anchored with its height tied to the hero so the PNG's flat top crop stays under the
+              header. From 2xl the comp places the cutout at exactly the hero's height (470x636, x 1170-1640
+              on a 1920 canvas): right edge 96px in from the container's padding box (184..1736), and its
+              bottom already runs 26px under the nationwide card's top edge. */}
           <img
             src={asset('design/hero-boy.png')}
             alt=""
             draggable="false"
-            className="pointer-events-none absolute right-6 top-0 z-20 hidden h-[calc(100%_+_24px)] w-auto select-none lg:block xl:right-12"
+            className="pointer-events-none absolute right-6 top-0 z-20 hidden h-[calc(100%_+_24px)] w-auto select-none lg:block xl:right-12 2xl:right-[96px] 2xl:h-full"
           />
         </div>
       </section>
 
-      {/* Nationwide goal + global stats — pulled up over the hero's bottom edge */}
+      {/* Nationwide goal + global stats — pulled up over the hero's bottom edge.
+          From 2xl the card is the comp's 1408x380 at x 292-1700 (1512px container, 88px left / 16px right gutter), radius 40,
+          overlapping the hero by 26px, padded 44/50 top/bottom and 63 at the sides; the row spacing
+          below puts the labels at y~805, the 56px numbers' baseline at y~880, the bar at y 905-929 and the
+          stat tiles at y 955-1039 on the comp's canvas. */}
       {stats && (
-        <section className="relative z-10 mx-auto -mt-6 max-w-[1400px] px-4 sm:px-6 lg:px-10">
-          <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12">
+        <section className="relative z-10 mx-auto -mt-6 max-w-[1400px] px-4 sm:px-6 lg:px-10 2xl:-mt-[26px] 2xl:max-w-[1512px] 2xl:pl-[88px] 2xl:pr-4">
+          <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12 2xl:px-[63px] 2xl:pb-[53px] 2xl:pt-10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* lulav-icon.png is a mis-export (traffic light); the 12x45 small render is the correct subject and never upscaled here */}
               <Eyebrow icon={asset('design/lulav-esrog-small.png')} iconClass="h-6 sm:h-7">One Giant Mission · Nationwide</Eyebrow>
@@ -192,26 +215,30 @@ export default function Home() {
             </div>
 
             {/* labels + big numbers; kept above the lulav marker in the stacking order */}
-            <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12">
+            <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12 2xl:mt-[18px] 2xl:gap-x-[30px]">
               <div>
                 <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Goal</p>
-                <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px]">{fmt(stats.totalGoal)}</p>
+                <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px] 2xl:mt-[18px] 2xl:text-[56px]">{fmt(stats.totalGoal)}</p>
               </div>
               <div>
                 <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Total Shakes</p>
-                <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px]">{fmt(stats.totalShakes)}</p>
+                <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px] 2xl:mt-[18px] 2xl:text-[56px]">{fmt(stats.totalShakes)}</p>
               </div>
               {/* sky halo (stroke painted under the fill) so the digits stay legible when the lulav marker rises behind them at high percentages */}
-              <p className="ml-auto font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-sky)] sm:text-[40px] lg:text-[44px]">{percent}%</p>
+              <p className="ml-auto font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-sky)] sm:text-[40px] lg:text-[44px] 2xl:text-[56px]">{percent}%</p>
             </div>
 
             {/* Right gutter (mr-*) per breakpoint = the widest percent label ("100%": 79 / 105 / 116px)
                 + half the marker (9 / 13 / 15px) + a ~24px gap, so the lulav standing on the fill's end
                 can never cross the label; at 100% it stands just left of it. Sized from the label's font
-                size at each breakpoint, so it holds at any viewport width. */}
-            <GoalBar percent={percent} className="mt-5 mr-[112px] sm:mt-6 sm:mr-[144px] lg:mr-[156px]" />
+                size at each breakpoint, so it holds at any viewport width. From 2xl the bar runs the card's
+                full inner width as in the comp; the label's sky halo + z-10 keep it legible if the marker
+                rises behind it at high percentages. */}
+            <GoalBar percent={percent} className="mt-5 mr-[112px] sm:mt-6 sm:mr-[144px] lg:mr-[156px] 2xl:mt-[15px] 2xl:mr-0" />
 
-            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8">
+            {/* From 2xl: three 320px columns from the card's inner left (the 3D icons overhang it by
+                10px in the comp), not stretched across the card. */}
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8 2xl:-ml-2.5 2xl:mt-[26px] 2xl:grid-cols-[repeat(3,320px)] 2xl:gap-0">
               <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.activeSoldiers)} label="Soldiers" />
               <Stat icon={asset('design/icon-school.png')} value={fmt(stats.totalSchools)} label="Schools" />
               <Stat icon={asset('design/icon-camera.png')} value={fmt(stats.totalPhotos)} label="Field Photos" />
@@ -221,10 +248,10 @@ export default function Home() {
       )}
 
       {schools && schools.length > 0 && (
-        <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 sm:pt-12 lg:px-10"><SchoolsRace schools={schools} /></section>
+        <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 sm:pt-12 lg:px-10 2xl:max-w-[1512px] 2xl:pl-[88px] 2xl:pr-4 2xl:pt-[45px]"><SchoolsRace schools={schools} /></section>
       )}
 
-      <section id="schools" className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
+      <section id="schools" className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 sm:py-12 lg:px-10 2xl:max-w-[1512px] 2xl:pl-[88px] 2xl:pr-4">
         <div className="mb-6">
           <Eyebrow>Join a Campaign</Eyebrow>
           <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">School Campaigns</h2>
