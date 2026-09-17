@@ -8,6 +8,7 @@ define('LULAV_PHOTO_ROOT', LULAV_STORAGE_ROOT . '/photos');
 
 require_once LULAV_PUBLIC_ROOT . '/api/header/db.php';
 require_once LULAV_PUBLIC_ROOT . '/api/auth/classes/Auth.php';
+require_once LULAV_PUBLIC_ROOT . '/class.globalSettings.php';
 require_once dirname(__DIR__, 2) . '/classes/mivtzoim.php';
 
 $MASHPIA_DB->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

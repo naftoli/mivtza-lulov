@@ -91,6 +91,53 @@ function lulavPercent(int $total, int $goal): int
     return max(0, (int) floor(($total / max(1, $goal)) * 100));
 }
 
+function lulavCurrentSchoolYear(): int
+{
+    $year = (int) GlobalSettings::getCurrentYear();
+    if ($year < 1) {
+        lulavError('The current school year is not configured.', 503);
+    }
+    return $year;
+}
+
+function lulavAustralianSchoolSql(): string
+{
+    $ids = array_map('intval', GlobalSettings::getAustralian());
+    return $ids ? implode(',', $ids) : '0';
+}
+
+function lulavSchoolIsEligible(int $schoolId): bool
+{
+    global $MASHPIA_DB;
+    $year = lulavCurrentSchoolYear();
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT 1
+         FROM school_registrations registration
+         WHERE registration.school_id = :school
+           AND (
+             registration.year = :year
+             OR (
+               registration.year = :previous_year
+               AND registration.school_id IN (' . lulavAustralianSchoolSql() . ')
+             )
+           )
+         LIMIT 1'
+    );
+    $stmt->execute([
+        ':school' => $schoolId,
+        ':year' => $year,
+        ':previous_year' => $year - 1,
+    ]);
+    return (bool) $stmt->fetchColumn();
+}
+
+function lulavRequireEligibleSchool(int $schoolId): void
+{
+    if (!lulavSchoolIsEligible($schoolId)) {
+        lulavError('School is not registered for this campaign.', 404);
+    }
+}
+
 function lulavSchoolTotals(int $campaignId): array
 {
     global $MASHPIA_DB;
@@ -135,8 +182,24 @@ function lulavSchoolRows(?int $onlyId = null): array
              AND settings.mivtzoim_id = :campaign
             WHERE s.school_era IS NULL
               AND s.test_school = 0
-              AND (s.chayolei = 1 OR s.chidon = 1)";
-    $params = [':campaign' => $campaign['mivtzoim_id']];
+              AND EXISTS (
+                  SELECT 1
+                  FROM school_registrations registration
+                  WHERE registration.school_id = s.school_id
+                    AND (
+                        registration.year = :current_year
+                        OR (
+                            registration.year = :previous_year
+                            AND s.school_id IN (" . lulavAustralianSchoolSql() . ")
+                        )
+                    )
+              )";
+    $year = lulavCurrentSchoolYear();
+    $params = [
+        ':campaign' => $campaign['mivtzoim_id'],
+        ':current_year' => $year,
+        ':previous_year' => $year - 1,
+    ];
     if ($onlyId !== null) {
         $sql .= ' AND s.school_id = :school';
         $params[':school'] = $onlyId;
@@ -189,6 +252,7 @@ function lulavSchoolRows(?int $onlyId = null): array
 function lulavKidsForSchool(int $schoolId): array
 {
     global $MASHPIA_DB;
+    lulavRequireEligibleSchool($schoolId);
     $stmt = $MASHPIA_DB->prepare(
         "SELECT u.user_id, u.user_serial, u.first, u.last, u.first_he, u.last_he,
                 u.dob, u.gender, u.school_id, u.class_id, u.mobile_pic, u.user_photo_id,
@@ -850,6 +914,7 @@ function lulavMappedDayMark(int $userId, string $field, int $day): array
 
 function lulavDayReport(array $kid, int $day, bool $allowPending): array
 {
+    lulavRequireEligibleSchool((int) $kid['school_id']);
     if (!in_array($day, lulavCampaignDays(), true)) {
         lulavError('Invalid Sukkos day.', 422);
     }
@@ -981,6 +1046,9 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
 function lulavDailyRows(?int $schoolId, ?int $userId, bool $includeHidden, bool $allowPending): array
 {
     global $MASHPIA_DB;
+    if ($schoolId !== null) {
+        lulavRequireEligibleSchool($schoolId);
+    }
     $campaign = lulavCampaign();
     $sql = "SELECT DISTINCT u.user_serial, map.day_number, mark.updated
             FROM lulav_api_task_map map
@@ -1049,6 +1117,7 @@ function lulavSchoolReportRows(int $schoolId): array
 function lulavLeaderboard(int $schoolId): array
 {
     global $MASHPIA_DB;
+    lulavRequireEligibleSchool($schoolId);
     $campaign = lulavCampaign();
     lulavRequireTables(['lulav_api_task_map']);
     $stmt = $MASHPIA_DB->prepare(
@@ -1098,6 +1167,7 @@ function lulavLeaderboard(int $schoolId): array
 function lulavClassLeaderboard(int $schoolId): array
 {
     global $MASHPIA_DB;
+    lulavRequireEligibleSchool($schoolId);
     $campaign = lulavCampaign();
     lulavRequireTables(['lulav_api_task_map']);
     $stmt = $MASHPIA_DB->prepare(
@@ -1165,6 +1235,7 @@ function lulavHandleKidLogin(): void
         lulavError('Invalid serial number or date of birth.', 401);
     }
     $kid = lulavKidBySerial($serial);
+    lulavRequireEligibleSchool((int) $kid['school_id']);
     $token = lulavIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
     lulavJson(['token' => $token, 'expiresIn' => (int) (getenv('LULAV_TOKEN_TTL') ?: 43200), 'soldier' => lulavSerializeKid($kid)]);
 }
@@ -1359,6 +1430,7 @@ try {
         if (!$schoolStmt->fetchColumn()) {
             lulavError('School not found.', 404);
         }
+        lulavRequireEligibleSchool($schoolId);
         $input = lulavInput();
         $override = $input['goalOverride'] ?? null;
         if ($override !== null && $override !== ''
@@ -1386,6 +1458,7 @@ try {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
         lulavRequireTables(['lulav_school_settings']);
         $input = lulavInput();
         $campaign = lulavCampaign();
@@ -1408,6 +1481,7 @@ try {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
         $stmt = $MASHPIA_DB->prepare(
             "SELECT c.class_id, c.class_grade, c.class_sub, COUNT(u.user_id) AS kid_count
              FROM classes c
@@ -1499,6 +1573,7 @@ try {
             lulavError('Shake not found.', 404);
         }
         lulavRequireSchoolAccess($actor, (int) $user['school_id']);
+        lulavRequireEligibleSchool((int) $user['school_id']);
         $hidden = !empty(lulavInput()['hidden']) ? 1 : 0;
         lulavWithUserLock($userId, static function () use (
             $userId,
@@ -1536,6 +1611,7 @@ try {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
         lulavJson(lulavSchoolReportRows($schoolId));
     }
     if ($method === 'GET' && preg_match('#^/schools/(\d+)/photos/pending$#', $path, $match)) {
@@ -1543,6 +1619,7 @@ try {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
         lulavRequireTables(['lulav_photos']);
         $stmt = $MASHPIA_DB->prepare(
             "SELECT photo.user_id, photo.day_number, u.user_serial
@@ -1580,6 +1657,7 @@ try {
             lulavError('Shake not found.', 404);
         }
         lulavRequireSchoolAccess($actor, (int) $user['school_id']);
+        lulavRequireEligibleSchool((int) $user['school_id']);
         $status = $match[2] === 'approve' ? 'approved' : 'rejected';
         $update = $MASHPIA_DB->prepare(
             'UPDATE lulav_photos
@@ -1603,6 +1681,7 @@ try {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
         $campaign = lulavCampaign();
         $countStmt = $MASHPIA_DB->prepare(
             "SELECT COUNT(DISTINCT CONCAT(user_id, ':', day_number))

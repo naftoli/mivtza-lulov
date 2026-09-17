@@ -71,6 +71,11 @@ Both return `{ token, expiresIn, soldier|admin }`. Send the token as
 - `GET /schools/:id/class-leaderboard` — public class standings and goals
 - `GET /stats` — public nationwide totals and goals
 
+Participating schools are those with a `school_registrations` row for
+`GlobalSettings::getCurrentYear()`. Schools listed by
+`GlobalSettings::getAustralian()` also qualify through a registration from the
+previous year.
+
 The default school goal is registered headcount × the HQ-managed per-child
 goal (initially 3). HQ can override one school. Percentages are calculated
 against that effective base goal and may exceed 100. Reaching the goal starts
