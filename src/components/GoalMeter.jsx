@@ -101,7 +101,7 @@ function GoalTrend({ percent, d = TREND, sparkleAtTip = false }) {
 }
 
 export default function GoalMeter({ school, celebrateMilestones = true, variant = 'default' }) {
-  const { total, percent, percentOfBase, goalReached, bonusActive, bonusLevel, goal, bonusGoal } = school
+  const { total, percent, percentOfBase, goalReached, bonusActive, goal, bonusGoal } = school
   const prevPercent = useRef(percent)
   const prevReached = useRef(goalReached)
 
@@ -176,7 +176,7 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
 
       <div className="flex-none text-center sm:text-right">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-navy">
-          {bonusActive ? `Bonus Round ×${bonusLevel}` : 'Total Shakes'}
+          {bonusActive ? 'Bonus Round' : 'Total Shakes'}
         </p>
 
         <p className="mt-1 flex items-baseline justify-center gap-2 sm:justify-end">

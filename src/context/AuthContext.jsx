@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import * as api from '../services/api.js'
 
 const AuthContext = createContext(null)
@@ -41,6 +41,17 @@ export function AuthProvider({ children }) {
   // A saved session from before the login response carried kidKey is stale — re-login.
   const [kid, setKid] = useState(() => { const k = load(KID_KEY); return k?.kidKey ? k : null })
   const [admin, setAdmin] = useState(() => load(ADMIN_KEY))
+
+  useEffect(() => {
+    const expire = () => {
+      setKid(null)
+      setAdmin(null)
+      save(KID_KEY, null)
+      save(ADMIN_KEY, null)
+    }
+    window.addEventListener('ml-auth-expired', expire)
+    return () => window.removeEventListener('ml-auth-expired', expire)
+  }, [])
 
   async function loginKid(id, dob) {
     const found = await api.verifyKid(id, dob)

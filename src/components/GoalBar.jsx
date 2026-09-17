@@ -18,7 +18,8 @@ import { asset } from '../lib/asset.js'
 // gutter from 2xl, where the comp runs the bar the card's full inner width and
 // relies on the label's sky halo instead.)
 export default function GoalBar({ percent, label = 'of goal', marker = true, className = '' }) {
-  const p = Math.max(0, Math.min(100, Math.floor(Number(percent) || 0)))
+  const actual = Math.max(0, Math.floor(Number(percent) || 0))
+  const p = Math.min(100, actual)
   return (
     <div className={`relative ${className}`}>
       <div
@@ -27,7 +28,7 @@ export default function GoalBar({ percent, label = 'of goal', marker = true, cla
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={p}
-        aria-label={`${p}% ${label}`}
+        aria-label={`${actual}% ${label}`}
       >
         <div
           className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"

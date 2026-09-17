@@ -90,7 +90,7 @@ function SchoolsRace({ schools }) {
             <span className="relative col-span-4 h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1 order-last 2xl:h-[22px]">
               <span
                 className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
-                style={{ width: `${Math.max(s.percent, 3)}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
+                style={{ width: `${Math.min(100, Math.max(s.percent, 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
               />
             </span>
             <span className="text-right font-display text-[16px] font-bold tabular-nums text-green sm:w-16 sm:flex-none sm:text-[18px] lg:w-24 lg:text-[20px] 2xl:w-[91px] 2xl:text-[26px]">
@@ -125,10 +125,10 @@ function SchoolCard({ s }) {
         <div className="px-5 pb-5 pt-4">
           <div className="flex items-baseline justify-between gap-3">
             <span className="font-display text-[28px] font-black leading-none tabular-nums text-navy">{fmt(s.total)}</span>
-            <span className="text-sm font-semibold text-muted">of {fmt(s.activeGoal)} shakes</span>
+            <span className="text-sm font-semibold text-muted">of {fmt(s.goal)} shakes</span>
           </div>
           <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-track">
-            <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.max(s.percent, 3)}%`, background: s.color }} />
+            <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(s.percent, 3))}%`, background: s.color }} />
           </div>
           <div className="mt-2 flex items-center justify-between text-[13px] font-semibold uppercase tracking-[0.04em]">
             <span className="text-green">{s.percent}% there</span>

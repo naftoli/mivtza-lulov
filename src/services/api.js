@@ -1,22 +1,25 @@
 // ---------------------------------------------------------------------------
-// Mock API layer.
+// API facade with a local demo implementation.
 //
 // Every function returns a Promise and reads/writes localStorage, so the app
 // behaves like it's talking to a real backend. When the Tzivos Hashem backend
 // + database are ready, replace the bodies of these functions with real fetch()
 // calls — the component code above them never has to change.
 //
-// MASHPIA.COM: this is the single integration seam. See the adapter skeleton in
-// ./mashpia.js and the contract in docs/mashpia-integration.md. To go live,
-// route these functions through mashpia.js (e.g. behind an env flag).
+// Setting VITE_MASHPIA_API routes every exported operation through mashpia.js.
 // ---------------------------------------------------------------------------
 
 import { SEED } from '../data/seed.js'
 import { ISRU_CHAG, LULAV_DAYS } from '../lib/succos.js'
+import * as mashpia from './mashpia.js'
+
+const MASHPIA_API = import.meta.env.VITE_MASHPIA_API
+  || (import.meta.env.PROD ? '/mivtzoim/lulav/api' : '')
+export const IS_DEMO = !MASHPIA_API
 
 // Exported so the session keys in AuthContext can be versioned with the data:
 // a session saved against an older seed must not log a ghost soldier in.
-export const VERSION = 'v9'
+export const VERSION = IS_DEMO ? 'v10' : 'live-v1'
 const KEYS = {
   schools: `ml_${VERSION}_schools`,
   kids: `ml_${VERSION}_kids`,
@@ -76,6 +79,7 @@ ensureSeed()
 
 // Live updates: notify subscribers when data changes (this tab or another tab).
 export function subscribe(cb) {
+  if (!IS_DEMO) return mashpia.subscribe(cb)
   listeners.add(cb)
   const onStorage = () => cb()
   window.addEventListener('storage', onStorage)
@@ -137,10 +141,12 @@ function baseGoalOf(school, pk = perKid()) {
 
 // HQ: read / change the per-soldier default (applies everywhere at once).
 export async function getSettings() {
+  if (!IS_DEMO) return mashpia.getSettings()
   await delay()
   return { perKidGoal: perKid() }
 }
 export async function setPerKidGoal(n) {
+  if (!IS_DEMO) return mashpia.setPerKidGoal(n)
   await delay()
   const v = Math.max(1, Math.floor(Number(n) || 0))
   write(KEYS.settings, { ...read(KEYS.settings, {}), perKidGoal: v })
@@ -149,6 +155,7 @@ export async function setPerKidGoal(n) {
 
 // HQ: set an individual school's goal, or clear it (null / '' / 0) back to automatic.
 export async function setSchoolGoal(schoolId, goalOverride) {
+  if (!IS_DEMO) return mashpia.setSchoolGoal(schoolId, goalOverride)
   const v = goalOverride === '' || goalOverride == null ? null : Math.max(1, Math.floor(Number(goalOverride) || 0)) || null
   return updateSchool(schoolId, { goalOverride: v })
 }
@@ -156,21 +163,20 @@ export async function setSchoolGoal(schoolId, goalOverride) {
 // Percent of a goal, floored and clamped to 0-100. It is 100 ONLY once the
 // total actually reaches the goal — 4,922 of 4,930 is "99%", never "100%".
 export function goalPercent(total, goal) {
-  if (total >= goal) return 100
-  return Math.max(0, Math.min(99, Math.floor((total / goal) * 100)))
+  return Math.max(0, Math.floor((Number(total) / Math.max(1, Number(goal))) * 100))
 }
 
 function decorateSchool(school, shakes) {
   const kids = kidCountOf(school)
   const pk = perKid()
-  const bonusLevel = school.bonusLevel || 0
   const goal = baseGoalOf(school, pk) // HQ override, else soldiers × per-kid
   const goalCustom = Number.isFinite(Number(school.goalOverride)) && Number(school.goalOverride) >= 1
-  // Each bonus round adds one shake per soldier to the target.
-  const activeGoal = goal + kids * bonusLevel
   // total = shakes already on record (baseline) + everything logged live
   const total = (school.baseline || 0) + loggedTotal(school.id, shakes)
   const goalReached = total >= goal
+  // There is one bonus round only, worth one additional shake per soldier.
+  const bonusActive = goalReached
+  const bonusGoal = goal + kids
   return {
     ...school,
     endDate: ISRU_CHAG, // fixed campaign end (Isru Chag) — not set by anyone
@@ -178,25 +184,28 @@ function decorateSchool(school, shakes) {
     perKidGoal: pk,
     goalCustom,
     goal,
-    bonusGoal: activeGoal, // current bonus target
-    bonusActive: bonusLevel > 0,
-    bonusLevel,
+    bonusGoal,
+    bonusActive,
+    bonusComplete: bonusActive && total >= bonusGoal,
+    bonusLevel: bonusActive ? 1 : 0,
     total,
     goalReached,
-    activeGoal,
-    percent: goalPercent(total, activeGoal),
+    activeGoal: bonusActive ? bonusGoal : goal,
+    percent: goalPercent(total, goal),
     percentOfBase: goalPercent(total, goal),
   }
 }
 
 // ---- reads ----
 export async function getSchools() {
+  if (!IS_DEMO) return mashpia.getSchools()
   await delay()
   const shakes = read(KEYS.shakes, [])
   return read(KEYS.schools, []).map((s) => decorateSchool(s, shakes))
 }
 
 export async function getSchool(id) {
+  if (!IS_DEMO) return mashpia.getSchool(id)
   await delay()
   const shakes = read(KEYS.shakes, [])
   const school = read(KEYS.schools, []).find((s) => s.id === id)
@@ -204,31 +213,49 @@ export async function getSchool(id) {
 }
 
 export async function getShakes(schoolId, { includeHidden = false } = {}) {
+  if (!IS_DEMO) return mashpia.getShakes(schoolId, { includeHidden })
   await delay()
   // Public rows carry the child's rank (never the serial). New entries store it,
   // but backfill from the roster so seeded/older entries expose it too.
   const rankOf = {}
-  for (const k of read(KEYS.kids, [])) if (k.schoolId === schoolId) rankOf[k.id] = k.rank || ''
+  for (const k of read(KEYS.kids, [])) {
+    if (k.schoolId === schoolId) rankOf[k.id] = { name: k.rank || '', image: k.rankImageUrl || null }
+  }
   return read(KEYS.shakes, [])
     .filter((s) => s.schoolId === schoolId && (includeHidden || !s.hidden))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map((s) => publicShake({ ...s, rank: s.rank || rankOf[s.kidId] || '' }))
+    .map((s) => publicShake({
+      ...s,
+      rank: s.rank || rankOf[s.kidId]?.name || '',
+      rankImageUrl: s.rankImageUrl || rankOf[s.kidId]?.image || null,
+    }))
 }
 
 export async function getRecentShakes(schoolId, limit = 8) {
+  if (!IS_DEMO) return mashpia.getRecentShakes(schoolId, limit)
   const all = await getShakes(schoolId)
   return all.slice(0, limit)
 }
 
 export async function getLeaderboard(schoolId, limit = 10) {
+  if (!IS_DEMO) return mashpia.getLeaderboard(schoolId, limit)
   await delay()
   const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
   // Map serial → rank so rows can carry the rank without ever exposing the serial.
   const rankOf = {}
-  for (const k of read(KEYS.kids, [])) if (k.schoolId === schoolId) rankOf[k.id] = k.rank || ''
+  for (const k of read(KEYS.kids, [])) {
+    if (k.schoolId === schoolId) rankOf[k.id] = { name: k.rank || '', image: k.rankImageUrl || null }
+  }
   const totals = {}
   for (const s of shakes) {
-    if (!totals[s.kidId]) totals[s.kidId] = { kidKey: kidKey(s.kidId), name: s.kidName, rank: rankOf[s.kidId] || s.rank || '', count: 0, entries: 0 }
+    if (!totals[s.kidId]) totals[s.kidId] = {
+      kidKey: kidKey(s.kidId),
+      name: s.kidName,
+      rank: rankOf[s.kidId]?.name || s.rank || '',
+      rankImageUrl: rankOf[s.kidId]?.image || s.rankImageUrl || null,
+      count: 0,
+      entries: 0,
+    }
     totals[s.kidId].count += s.count
     totals[s.kidId].entries += 1
   }
@@ -240,6 +267,7 @@ export async function getLeaderboard(schoolId, limit = 10) {
 // Class/platoon standings — each class has its OWN goal (kids in class × the
 // per-soldier default), same automatic rule as schools.
 export async function getClassLeaderboard(schoolId, limit = 12) {
+  if (!IS_DEMO) return mashpia.getClassLeaderboard(schoolId, limit)
   await delay()
   const pk = perKid()
   const kidsAll = read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
@@ -269,6 +297,7 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
 }
 
 export async function getGlobalStats() {
+  if (!IS_DEMO) return mashpia.getGlobalStats()
   await delay()
   const shakes = read(KEYS.shakes, []).filter((s) => !s.hidden)
   const schools = read(KEYS.schools, [])
@@ -284,6 +313,7 @@ export async function getGlobalStats() {
 }
 
 export async function getKidShakes(kidId) {
+  if (!IS_DEMO) return mashpia.getKidShakes(kidId)
   await delay()
   return read(KEYS.shakes, [])
     .filter((s) => s.kidId === kidId)
@@ -297,6 +327,7 @@ export async function getKidShakes(kidId) {
 // where perDay sums each Lulav day's shake count. `id` is the serial — this is an
 // AUTHENTICATED admin view, so it's fine here (never in a public payload).
 export async function getSchoolReportRows(schoolId) {
+  if (!IS_DEMO) return mashpia.getSchoolReportRows(schoolId)
   await delay()
   const kids = read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
   const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
@@ -326,12 +357,14 @@ export async function getSchoolReportRows(schoolId) {
 }
 
 export async function getKidsForSchool(schoolId) {
+  if (!IS_DEMO) return mashpia.getKidsForSchool(schoolId)
   await delay()
   return read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
 }
 
 // ---- auth ----
 export async function verifyKid(id, dob) {
+  if (!IS_DEMO) return mashpia.verifyKid(id, dob)
   await delay()
   const kid = read(KEYS.kids, []).find(
     (k) => k.id.trim() === id.trim() && k.dob === dob,
@@ -346,6 +379,7 @@ export async function verifyKid(id, dob) {
 }
 
 export async function verifyAdmin(username, password) {
+  if (!IS_DEMO) return mashpia.verifyAdmin(username, password)
   await delay()
   const admin = read(KEYS.admins, []).find(
     (a) => a.username === username.trim().toLowerCase() && a.password === password,
@@ -355,52 +389,59 @@ export async function verifyAdmin(username, password) {
   return clone(safe)
 }
 
+export async function getKidDayReport(kidId, day) {
+  if (!IS_DEMO) return mashpia.getKidDayReport(day)
+  await delay()
+  const report = read(KEYS.shakes, []).find(
+    (shake) => shake.kidId === kidId && Number(shake.day) === Number(day),
+  )
+  return report ? clone(report) : {
+    day: Number(day),
+    count: 0,
+    minutes: 0,
+    note: '',
+    photos: [],
+  }
+}
+
 // ---- writes ----
 export async function addShake({ kid, day, count, minutes, note, photos }) {
+  if (!IS_DEMO) return mashpia.addShake({ kid, day, count, minutes, note, photos })
   await delay()
   const shakes = read(KEYS.shakes, [])
   const displayName = `${kid.firstName} ${kid.lastName ? kid.lastName[0] + '.' : ''}`.trim()
   const list = (photos || []).filter(Boolean)
+  const existing = shakes.find(
+    (shake) => shake.kidId === kid.id && Number(shake.day) === Number(day),
+  )
+  const hasNewPhoto = list.some((photo) => !(existing?.photos || []).includes(photo))
   const entry = {
-    id: `s${Date.now()}`,
+    ...(existing || {}),
+    id: existing?.id || `s${Date.now()}`,
     kidId: kid.id,
     kidName: displayName,
     schoolId: kid.schoolId,
-    rank: kid.rank || '', // child's rank — public-safe (the serial never is)
-    day: day == null ? null : Number(day), // which Sukkos day (a LULAV_DAY, 2–7)
-    count: Number(count), // number of shakes
-    minutes: Number(minutes) || 0, // minutes on mivtzoim
-    note: note?.trim() || '', // the optional "story"
+    rank: kid.rank || '',
+    rankImageUrl: kid.rankImageUrl || null,
+    day: Number(day),
+    count: Math.max(Number(existing?.count) || 0, Number(count) || 0),
+    minutes: Math.max(Number(existing?.minutes) || 0, Number(minutes) || 0),
+    note: note?.trim() || '',
     photos: list,
-    photo: list[0] || null, // first photo, for compact feed thumbnails
-    photoApproved: list.length === 0, // photos start PENDING; approved by an admin
-    createdAt: new Date().toISOString(), // system-logged date + time
+    photo: list[0] || null,
+    photoApproved: list.length === 0 ? true : hasNewPhoto ? false : Boolean(existing?.photoApproved),
+    createdAt: new Date().toISOString(),
     hidden: false,
   }
-  shakes.push(entry)
+  if (existing) shakes[shakes.indexOf(existing)] = entry
+  else shakes.push(entry)
   write(KEYS.shakes, shakes) // throws if nothing was saved — nothing below runs
-
-  // Auto-advance bonus rounds: each round adds 1 shake/kid to the target, so as
-  // soon as the current target is passed, the next round kicks in automatically.
-  const schools = read(KEYS.schools, [])
-  const si = schools.findIndex((s) => s.id === kid.schoolId)
-  if (si >= 0) {
-    const s = schools[si]
-    const kids = kidCountOf(s)
-    if (kids > 0) {
-      const total = (s.baseline || 0) + loggedTotal(s.id, shakes)
-      const neededLevel = Math.max(0, Math.ceil((total - baseGoalOf(s)) / kids))
-      if (neededLevel > (s.bonusLevel || 0)) {
-        schools[si] = { ...s, bonusLevel: neededLevel }
-        write(KEYS.schools, schools)
-      }
-    }
-  }
   return clone(entry)
 }
 
 // ---- photo approval ----
 export async function getPendingPhotos(schoolId) {
+  if (!IS_DEMO) return mashpia.getPendingPhotos(schoolId)
   await delay()
   return read(KEYS.shakes, [])
     .filter((s) => s.schoolId === schoolId && !s.hidden && !s.photoApproved && (s.photos?.length || s.photo))
@@ -408,6 +449,7 @@ export async function getPendingPhotos(schoolId) {
 }
 
 export async function approvePhotos(shakeId) {
+  if (!IS_DEMO) return mashpia.approvePhotos(shakeId)
   await delay()
   const shakes = read(KEYS.shakes, [])
   const s = shakes.find((x) => x.id === shakeId)
@@ -419,6 +461,7 @@ export async function approvePhotos(shakeId) {
 // Bulk approve: flips every pending entry in the school (same set getPendingPhotos returns).
 // Returns the number of entries approved.
 export async function approveAllPhotos(schoolId) {
+  if (!IS_DEMO) return mashpia.approveAllPhotos(schoolId)
   await delay()
   const shakes = read(KEYS.shakes, [])
   let n = 0
@@ -434,6 +477,7 @@ export async function approveAllPhotos(schoolId) {
 
 // Reject = remove the photos (the shake entry + its count stay).
 export async function rejectPhotos(shakeId) {
+  if (!IS_DEMO) return mashpia.rejectPhotos(shakeId)
   await delay()
   const shakes = read(KEYS.shakes, [])
   const s = shakes.find((x) => x.id === shakeId)
@@ -443,6 +487,7 @@ export async function rejectPhotos(shakeId) {
 }
 
 export async function setShakeHidden(shakeId, hidden) {
+  if (!IS_DEMO) return mashpia.setShakeHidden(shakeId, hidden)
   await delay()
   const shakes = read(KEYS.shakes, [])
   const s = shakes.find((x) => x.id === shakeId)
@@ -452,6 +497,7 @@ export async function setShakeHidden(shakeId, hidden) {
 }
 
 export async function updateSchool(schoolId, patch) {
+  if (!IS_DEMO) return mashpia.updateSchool(schoolId, patch)
   await delay()
   const schools = read(KEYS.schools, [])
   const idx = schools.findIndex((s) => s.id === schoolId)
@@ -463,6 +509,7 @@ export async function updateSchool(schoolId, patch) {
 }
 
 export async function addKid(schoolId, { id, dob, firstName, lastName, grade }) {
+  if (!IS_DEMO) return mashpia.addKid(schoolId, { id, dob, firstName, lastName, grade })
   await delay()
   const kids = read(KEYS.kids, [])
   if (kids.some((k) => k.id === id.trim())) {
@@ -490,6 +537,7 @@ export async function addKid(schoolId, { id, dob, firstName, lastName, grade }) 
 
 // Demo helper: wipe localStorage and reload from seed.
 export async function resetDemoData() {
+  if (!IS_DEMO) return mashpia.resetDemoData()
   Object.values(KEYS).forEach((k) => localStorage.removeItem(k))
   ensureSeed()
   emit()

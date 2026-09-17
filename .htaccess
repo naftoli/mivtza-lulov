@@ -1,5 +1,8 @@
 RewriteEngine On
 
+# Let the PHP API's own rewrite rules handle API requests.
+RewriteRule ^api(?:/|$) - [L]
+
 # Serve Vite's generated files from dist while keeping the public URL at
 # /mivtzoim/lulav/.
 RewriteRule ^dist(?:/|$) - [L]

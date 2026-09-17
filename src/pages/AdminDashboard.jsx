@@ -5,7 +5,7 @@ import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   setShakeHidden, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos,
-  getSettings, setPerKidGoal, setSchoolGoal,
+  getSettings, setPerKidGoal, setSchoolGoal, IS_DEMO,
 } from '../services/api.js'
 
 // Fixed campaign end (Isru Chag), shown read-only — e.g. "Mon, Oct 5".
@@ -61,7 +61,7 @@ export default function AdminDashboard() {
           <h1 className="mt-0.5 font-display text-3xl font-black leading-tight text-navy">{admin.name}</h1>
         </div>
         <div className="flex gap-2">
-          {admin.role === 'hq' && (
+          {admin.role === 'hq' && IS_DEMO && (
             <Button variant="outline" onClick={() => { if (confirm('Reset ALL demo data back to the sample seed?')) resetDemoData() }}>Reset demo data</Button>
           )}
           <Button variant="ghost" onClick={logoutAdmin}>Log out</Button>
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
                   <span className="w-24 flex-none truncate font-semibold text-navy sm:w-36">{s.name}</span>
                   <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-track">
                     <span className="absolute inset-y-0 left-0 rounded-full"
-                      style={{ width: `${Math.max(s.percent, 3)}%`, background: `linear-gradient(90deg, rgba(255,255,255,.22), rgba(0,28,76,.16)), ${RACE[i % RACE.length]}` }} />
+                      style={{ width: `${Math.min(100, Math.max(s.percent, 3))}%`, background: `linear-gradient(90deg, rgba(255,255,255,.22), rgba(0,28,76,.16)), ${RACE[i % RACE.length]}` }} />
                   </span>
                   <span className="w-20 flex-none text-right text-[12px] font-bold tabular-nums text-green sm:w-28 sm:text-[13px]">{fmt(s.total)} · {s.percent}%</span>
                 </button>
@@ -232,11 +232,13 @@ function CampaignSettings({ school, isHQ }) {
       </div>
 
       <div className={`${tile} mt-4 p-4`}>
-        <p className="sh !text-gold-dark">⭐ Bonus Rounds (automatic)</p>
+        <p className="sh !text-gold-dark">⭐ Bonus Round (automatic)</p>
         <p className="mt-1 text-sm text-navy">
           {school.bonusActive
-            ? `Round ${school.bonusLevel} — target ${fmt(school.activeGoal)} shakes (+1 per soldier each round).`
-            : `Once ${fmt(school.goal)} is reached, a bonus round starts on its own, adding ${fmt(school.kidCount)} (1 per soldier) each time.`}
+            ? school.bonusComplete
+              ? `Bonus complete — ${fmt(school.total)} shakes against the ${fmt(school.bonusGoal)} bonus target.`
+              : `Bonus target: ${fmt(school.bonusGoal)} shakes (+1 per soldier).`
+            : `Once ${fmt(school.goal)} is reached, one bonus round starts, adding ${fmt(school.kidCount)} (1 per soldier).`}
         </p>
       </div>
     </Section>

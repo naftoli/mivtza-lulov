@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
-import { addShake, getSchool, getKidShakes } from '../services/api.js'
+import { addShake, getSchool, getKidShakes, getKidDayReport } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, hebrewDate, fileToScaledDataUrl } from '../lib/format.js'
 import { celebrate } from '../lib/celebrate.js'
@@ -22,6 +22,7 @@ const ERROR_NOTICE = 'animate-pop rounded-xl bg-race-red/12 px-3 py-2 text-sm fo
 export default function KidDashboard() {
   const { kid, logoutKid } = useAuth()
   const fileRef = useRef(null)
+  const dayRequestRef = useRef(0)
 
   const { data: school } = useLiveData(() => (kid ? getSchool(kid.schoolId) : Promise.resolve(null)), [kid?.schoolId])
   const { data: myShakes, loading } = useLiveData(() => (kid ? getKidShakes(kid.id) : Promise.resolve([])), [kid?.id])
@@ -32,6 +33,7 @@ export default function KidDashboard() {
   const [story, setStory] = useState('')
   const [photos, setPhotos] = useState([])
   const [busy, setBusy] = useState(false)
+  const [loadingDay, setLoadingDay] = useState(false)
   const [flash, setFlash] = useState('')
   const [flashError, setFlashError] = useState(false) // true when `flash` reports a failure
   const [mascotMsg, setMascotMsg] = useState('')
@@ -43,6 +45,26 @@ export default function KidDashboard() {
   const myPhotoCount = (myShakes || []).reduce((n, s) => n + (s.photos?.length || (s.photo ? 1 : 0)), 0)
 
   const notify = (text, isError = false) => { setFlash(text); setFlashError(isError) }
+
+  async function selectDay(selectedDay) {
+    const request = ++dayRequestRef.current
+    setDay(selectedDay)
+    setLoadingDay(true)
+    if (flash) setFlash('')
+    try {
+      const report = await getKidDayReport(kid.id, selectedDay)
+      if (request !== dayRequestRef.current) return
+      setCount(report?.count ? String(report.count) : '')
+      setMinutes(report?.minutes ? String(report.minutes) : '')
+      setStory(report?.note || '')
+      setPhotos(report?.photos || [])
+    } catch (error) {
+      if (request !== dayRequestRef.current) return
+      notify(error?.message || 'Could not load that day’s report.', true)
+    } finally {
+      if (request === dayRequestRef.current) setLoadingDay(false)
+    }
+  }
 
   async function onFiles(e) {
     const files = [...(e.target.files || [])]
@@ -155,7 +177,7 @@ export default function KidDashboard() {
                   const on = day === n
                   return (
                     // Single-select day pills: navy when picked; the deeper sky (track) when not.
-                    <button type="button" key={n} onClick={() => { setDay(n); if (flash) setFlash('') }} aria-pressed={on}
+                    <button type="button" key={n} onClick={() => selectDay(n)} aria-pressed={on}
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition ${on ? 'bg-navy text-white shadow-sm' : 'bg-track text-navy ring-1 ring-transparent hover:ring-green-mid'}`}>
                       {on ? '✓ ' : ''}{ordinal(n)} day
                     </button>
@@ -166,7 +188,7 @@ export default function KidDashboard() {
             </div>
 
             {/* Steps 2+ — only after a day is chosen */}
-            {day && (
+            {day && !loadingDay && (
               <>
                 <Field label="Number of shakes" hint="If you went on Mivtzoyim with another Chayol, divide the total between yourselves">
                   <Input type="number" min="1" max="500" value={count} onChange={(e) => { setCount(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 12" required className="text-lg" />
@@ -210,6 +232,7 @@ export default function KidDashboard() {
               </>
             )}
 
+            {loadingDay && <Spinner />}
             {!day && flash && <p className={flashError ? ERROR_NOTICE : SUCCESS_NOTICE}>{flash}</p>}
           </form>
         </Card>

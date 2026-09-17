@@ -162,7 +162,7 @@ function setSpacing(ctx, value) {
 
 // Build the share card and resolve with a PNG Blob (for preview / share / save).
 export async function buildShareCard(school) {
-  const { name, city, logo, total, activeGoal, percent, bonusActive } = school
+  const { name, city, logo, total, goal, percent, bonusActive } = school
   const p = palette()
   const [, shield, marker, logoImg] = await Promise.all([ensureFonts(), loadShield(), loadMarker(), loadImage(logo)])
 
@@ -247,7 +247,7 @@ export async function buildShareCard(school) {
   // goal line — navy
   ctx.font = exo(600, 34)
   ctx.fillStyle = p.navy
-  ctx.fillText(`of ${fmt(activeGoal)} shakes`, L, 652)
+  ctx.fillText(`of ${fmt(goal)} shakes`, L, 652)
 
   // progress bar — track + green gradient fill + lulav-esrog marker
   const barY = 770

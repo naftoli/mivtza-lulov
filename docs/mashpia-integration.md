@@ -43,21 +43,21 @@ the **global per-child number** and any **per-school override**.
 Not stored, not editable. Derived in [`src/lib/succos.js`](../src/lib/succos.js) from
 `SUKKOS_START`; update that once a year and the end date + Lulav days follow.
 
-### E. Shakes (write — the two-way sync)
-The child logs **one entry per Sukkos day**. There is **no separate "report" object** — the
-teacher grid is derived from these entries (`getSchoolReportRows`).
+### E. Daily reports (write — the two-way sync)
+Each child has **one cumulative report per Sukkos day**. Choosing a day loads
+its current values; saving writes the updated cumulative values directly to
+the same `date_tasks_marks` rows used by the teacher checklist.
 
-`addShake(entry)` — suggested `POST /api/shakes`:
+`PUT /api/me/days/:day`:
 
 | Field | Meaning (teacher-checklist column) |
 |---|---|
-| `day` | which Sukkos day, 2–7 (day 1 is Shabbos in 5787; derived from `succos.js` — store as sent) |
-| `count` | number of people helped to shake |
-| `minutes` | minutes spent on mivtzoim |
-| `note`, `photos[]` | story + field photos |
-| `rank`, `kidName`, `schoolId`, `createdAt` | copied from the child record / system time |
+| `count` | cumulative number of people helped that day |
+| `minutes` | cumulative minutes spent on mivtzoim that day |
+| `note`, `photos[]` | that day's story + field photos |
 
-Write to the same record the teacher grid reads, so both views agree.
+The server gets the child from the bearer token and the day from the URL. It
+saves the larger of the submitted and current numeric values.
 
 ### F. Photos — approval workflow
 Uploads arrive **pending** and stay hidden publicly until approved. Needed: submit-pending,
@@ -85,4 +85,14 @@ or route secret-key calls through a **small serverless proxy**. Allow **CORS** f
 7. Photo endpoints + accepted format and size.
 8. App→API auth (token vs. proxy) and CORS.
 
-Phase 1 = login + roster. Phase 2 = shakes / photos two-way sync.
+---
+
+## Mashpia implementation
+
+The Mashpia-side endpoints now live in [`../api`](../api/README.md) and are
+served from `/mivtzoim/lulav/api`. Their setup guide documents authentication,
+routes, photo limits, CORS, and the task map that connects each child's
+cumulative daily report to the same `date_tasks_marks` records used by the
+teacher checklist.
+
+The included `api/schema.sql` is intentionally not applied automatically.

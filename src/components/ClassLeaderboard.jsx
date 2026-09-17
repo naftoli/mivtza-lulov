@@ -45,7 +45,7 @@ export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--
                 <span className="w-10 text-right font-display text-sm font-bold tabular-nums" style={{ color }}>{r.percent}%</span>
               </div>
               <div className="ml-11 mt-1.5 h-2.5 overflow-hidden rounded-full bg-track">
-                <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.max(r.percent, 3)}%`, background: RACE_FILLS[i % RACE_FILLS.length] }} />
+                <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(r.percent, 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }} />
               </div>
             </li>
           ))}

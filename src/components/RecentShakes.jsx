@@ -19,14 +19,16 @@ export default function RecentShakes({ shakes }) {
         <ul className="space-y-3">
           {shakes.map((s) => (
             <li key={s.id} className="flex animate-rise items-center gap-3">
-              {s.kidPhoto ? (
-                <Avatar name={s.kidName} src={s.kidPhoto} size={44} />
+              {s.rankImageUrl ? (
+                <span className="grid h-11 w-11 shrink-0 place-items-center" title={s.rank}>
+                  <img src={s.rankImageUrl} alt={s.rank || 'Rank'} className="h-10 w-10 object-contain" />
+                </span>
               ) : s.rank ? (
                 <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-green/10 ring-1 ring-green/20" title={s.rank}>
                   <span className="px-1 text-center font-cond text-[10px] font-semibold uppercase leading-[1.03] tracking-[0.01em] text-green">{s.rank}</span>
                 </span>
               ) : (
-                <Avatar name={s.kidName} size={44} />
+                <Avatar name={s.kidName} src={s.kidPhoto} size={44} />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] leading-tight">

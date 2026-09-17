@@ -38,8 +38,12 @@ export default function Leaderboard({ rows, highlightKidKey }) {
           {rows.map((r, i) => (
             <li key={r.kidKey}
               className={`flex items-center gap-3 rounded-2xl px-2 py-1.5 ${r.kidKey === highlightKidKey ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
-              {/* the child's army rank (falls back to the medal/number when absent) */}
-              {r.rank ? (
+              {/* The child's army rank logo (falls back to its name, then place). */}
+              {r.rankImageUrl ? (
+                <span className="grid w-14 shrink-0 place-items-center" title={r.rank}>
+                  <img src={r.rankImageUrl} alt={r.rank || 'Rank'} className="h-10 w-10 object-contain" />
+                </span>
+              ) : r.rank ? (
                 <span className="grid w-14 shrink-0 place-items-center" title={r.rank}>
                   <span className="text-center font-cond text-[11px] font-semibold uppercase leading-[1.05] tracking-[0.01em] text-green">{r.rank}</span>
                 </span>
