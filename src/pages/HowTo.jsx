@@ -46,8 +46,22 @@ export default function HowTo() {
               “Blessed are You… who sanctified us with His mitzvos and commanded us about taking the lulav.”
             </p>
           </div>
+          <p className="mt-4 text-sm text-muted">
+            The <strong className="text-navy">first time</strong> you shake Lulav this Succos — the first day that isn't Shabbos (this year, the <strong className="text-navy">{ordinal(LULAV_DAYS[0])} day</strong>) — also add the <strong className="text-navy">Shehecheyanu</strong> bracha:
+          </p>
+          <div className="mt-4 rounded-[20px] bg-paper p-5 text-center">
+            <p className="font-heb text-2xl leading-relaxed text-navy" dir="rtl">
+              בָּרוּךְ אַתָּה ה׳ אֱלֹקֵינוּ מֶלֶךְ הָעוֹלָם, שֶׁהֶחֱיָנוּ וְקִיְּמָנוּ וְהִגִּיעָנוּ לִזְמַן הַזֶּה.
+            </p>
+            <p className="mt-3 text-sm italic text-muted">
+              Boruch Atoh Ado-noy Elo-keinu Melech ho'olom, shehecheyonu vekiyemonu vehigiyonu lizman hazeh.
+            </p>
+            <p className="mt-2 text-sm text-navy/80">
+              “Blessed are You… who has granted us life, sustained us, and brought us to this time.”
+            </p>
+          </div>
           <p className="mt-3 text-sm text-muted">
-            The <strong className="text-navy">first time</strong> you shake Lulav this Succos (the first day that isn't Shabbos — this year, the <strong className="text-navy">{ordinal(LULAV_DAYS[0])} day</strong>), also say <strong className="text-navy">Shehecheyanu</strong>.
+            Said only the <strong className="text-navy">first day</strong> you take the lulav — the first time this Succos.
           </p>
         </Card>
 
@@ -56,25 +70,25 @@ export default function HowTo() {
         </Step>
 
         <Step n="2" title="Hold it right">
-          Take the <strong>lulav in your right hand</strong> (spine facing you). Hold the <strong>esrog in your left hand</strong> — with the <strong>pitom (tip) pointing down</strong> while you say the bracha. Then turn the esrog <strong>right-side up</strong> and bring both hands together.
+          Take the <strong>lulav in your right hand</strong> (spine facing you) while you say the bracha. Then pick up the <strong>esrog with your left hand</strong>, <strong>Pitom (tip) pointing up</strong> and bring both hands together.
         </Step>
 
         <Step n="3" title="Shake in every direction (na'anuim)">
-          Gently shake the lulav &amp; esrog <strong>three times in each direction</strong> — to the sides, forward, up, and down — bringing them back to your heart each time. Follow your family's or school's <strong>minhag</strong> for the exact order.
+          Gently shake the lulav &amp; esrog <strong>three times in each direction</strong>. First to the right, then to the left, then forward, up, down, and behind, — bringing them back to your heart each time.
         </Step>
 
-        <Step n="4" title="Help another Yid 🎖️">
+        <Step n="4" title="Help another Yid">
           This is the mivtza! Politely offer to help a fellow Yid do the mitzvah: hand them the set, help them make the bracha and shake, then wish them a <strong>Gut Yom Tov</strong>. Every person you help counts!
         </Step>
 
         <Step n="5" title="Log your shakes">
-          Come back to the app and record how many people you helped — add a photo and your story too. Watch your school climb toward its goal!
+          Come back and record how many people you helped — add a photo and your story too. Watch your <strong>school</strong> and the <strong>army</strong> climb toward its goal!
         </Step>
 
         {/* Callout — green-deep panel, gold lead-in, white copy */}
         <div className="rounded-[28px] bg-green p-5 text-white shadow-card sm:p-6">
           <p className="text-sm text-white/90">
-            <strong className="text-gold">Not sure about something?</strong> Always ask your teacher, counselor, or rabbi — they'll be happy to show you.
+            <strong className="text-gold">Not sure about something?</strong> Reach out to your <strong>Base Commander</strong> for help.
           </p>
         </div>
 
@@ -82,6 +96,10 @@ export default function HowTo() {
           <Button to="/login" variant="gold">I'm ready — Log my shakes 🌿</Button>
           <Button to="/" variant="outline">See the campaigns</Button>
         </div>
+
+        <p className="pt-2 text-center text-xs text-muted">
+          Special thank you to Altein Esrogim and Itches Haddasim.
+        </p>
       </div>
     </div>
   )
