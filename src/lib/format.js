@@ -34,6 +34,18 @@ export function daysLeft(endDate) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
+// The Hebrew-calendar date for an ISO timestamp, e.g. "24 Tishri 5787".
+// Date only — no time/seconds. Guarded so a bad value never throws in render.
+export function hebrewDate(iso) {
+  try {
+    return new Intl.DateTimeFormat('en-u-ca-hebrew', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    }).format(new Date(iso))
+  } catch {
+    return ''
+  }
+}
+
 // Downscale an uploaded image to a data URL so the mock localStorage store
 // doesn't blow its quota. The real backend would upload the original file.
 export function fileToScaledDataUrl(file, maxSize = 900, quality = 0.82) {

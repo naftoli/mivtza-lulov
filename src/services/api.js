@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { SEED } from '../data/seed.js'
-import { ISRU_CHAG } from '../lib/succos.js'
+import { ISRU_CHAG, LULAV_DAYS } from '../lib/succos.js'
 
 // Exported so the session keys in AuthContext can be versioned with the data:
 // a session saved against an older seed must not log a ghost soldier in.
@@ -22,7 +22,6 @@ const KEYS = {
   kids: `ml_${VERSION}_kids`,
   admins: `ml_${VERSION}_admins`,
   shakes: `ml_${VERSION}_shakes`,
-  reports: `ml_${VERSION}_reports`,
   settings: `ml_${VERSION}_settings`,
 }
 
@@ -116,11 +115,11 @@ function loggedTotal(schoolId, shakes) {
     .reduce((sum, s) => sum + s.count, 0)
 }
 
-// Goals are AUTOMATIC (never picked): 5 shakes per soldier for the base goal,
+// Goals are AUTOMATIC (never picked): 3 shakes per soldier for the base goal,
 // and every bonus round adds 1 more shake per soldier.
 // The per-soldier default. HQ can change it (setPerKidGoal) and it drives every
 // automatic goal — school, class and nationwide. Schools never set goals.
-const DEFAULT_PER_KID = 5
+const DEFAULT_PER_KID = 3
 const kidCountOf = (s) => s.soldierCount || 0
 
 // Current per-soldier default (read synchronously from the settings store).
@@ -206,10 +205,14 @@ export async function getSchool(id) {
 
 export async function getShakes(schoolId, { includeHidden = false } = {}) {
   await delay()
+  // Public rows carry the child's rank (never the serial). New entries store it,
+  // but backfill from the roster so seeded/older entries expose it too.
+  const rankOf = {}
+  for (const k of read(KEYS.kids, [])) if (k.schoolId === schoolId) rankOf[k.id] = k.rank || ''
   return read(KEYS.shakes, [])
     .filter((s) => s.schoolId === schoolId && (includeHidden || !s.hidden))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(publicShake)
+    .map((s) => publicShake({ ...s, rank: s.rank || rankOf[s.kidId] || '' }))
 }
 
 export async function getRecentShakes(schoolId, limit = 8) {
@@ -220,9 +223,12 @@ export async function getRecentShakes(schoolId, limit = 8) {
 export async function getLeaderboard(schoolId, limit = 10) {
   await delay()
   const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
+  // Map serial → rank so rows can carry the rank without ever exposing the serial.
+  const rankOf = {}
+  for (const k of read(KEYS.kids, [])) if (k.schoolId === schoolId) rankOf[k.id] = k.rank || ''
   const totals = {}
   for (const s of shakes) {
-    if (!totals[s.kidId]) totals[s.kidId] = { kidKey: kidKey(s.kidId), name: s.kidName, count: 0, entries: 0 }
+    if (!totals[s.kidId]) totals[s.kidId] = { kidKey: kidKey(s.kidId), name: s.kidName, rank: rankOf[s.kidId] || s.rank || '', count: 0, entries: 0 }
     totals[s.kidId].count += s.count
     totals[s.kidId].entries += 1
   }
@@ -231,8 +237,8 @@ export async function getLeaderboard(schoolId, limit = 10) {
     .slice(0, limit)
 }
 
-// Class/platoon standings — each class has its OWN goal (kids in class × 5),
-// same automatic rule as schools.
+// Class/platoon standings — each class has its OWN goal (kids in class × the
+// per-soldier default), same automatic rule as schools.
 export async function getClassLeaderboard(schoolId, limit = 12) {
   await delay()
   const pk = perKid()
@@ -284,31 +290,39 @@ export async function getKidShakes(kidId) {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 }
 
-// ---- Succos report (the kid-facing version of the teacher checklist) ----
-// One editable record per soldier: which days they went out, minutes,
-// people shaken with friends, people shaken personally, plus photos/story.
-export async function getReport(kidId) {
+// ---- Admin report grid ----
+// The teacher-checklist grid is now DERIVED from the soldiers' own shake entries
+// (the separate report store is gone). One row per soldier in the school:
+//   { id, name, grade, rank, perDay: {2:n,…,7:n}, totalShakes, totalMinutes }
+// where perDay sums each Lulav day's shake count. `id` is the serial — this is an
+// AUTHENTICATED admin view, so it's fine here (never in a public payload).
+export async function getSchoolReportRows(schoolId) {
   await delay()
-  const r = read(KEYS.reports, []).find((x) => x.kidId === kidId)
-  return r ? clone(r) : null
-}
-
-export async function saveReport(kidId, patch) {
-  await delay()
-  const reports = read(KEYS.reports, [])
-  const idx = reports.findIndex((x) => x.kidId === kidId)
-  const base = idx >= 0 ? reports[idx] : { kidId }
-  const merged = { ...base, ...patch, kidId, updatedAt: new Date().toISOString() }
-  if (idx >= 0) reports[idx] = merged
-  else reports.push(merged)
-  write(KEYS.reports, reports)
-  return clone(merged)
-}
-
-// For a future admin view (the teacher-style grid across a school).
-export async function getReportsForSchool(schoolId) {
-  await delay()
-  return read(KEYS.reports, []).filter((r) => r.schoolId === schoolId)
+  const kids = read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
+  const shakes = read(KEYS.shakes, []).filter((s) => s.schoolId === schoolId && !s.hidden)
+  const byKid = {}
+  for (const k of kids) {
+    byKid[k.id] = {
+      id: k.id,
+      name: `${k.firstName} ${k.lastName}`.trim(),
+      grade: k.grade || '',
+      rank: k.rank || '',
+      perDay: Object.fromEntries(LULAV_DAYS.map((d) => [d, 0])),
+      totalShakes: 0,
+      totalMinutes: 0,
+    }
+  }
+  for (const s of shakes) {
+    const row = byKid[s.kidId]
+    if (!row) continue
+    const c = Number(s.count) || 0
+    row.totalShakes += c
+    row.totalMinutes += Number(s.minutes) || 0
+    if (s.day != null && row.perDay[s.day] != null) row.perDay[s.day] += c
+  }
+  return Object.values(byKid).sort(
+    (a, b) => String(a.grade).localeCompare(String(b.grade)) || String(a.name).localeCompare(String(b.name)),
+  )
 }
 
 export async function getKidsForSchool(schoolId) {
@@ -342,7 +356,7 @@ export async function verifyAdmin(username, password) {
 }
 
 // ---- writes ----
-export async function addShake({ kid, count, note, photos }) {
+export async function addShake({ kid, day, count, minutes, note, photos }) {
   await delay()
   const shakes = read(KEYS.shakes, [])
   const displayName = `${kid.firstName} ${kid.lastName ? kid.lastName[0] + '.' : ''}`.trim()
@@ -352,7 +366,10 @@ export async function addShake({ kid, count, note, photos }) {
     kidId: kid.id,
     kidName: displayName,
     schoolId: kid.schoolId,
-    count: Number(count),
+    rank: kid.rank || '', // child's rank — public-safe (the serial never is)
+    day: day == null ? null : Number(day), // which Sukkos day (a LULAV_DAY, 2–7)
+    count: Number(count), // number of shakes
+    minutes: Number(minutes) || 0, // minutes on mivtzoim
     note: note?.trim() || '', // the optional "story"
     photos: list,
     photo: list[0] || null, // first photo, for compact feed thumbnails

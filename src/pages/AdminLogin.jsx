@@ -42,9 +42,9 @@ export default function AdminLogin() {
         <Band />
         <div className="p-6 sm:p-8">
           <img src={asset('th-logo.svg')} alt="" className="mx-auto h-16 w-auto" />
-          <p className="sh mt-4 text-center">School Admin</p>
-          <h1 className="mt-1 text-center font-display text-[26px] font-extrabold leading-tight text-navy">Admin Login</h1>
-          <p className="mt-1.5 text-center text-sm text-muted">For Tzivos Hashem HQ and school offices.</p>
+          {/* MASHPIA: school login will sync with mashpia.com — schools reach this
+              screen through a PRIVATE link (not surfaced in the public nav). */}
+          <h1 className="mt-4 text-center font-display text-[26px] font-extrabold leading-tight text-navy">Base Login</h1>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. oholei-torah" required /></Field>

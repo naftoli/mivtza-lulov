@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
-  updateSchool, setShakeHidden, addKid, resetDemoData, getReportsForSchool,
+  setShakeHidden, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos,
   getSettings, setPerKidGoal, setSchoolGoal,
 } from '../services/api.js'
@@ -126,20 +126,19 @@ function SchoolAdmin({ schoolId, isHQ }) {
   const { data: school } = useLiveData(() => getSchool(schoolId), [schoolId])
   const { data: shakes } = useLiveData(() => getShakes(schoolId, { includeHidden: true }), [schoolId])
   const { data: kids } = useLiveData(() => getKidsForSchool(schoolId), [schoolId])
-  const { data: reports } = useLiveData(() => getReportsForSchool(schoolId), [schoolId])
+  const { data: reportRows } = useLiveData(() => getSchoolReportRows(schoolId), [schoolId])
   const { data: pending } = useLiveData(() => getPendingPhotos(schoolId), [schoolId])
 
   if (!school) return <div className="mt-6"><Spinner /></div>
 
   return (
     <div className="mt-6 space-y-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <CampaignSettings school={school} isHQ={isHQ} />
-        <Roster schoolId={schoolId} kids={kids || []} />
-      </div>
+      <CampaignSettings school={school} isHQ={isHQ} />
+      {/* Photo Approvals above the roster; "Remove entry" moderation right under it. */}
       <PhotoApprovals schoolId={schoolId} shakes={pending || []} />
-      <ReportGrid kids={kids || []} reports={reports || []} />
       <Moderation shakes={shakes || []} />
+      <Roster kids={kids || []} />
+      <ReportGrid rows={reportRows || []} />
     </div>
   )
 }
@@ -179,19 +178,16 @@ function GlobalGoalSettings() {
 
 function CampaignSettings({ school, isHQ }) {
   const autoGoal = school.kidCount * school.perKidGoal
-  const [motto, setMotto] = useState(school.motto)
   // Blank = automatic; a number = an HQ custom goal for this school.
   const [goalVal, setGoalVal] = useState(school.goalCustom ? String(school.goal) : '')
   const [saved, setSaved] = useState(false)
   useEffect(() => {
-    setMotto(school.motto)
     setGoalVal(school.goalCustom ? String(school.goal) : '')
   }, [school.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save(e) {
     e.preventDefault()
-    await updateSchool(school.id, { motto })
-    if (isHQ) await setSchoolGoal(school.id, goalVal) // '' clears back to automatic
+    await setSchoolGoal(school.id, goalVal) // '' clears back to automatic
     setSaved(true); setTimeout(() => setSaved(false), 1600)
   }
 
@@ -199,18 +195,24 @@ function CampaignSettings({ school, isHQ }) {
     <Section title="Campaign Settings" topColor={school.color} right={<Pill>{school.percent}% of goal</Pill>}>
       {/* Goal: automatic (soldiers × per-kid) unless HQ sets a custom number. Schools can't. */}
       {isHQ ? (
-        <div className={`${tile} p-4`}>
-          <p className={label}>Goal</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <Input type="number" min="1" value={goalVal} onChange={(e) => setGoalVal(e.target.value)}
-              placeholder={`${fmt(autoGoal)} (auto)`} className="w-40" />
-            <span className="text-sm font-semibold text-muted">shakes</span>
+        <form onSubmit={save}>
+          <div className={`${tile} p-4`}>
+            <p className={label}>Goal</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <Input type="number" min="1" value={goalVal} onChange={(e) => setGoalVal(e.target.value)}
+                placeholder={`${fmt(autoGoal)} (auto)`} className="w-40" />
+              <span className="text-sm font-semibold text-muted">shakes</span>
+            </div>
+            <p className="mt-1.5 text-sm text-muted">
+              Leave blank for the automatic goal — {fmt(school.kidCount)} soldiers × {school.perKidGoal} = {fmt(autoGoal)}.
+              {school.goalCustom && ' This school is on a custom goal right now.'}
+            </p>
           </div>
-          <p className="mt-1.5 text-sm text-muted">
-            Leave blank for the automatic goal — {fmt(school.kidCount)} soldiers × {school.perKidGoal} = {fmt(autoGoal)}.
-            {school.goalCustom && ' This school is on a custom goal right now.'}
-          </p>
-        </div>
+          <div className="mt-4 flex items-center gap-3">
+            <Button type="submit" variant="navy">Save</Button>
+            {saved && <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-green">✓ Saved</span>}
+          </div>
+        </form>
       ) : (
         <div className={`${tile} p-4`}>
           <p className={label}>Goal {school.goalCustom ? '(set by HQ)' : '(automatic)'}</p>
@@ -223,19 +225,10 @@ function CampaignSettings({ school, isHQ }) {
         </div>
       )}
 
-      <form onSubmit={save} className="mt-4 space-y-4">
-        <Field label="Motto"><Input value={motto} onChange={(e) => setMotto(e.target.value)} /></Field>
-        <div className="flex items-center gap-3">
-          <Button type="submit" variant="navy">Save</Button>
-          {saved && <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-green">✓ Saved</span>}
-        </div>
-      </form>
-
       {/* End date is fixed to Isru Chag — not editable by anyone. */}
       <div className={`${tile} mt-4 p-4`}>
         <p className={label}>Campaign ends</p>
         <p className="mt-0.5 font-semibold text-navy">{prettyDate(school.endDate)} · Isru Chag Sukkos</p>
-        <p className="mt-1 text-sm text-muted">Set by the calendar — the same for every school.</p>
       </div>
 
       <div className={`${tile} mt-4 p-4`}>
@@ -250,51 +243,47 @@ function CampaignSettings({ school, isHQ }) {
   )
 }
 
-function Roster({ schoolId, kids }) {
-  const [form, setForm] = useState({ id: '', dob: '', firstName: '', lastName: '', grade: '' })
-  const [error, setError] = useState('')
-
-  async function add(e) {
-    e.preventDefault()
-    setError('')
-    try {
-      await addKid(schoolId, form)
-      setForm({ id: '', dob: '', firstName: '', lastName: '', grade: '' })
-    } catch (err) { setError(err.message) }
-  }
+// MASHPIA: the roster is READ-ONLY here — soldiers are sourced from Mashpia, not
+// added or edited in this UI, so there is no add-soldier form. When Mashpia is
+// wired up this list is populated from the server-side roster.
+function Roster({ kids }) {
+  const [q, setQ] = useState('')
 
   const byGrade = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const list = needle
+      ? kids.filter((k) => `${k.firstName} ${k.lastName}`.toLowerCase().includes(needle))
+      : kids
     const g = {}
-    kids.forEach((k) => { (g[k.grade || '—'] ??= []).push(k) })
+    list.forEach((k) => { (g[k.grade || '—'] ??= []).push(k) })
     return g
-  }, [kids])
+  }, [kids, q])
+
+  const grades = Object.keys(byGrade).sort()
 
   return (
     <Section title="Soldier Roster" topColor="var(--color-blue)" right={<Pill>{kids.length} soldiers</Pill>}>
-      <form onSubmit={add} className="grid grid-cols-2 gap-3">
-        <Field label="First name"><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></Field>
-        <Field label="Last name"><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></Field>
-        <Field label="Serial number"><Input value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} required /></Field>
-        <Field label="Date of birth"><Input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} required /></Field>
-        <Field label="Grade / class"><Input value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="e.g. 5" /></Field>
-        <div className="col-span-2">
-          {error && <p className="mb-2 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
-          <Button type="submit" variant="outline" className="w-full">+ Add soldier</Button>
-        </div>
-      </form>
+      <Field label="Search by name">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search soldiers…" />
+      </Field>
 
-      <div className="mt-4 max-h-52 space-y-3 overflow-auto pr-1">
-        {Object.keys(byGrade).sort().map((grade) => (
+      <div className="mt-4 max-h-72 space-y-3 overflow-auto pr-1">
+        {grades.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted">No soldiers match “{q}”.</p>
+        ) : grades.map((grade) => (
           <div key={grade}>
             <p className={`${label} mb-1`}>Grade {grade}</p>
             <ul className="space-y-1">
               {byGrade[grade].map((k) => (
-                <li key={k.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/55 px-3 py-1.5 text-sm">
-                  <span className="truncate font-semibold text-navy">{k.firstName} {k.lastName}</span>
-                  <span className="flex flex-none items-center gap-2">
-                    {k.rank && <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gold-dark">{k.rank}</span>}
-                    <span className="text-[11px] font-semibold tabular-nums text-muted">#{k.id}</span>
-                  </span>
+                <li key={k.id} className="rounded-xl bg-white/55 px-3 py-1.5 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-semibold text-navy">{k.firstName} {k.lastName}</span>
+                    <span className="flex-none text-[11px] font-semibold tabular-nums text-muted">#{k.id}</span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted/85">
+                    {k.rank && <span className="font-bold uppercase tracking-[0.08em] text-gold-dark">{k.rank}</span>}
+                    {k.dob && <span className="tabular-nums">DOB {k.dob}</span>}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -367,33 +356,80 @@ function PhotoApprovals({ schoolId, shakes }) {
   )
 }
 
+// Sort options for the "Remove entry" list.
+const MOD_SORTS = {
+  shakes: { label: 'Most shakes', fn: (a, b) => b.count - a.count },
+  name: { label: 'Name', fn: (a, b) => String(a.kidName).localeCompare(String(b.kidName)) },
+  newest: { label: 'Newest', fn: (a, b) => new Date(b.createdAt) - new Date(a.createdAt) },
+  oldest: { label: 'Oldest', fn: (a, b) => new Date(a.createdAt) - new Date(b.createdAt) },
+}
+
 function Moderation({ shakes }) {
+  const [sort, setSort] = useState('shakes')
+  const [q, setQ] = useState('')
+  const [limit, setLimit] = useState(10)
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const base = needle ? shakes.filter((s) => String(s.kidName).toLowerCase().includes(needle)) : shakes
+    return [...base].sort(MOD_SORTS[sort].fn)
+  }, [shakes, q, sort])
+
+  // Reset the reveal whenever the search or sort changes.
+  useEffect(() => { setLimit(10) }, [q, sort])
+
+  const shown = filtered.slice(0, limit)
+  const remaining = filtered.length - shown.length
+
   return (
-    <Section title="Photo & Entry Moderation" topColor="var(--color-red)"
+    <Section title="Remove Mivtza Lulov Entry" topColor="var(--color-red)"
       right={<span className="text-xs text-muted">Hidden entries don’t count toward the goal or show publicly</span>}>
       {shakes.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">No entries yet.</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {shakes.map((s) => {
-            const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
-            return (
-              <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : 'bg-white/55'}`}>
-                {imgs[0]
-                  ? <img src={imgs[0]} alt="" className="h-14 w-14 flex-none rounded-xl object-cover" />
-                  : <span className="grid h-14 w-14 flex-none place-items-center rounded-xl bg-track">🌿</span>}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
-                  {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
-                  <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
-                </div>
-                <Button variant={s.hidden ? 'outline' : 'red'} className={s.hidden ? smallBtn : dangerBtn} onClick={() => setShakeHidden(s.id, !s.hidden)}>
-                  {s.hidden ? 'Restore' : 'Remove'}
-                </Button>
-              </div>
-            )
-          })}
-        </div>
+        <>
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <Field label="Search by name"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search soldiers…" /></Field>
+            <label className="flex items-center gap-2">
+              <span className={`${label} flex-none`}>Sort</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value)}
+                className="rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-blue focus:ring-2 focus:ring-blue/25">
+                {Object.entries(MOD_SORTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          {shown.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">No entries match “{q}”.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {shown.map((s) => {
+                const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
+                return (
+                  <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : 'bg-white/55'}`}>
+                    {imgs[0]
+                      ? <img src={imgs[0]} alt="" className="h-14 w-14 flex-none rounded-xl object-cover" />
+                      : <span className="grid h-14 w-14 flex-none place-items-center rounded-xl bg-track">🌿</span>}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
+                      {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
+                    </div>
+                    <Button variant={s.hidden ? 'outline' : 'red'} className={s.hidden ? smallBtn : dangerBtn} onClick={() => setShakeHidden(s.id, !s.hidden)}>
+                      {s.hidden ? 'Restore' : 'Remove'}
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {remaining > 0 && (
+            <div className="mt-4 text-center">
+              <Button variant="outline" className={smallBtn} onClick={() => setLimit((n) => n + 10)}>Show more ({remaining})</Button>
+            </div>
+          )}
+        </>
       )}
     </Section>
   )

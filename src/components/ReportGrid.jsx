@@ -2,18 +2,15 @@ import { fmt } from '../lib/format.js'
 import { Card, SectionHeader, Pill } from './ui.jsx'
 import { LULAV_DAYS, SHABBOS_DAY } from '../lib/succos.js'
 
-// Admin view: the teacher-checklist grid, one row per soldier, filled in from
-// the kids' own Succos reports.
-export default function ReportGrid({ kids, reports }) {
-  const byKid = Object.fromEntries((reports || []).map((r) => [r.kidId, r]))
-  const rows = [...(kids || [])].sort(
-    (a, b) => String(a.grade || '').localeCompare(String(b.grade || '')) ||
-      String(a.lastName || '').localeCompare(String(b.lastName || '')),
-  )
-  const reportedCount = rows.filter((k) => byKid[k.id]).length
-  const sum = (f) => (reports || []).reduce((n, r) => n + (Number(r[f]) || 0), 0)
+// Admin view: a shakes-per-day grid, one row per soldier, DERIVED from the
+// soldiers' own logged shake entries (see api.getSchoolReportRows). Each row is
+// { id, name, grade, rank, perDay: {2:n,…,7:n}, totalShakes, totalMinutes }.
+export default function ReportGrid({ rows = [] }) {
+  const perDayTotal = (d) => rows.reduce((n, r) => n + (Number(r.perDay?.[d]) || 0), 0)
+  const totalShakes = rows.reduce((n, r) => n + (Number(r.totalShakes) || 0), 0)
+  const totalMinutes = rows.reduce((n, r) => n + (Number(r.totalMinutes) || 0), 0)
 
-  const num = (v) => (v === null || v === undefined || v === '' ? '—' : fmt(v))
+  const cell = (v) => (!v ? '—' : fmt(v)) // 0 / blank → em dash
   // header: Exo semibold navy caps on the sky card; body rows zebra in a lighter sky
   const th = 'px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-navy'
   const td = 'px-2.5 py-2'
@@ -21,11 +18,11 @@ export default function ReportGrid({ kids, reports }) {
   return (
     <Card className="p-6" topColor="var(--color-cyan)">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <SectionHeader>Mivtza Lulav Report</SectionHeader>
-        <Pill>{reportedCount}/{rows.length} reported</Pill>
+        <SectionHeader>Shakes each day of Sukkos</SectionHeader>
+        <Pill>{rows.length} soldiers</Pill>
       </div>
       <p className="mb-4 text-xs text-muted">
-        Filled in by the soldiers themselves. ✓ = went on Mivtza Lulav that day of Succos. (Day {SHABBOS_DAY} is Shabbos — no Lulav.)
+        Filled in by the soldiers themselves. (Day {SHABBOS_DAY} is Shabbos — no Lulav.)
       </p>
 
       {rows.length === 0 ? (
@@ -34,45 +31,42 @@ export default function ReportGrid({ kids, reports }) {
         <div className="overflow-x-auto rounded-2xl">
           <table className="w-full min-w-[760px] border-collapse text-sm text-navy">
             <thead>
-              <tr className="text-left">
+              <tr className="border-b-2 border-navy/15 text-left">
                 <th className={th}>Grade</th>
                 <th className={th}>Student</th>
-                <th className={`${th} text-center`} colSpan={LULAV_DAYS.length}>Days on Mivtza Lulav</th>
-                <th className={`${th} text-right`}>Min</th>
-                <th className={`${th} text-right`}>w/ Friends</th>
-                <th className={`${th} text-right`}>Personally</th>
-              </tr>
-              <tr className="border-b-2 border-navy/15">
-                <th /><th />
-                {LULAV_DAYS.map((d) => <th key={d} className={`${th} pt-0 text-center`}>{d}</th>)}
-                <th /><th /><th />
+                {LULAV_DAYS.map((d) => (
+                  <th key={d} className={`${th} text-center`}>
+                    <span className="block text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">Day</span>
+                    {d}
+                  </th>
+                ))}
+                <th className={`${th} text-right`}>Total Shakes</th>
+                <th className={`${th} text-right`}>Total Minutes</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((k) => {
-                const r = byKid[k.id]
-                return (
-                  <tr key={k.id} className={`odd:bg-[#ddf3ff] ${r ? '' : 'text-muted/60'}`}>
-                    <td className={`${td} whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-muted`}>{k.grade || '—'}</td>
-                    <td className={`${td} whitespace-nowrap font-semibold text-navy`}>{k.firstName} {k.lastName}</td>
-                    {LULAV_DAYS.map((d) => (
-                      <td key={d} className={`${td} text-center`}>
-                        {r?.days?.includes(d) ? <span className="font-bold text-green">✓</span> : <span className="text-navy/25">·</span>}
-                      </td>
-                    ))}
-                    <td className={`${td} text-right tabular-nums`}>{num(r?.minutes)}</td>
-                    <td className={`${td} text-right tabular-nums`}>{num(r?.peopleWithFriends)}</td>
-                    <td className={`${td} text-right font-semibold tabular-nums text-navy`}>{num(r?.peoplePersonal)}</td>
-                  </tr>
-                )
-              })}
+              {rows.map((r) => (
+                <tr key={r.id} className="odd:bg-[#ddf3ff]">
+                  <td className={`${td} whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-muted`}>{r.grade || '—'}</td>
+                  <td className={`${td} whitespace-nowrap font-semibold text-navy`}>{r.name}</td>
+                  {LULAV_DAYS.map((d) => (
+                    <td key={d} className={`${td} text-center tabular-nums`}>
+                      {r.perDay?.[d] ? <span className="font-semibold text-green">{fmt(r.perDay[d])}</span> : <span className="text-navy/25">—</span>}
+                    </td>
+                  ))}
+                  <td className={`${td} text-right font-semibold tabular-nums text-navy`}>{cell(r.totalShakes)}</td>
+                  <td className={`${td} text-right tabular-nums`}>{cell(r.totalMinutes)}</td>
+                </tr>
+              ))}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-navy/15 font-semibold text-navy">
-                <td className={`${td} text-[11px] font-extrabold uppercase tracking-[0.08em] text-green`} colSpan={2 + LULAV_DAYS.length}>Totals</td>
-                <td className={`${td} text-right tabular-nums`}>{fmt(sum('minutes'))}</td>
-                <td className={`${td} text-right tabular-nums`}>{fmt(sum('peopleWithFriends'))}</td>
-                <td className={`${td} text-right tabular-nums`}>{fmt(sum('peoplePersonal'))}</td>
+                <td className={`${td} text-[11px] font-extrabold uppercase tracking-[0.08em] text-green`} colSpan={2}>Totals</td>
+                {LULAV_DAYS.map((d) => (
+                  <td key={d} className={`${td} text-center tabular-nums`}>{fmt(perDayTotal(d))}</td>
+                ))}
+                <td className={`${td} text-right tabular-nums`}>{fmt(totalShakes)}</td>
+                <td className={`${td} text-right tabular-nums`}>{fmt(totalMinutes)}</td>
               </tr>
             </tfoot>
           </table>

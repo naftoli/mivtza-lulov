@@ -3,12 +3,12 @@ import { Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { addShake, getSchool, getKidShakes } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
-import { fmt, timeAgo, fileToScaledDataUrl } from '../lib/format.js'
+import { fmt, hebrewDate, fileToScaledDataUrl } from '../lib/format.js'
 import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
+import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
 import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar } from '../components/ui.jsx'
-import SuccosReport from '../components/SuccosReport.jsx'
 import Mascot from '../components/Mascot.jsx'
 
 // Small-label style (Exo semibold caps, navy) — matches the Field label; condensed
@@ -26,7 +26,9 @@ export default function KidDashboard() {
   const { data: school } = useLiveData(() => (kid ? getSchool(kid.schoolId) : Promise.resolve(null)), [kid?.schoolId])
   const { data: myShakes, loading } = useLiveData(() => (kid ? getKidShakes(kid.id) : Promise.resolve([])), [kid?.id])
 
+  const [day, setDay] = useState(null) // which Sukkos day this entry is for
   const [count, setCount] = useState('')
+  const [minutes, setMinutes] = useState('')
   const [story, setStory] = useState('')
   const [photos, setPhotos] = useState([])
   const [busy, setBusy] = useState(false)
@@ -56,13 +58,14 @@ export default function KidDashboard() {
 
   async function submit(e) {
     e.preventDefault()
+    if (!day) return
     const n = Number(count)
     if (!n || n < 1) return
     if (n > 500) { notify('That’s a lot at once! Please split very large counts into separate entries.', true); return }
     setBusy(true)
     const before = school
     try {
-      await addShake({ kid, count: n, note: story, photos })
+      await addShake({ kid, day, count: n, minutes: Number(minutes) || 0, note: story, photos })
     } catch (err) {
       // Nothing was saved — keep the form (and photos) so the kid can retry.
       notify(err?.message || 'Could not save your shakes — please try again.', true)
@@ -70,7 +73,7 @@ export default function KidDashboard() {
     } finally {
       setBusy(false)
     }
-    setCount(''); setStory(''); setPhotos([])
+    setDay(null); setCount(''); setMinutes(''); setStory(''); setPhotos([])
     notify(`🎉 ${n} shakes added! Yasher koach, ${kid.firstName}!`)
     setTimeout(() => setFlash(''), 5000)
 
@@ -132,7 +135,7 @@ export default function KidDashboard() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Log form */}
+        {/* Log form — DAY FIRST: pick a day, then the rest of the form appears */}
         <Card className="p-6" topColor="var(--color-gold)">
           <div className="flex items-center justify-between">
             <SectionHeader>Log your shakes</SectionHeader>
@@ -144,47 +147,76 @@ export default function KidDashboard() {
           </div>
           <p className="mt-1 mb-4 text-sm text-navy/80">Report how many people you helped shake Lulav — and snap a photo from the field!</p>
           <form onSubmit={submit} className="space-y-5">
-            <Field label="Number of shakes">
-              <Input type="number" min="1" max="500" value={count} onChange={(e) => { setCount(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 12" required className="text-lg" />
-            </Field>
-
-            {/* Big, phone-friendly photo button */}
+            {/* Step 1 — which day of Succos */}
             <div>
-              <span className={`mb-1.5 block ${LABEL}`}>Add photos</span>
-              <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" id="photoInput" />
-              <label htmlFor="photoInput"
-                className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-track bg-white/70 px-4 py-6 text-center transition hover:border-green-mid hover:bg-white">
-                <img src={asset('design/icon-camera.png')} alt="" className="h-12 w-auto" />
-                <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-navy">Tap to take or upload photos</span>
-                <span className="text-xs text-navy/70">Take a new photo or pick from your gallery · add as many as you like</span>
-              </label>
-              {photos.length > 0 && (
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {photos.map((p, i) => (
-                    <div key={i} className="relative aspect-square">
-                      <img src={p} alt="" className="h-full w-full rounded-xl object-cover ring-2 ring-white" />
-                      <button type="button" onClick={() => setPhotos((arr) => arr.filter((_, j) => j !== i))}
-                        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red text-[11px] font-bold text-white shadow">×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <span className={`mb-2 block ${LABEL}`}>Which day are you reporting?</span>
+              <div className="flex flex-wrap gap-2">
+                {LULAV_DAYS.map((n) => {
+                  const on = day === n
+                  return (
+                    // Single-select day pills: navy when picked; the deeper sky (track) when not.
+                    <button type="button" key={n} onClick={() => { setDay(n); if (flash) setFlash('') }} aria-pressed={on}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${on ? 'bg-navy text-white shadow-sm' : 'bg-track text-navy ring-1 ring-transparent hover:ring-green-mid'}`}>
+                      {on ? '✓ ' : ''}{ordinal(n)} day
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-xs text-navy/70">(The {ordinal(SHABBOS_DAY)} day of Succos is Shabbos — no Lulav.)</p>
             </div>
 
-            <Field label="Add a story (optional)" hint="Where were you? Who did you help?">
-              <Textarea rows={3} value={story} onChange={(e) => setStory(e.target.value)} placeholder="e.g. Helped everyone at the nursing home on Kingston Ave. this morning!" />
-            </Field>
+            {/* Steps 2+ — only after a day is chosen */}
+            {day && (
+              <>
+                <Field label="Number of shakes" hint="If you went on Mivtzoyim with another Chayol, divide the total between yourselves">
+                  <Input type="number" min="1" max="500" value={count} onChange={(e) => { setCount(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 12" required className="text-lg" />
+                </Field>
 
-            {flash && <p className={flashError ? ERROR_NOTICE : SUCCESS_NOTICE}>{flash}</p>}
-            <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-              {busy ? 'Reporting…' : 'Report my shakes 🌿'}
-            </Button>
+                <Field label="Minutes on Mivtzoim">
+                  <Input type="number" min="0" value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="e.g. 90" />
+                </Field>
+
+                {/* Big, phone-friendly photo button */}
+                <div>
+                  <span className={`mb-1.5 block ${LABEL}`}>Add photos</span>
+                  <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" id="photoInput" />
+                  <label htmlFor="photoInput"
+                    className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-track bg-white/70 px-4 py-6 text-center transition hover:border-green-mid hover:bg-white">
+                    <img src={asset('design/icon-camera.png')} alt="" className="h-12 w-auto" />
+                    <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-navy">Tap to take or upload photos</span>
+                    <span className="text-xs text-navy/70">Take a new photo or pick from your gallery · add as many as you like</span>
+                  </label>
+                  {photos.length > 0 && (
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      {photos.map((p, i) => (
+                        <div key={i} className="relative aspect-square">
+                          <img src={p} alt="" className="h-full w-full rounded-xl object-cover ring-2 ring-white" />
+                          <button type="button" onClick={() => setPhotos((arr) => arr.filter((_, j) => j !== i))}
+                            className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red text-[11px] font-bold text-white shadow">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Field label="Add a story (optional)" hint="Where were you? Who did you help?">
+                  <Textarea rows={3} value={story} onChange={(e) => setStory(e.target.value)} placeholder="e.g. Helped everyone at the nursing home on Kingston Ave. this morning!" />
+                </Field>
+
+                {flash && <p className={flashError ? ERROR_NOTICE : SUCCESS_NOTICE}>{flash}</p>}
+                <Button type="submit" variant="gold" className="w-full" disabled={busy}>
+                  {busy ? 'Reporting…' : 'Report my shakes 🌿'}
+                </Button>
+              </>
+            )}
+
+            {!day && flash && <p className={flashError ? ERROR_NOTICE : SUCCESS_NOTICE}>{flash}</p>}
           </form>
         </Card>
 
         {/* History */}
         <Card className="p-6" topColor="var(--color-blue)">
-          <SectionHeader>My missions</SectionHeader>
+          <SectionHeader>My Mivtza Lulov Report</SectionHeader>
           {loading ? <Spinner /> : (myShakes || []).length === 0 ? (
             <p className="py-10 text-center text-sm text-navy/80">No missions logged yet. Your first one is waiting! 🌿</p>
           ) : (
@@ -198,10 +230,10 @@ export default function KidDashboard() {
                       : <span className="grid h-12 w-12 flex-none place-items-center rounded-xl bg-white/70">🌿</span>}
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] font-bold text-navy">
-                        {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-semibold text-navy/70">· {imgs.length} photos</span>}
+                        {fmt(s.count)} Shakes <span className="text-navy/40">|</span> {fmt(s.minutes || 0)} Minutes on Mivtzoim
                       </p>
                       {s.note && <p className="text-xs italic text-navy/80">“{s.note}”</p>}
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-navy/60">{new Date(s.createdAt).toLocaleString()} · {timeAgo(s.createdAt)}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-navy/60">{hebrewDate(s.createdAt)}</p>
                     </div>
                   </li>
                 )
@@ -209,11 +241,6 @@ export default function KidDashboard() {
             </ul>
           )}
         </Card>
-      </div>
-
-      {/* Succos report — the kid-facing version of the teacher checklist */}
-      <div className="mt-6">
-        <SuccosReport kid={kid} loggedShakes={myTotal} />
       </div>
 
       {mascotMsg && <Mascot message={mascotMsg} onDone={() => setMascotMsg('')} />}
