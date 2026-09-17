@@ -59,7 +59,12 @@ export default function Layout({ children }) {
                 phones; sm:px-6 / sm:text-[18px] restore .btn's defaults, so the desktop pill is unchanged.
                 From 2xl the pill is the comp's ~145x46: 24px caps (11px + 24 + 11) with 14px sides. */}
             {kid
-              ? <Button to="/me" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">My Missions</Button>
+              ? <Button to="/me" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">
+                  {/* Full label on desktop; a compact form below lg so the pill never
+                      overflows the phone header (the disclosure menu shows the full label). */}
+                  <span className="lg:hidden">My Report</span>
+                  <span className="hidden lg:inline">My Mivtza Lulov Report</span>
+                </Button>
               : <Button to="/login" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">Soldier Login</Button>}
             <Button to={admin ? '/admin' : '/admin/login'} variant="ghost"
               className={`hidden px-0 opacity-85 hover:opacity-100 sm:inline-flex ${navText}`}>
@@ -91,7 +96,7 @@ export default function Layout({ children }) {
               {admin ? 'Admin' : 'School Admin'}
             </NavLink>
             <NavLink to={kid ? '/me' : '/login'} className={menuLink} onClick={() => setMenuOpen(false)}>
-              {kid ? 'My Missions' : 'Soldier Login'}
+              {kid ? 'My Mivtza Lulov Report' : 'Soldier Login'}
             </NavLink>
           </div>
         </nav>

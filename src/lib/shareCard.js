@@ -310,3 +310,22 @@ export async function buildShareCard(school) {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('render failed'))), 'image/png')
   })
 }
+
+// ---- Web Share helpers (used by SharePanel for the Share + WhatsApp buttons) ----
+
+// Wrap a rendered share-card PNG blob in a File for the Web Share API.
+export function shareCardFile(blob, school) {
+  if (!blob) return null
+  return new File([blob], `mivtza-lulav-${school?.id ?? 'card'}.png`, { type: 'image/png' })
+}
+
+// True when this browser can share the given file through the Web Share API
+// (navigator.canShare with a files payload — Android Chrome, iOS Safari).
+// Guards for SSR / older browsers that lack canShare.
+export function canShareFiles(file) {
+  try {
+    return !!file && typeof navigator !== 'undefined' && !!navigator.canShare?.({ files: [file] })
+  } catch {
+    return false
+  }
+}

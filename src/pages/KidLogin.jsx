@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { Button, Card, Field, Input, Band } from '../components/ui.jsx'
 import { asset } from '../lib/asset.js'
 
+const SERIAL_TIP = 'You can find your serial number on your account at mashpia.com.'
+
 export default function KidLogin() {
   const { loginKid } = useAuth()
   const navigate = useNavigate()
@@ -11,6 +13,7 @@ export default function KidLogin() {
   const [dob, setDob] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [tipOpen, setTipOpen] = useState(false)
 
   async function submit(e) {
     e.preventDefault()
@@ -34,15 +37,45 @@ export default function KidLogin() {
           <p className="mt-1.5 text-center text-sm text-navy/80">Log in with your serial number and date of birth to record your shakes.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <Field label="Serial Number">
-              <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="e.g. 10023" inputMode="numeric" required />
-            </Field>
+            {/* Serial number: a custom field (not <Field>) so the info button isn't
+                nested inside the field's <label> — a labelable <button> there would
+                hijack the label's control and steal focus from the input. The <label
+                htmlFor> wraps only the text; the button sits beside it. Native title =
+                hover tooltip; click/keyboard toggles the styled inline note for touch.
+                The note is in normal flow so it never overflows / gets clipped at 375px. */}
+            <div>
+              <div className="mb-1.5 flex flex-col gap-1">
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">
+                  <label htmlFor="kid-serial">Serial Number</label>
+                  <button
+                    type="button"
+                    aria-label={SERIAL_TIP}
+                    title={SERIAL_TIP}
+                    aria-expanded={tipOpen}
+                    onClick={() => setTipOpen((o) => !o)}
+                    onBlur={() => setTipOpen(false)}
+                    className="grid h-4 w-4 flex-none place-items-center rounded-full text-navy/70 transition hover:text-navy"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 11.5v4.5M12 7.75h.01" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </span>
+                {tipOpen && (
+                  <span role="note" className="rounded-lg bg-white/80 px-2.5 py-1.5 text-[11px] font-medium normal-case leading-snug tracking-normal text-navy/80">
+                    {SERIAL_TIP}
+                  </span>
+                )}
+              </div>
+              <Input id="kid-serial" value={id} onChange={(e) => setId(e.target.value)} placeholder="e.g. 7750446" inputMode="numeric" required />
+            </div>
             <Field label="Date of Birth">
               <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} required />
             </Field>
             {error && <p className="rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
             <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-              {busy ? 'Checking…' : 'Report for duty 🎖️'}
+              {busy ? 'Checking…' : 'Report for duty'}
             </Button>
           </form>
 

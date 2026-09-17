@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { buildShareCard } from '../lib/shareCard.js'
+import { buildShareCard, shareCardFile, canShareFiles } from '../lib/shareCard.js'
 import { asset } from '../lib/asset.js'
 import { Button, SectionHeader } from './ui.jsx'
-import QrCode from './QrCode.jsx'
 
-// Modal: a shareable campaign card (image) + QR code + share actions.
+// Modal: a shareable campaign card (image) + share actions.
 export default function SharePanel({ school, onClose }) {
   const url = window.location.href
   const [png, setPng] = useState(null) // { blob, dataUrl }
@@ -27,10 +26,12 @@ export default function SharePanel({ school, onClose }) {
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 1800) }
   const shareText = `Help ${school.name} reach their Mivtza Lulav goal! 🌿`
 
+  // Share the generated share-card PNG + the link through the native share
+  // sheet where the browser supports file-sharing; otherwise share the link
+  // alone, and as a last resort copy it to the clipboard.
   async function shareImage() {
-    const blob = blobRef.current
-    const file = blob && new File([blob], 'mivtza-lulav.png', { type: 'image/png' })
-    if (file && navigator.canShare?.({ files: [file] })) {
+    const file = shareCardFile(blobRef.current, school)
+    if (canShareFiles(file)) {
       try { await navigator.share({ files: [file], title: school.name, text: shareText, url }) } catch { /* cancelled */ }
     } else if (navigator.share) {
       try { await navigator.share({ title: school.name, text: shareText, url }) } catch { /* cancelled */ }
@@ -40,7 +41,22 @@ export default function SharePanel({ school, onClose }) {
     }
   }
 
-  function whatsapp() {
+  // WhatsApp: attach the photo + link through the native share sheet where the
+  // browser can share files (Android Chrome, iOS Safari), otherwise fall back
+  // to a wa.me link carrying the message + URL. A wa.me link can't attach the
+  // image itself — on that path the user gets the link and can add the saved
+  // image manually.
+  async function whatsapp() {
+    const file = shareCardFile(blobRef.current, school)
+    if (canShareFiles(file)) {
+      try {
+        await navigator.share({ files: [file], title: school.name, text: `${shareText} ${url}` })
+        return
+      } catch (e) {
+        if (e?.name === 'AbortError') return // user dismissed the sheet
+        // any other error → fall through to the wa.me link
+      }
+    }
     window.open(`https://wa.me/?text=${encodeURIComponent(`${shareText} ${url}`)}`, '_blank', 'noopener')
   }
 
@@ -83,16 +99,7 @@ export default function SharePanel({ school, onClose }) {
           <Button variant="outline" onClick={copyLink} className="w-full">Copy link</Button>
         </div>
 
-        {/* QR */}
-        <div className="mt-5 flex items-center gap-4 rounded-[20px] bg-paper p-4">
-          <QrCode value={url} size={110} className="flex-none" />
-          <div className="min-w-0">
-            <p className="font-display font-bold text-navy">Scan to open</p>
-            <p className="text-sm text-muted">Great for flyers, signs, or sharing in person.</p>
-          </div>
-        </div>
-
-        {toast && <p className="mt-3 text-center text-sm font-semibold text-green">{toast}</p>}
+        {toast && <p className="mt-4 text-center text-sm font-semibold text-green">{toast}</p>}
       </div>
     </div>
   )
