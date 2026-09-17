@@ -187,6 +187,75 @@ function lulavDateFromJd($jd): ?string
     return sprintf('%04d-%02d-%02d', (int) $parts[2], (int) $parts[0], (int) $parts[1]);
 }
 
+function lulavCurrentSchoolYear(): int
+{
+    $year = (int) GlobalSettings::getCurrentYear();
+    if ($year < 1) {
+        lulavError('The current school year is not configured.', 503);
+    }
+    return $year;
+}
+
+function lulavAustralianSchoolSql(): string
+{
+    $ids = array_map('intval', GlobalSettings::getAustralian());
+    return $ids ? implode(',', $ids) : '0';
+}
+
+function lulavEligibleUserCondition(string $userAlias): string
+{
+    // Keep campaign-child eligibility centralized: a future per-user Lulav
+    // flag can replace this registration-year rule without rewriting queries.
+    if (!preg_match('/^[a-z][a-z0-9_]*$/i', $userAlias)) {
+        throw new InvalidArgumentException('Invalid user table alias.');
+    }
+    $year = lulavCurrentSchoolYear();
+    return "EXISTS (
+        SELECT 1
+        FROM user_registration lulav_registration
+        WHERE lulav_registration.user_id = {$userAlias}.user_id
+          AND (
+            lulav_registration.year = {$year}
+            OR (
+              lulav_registration.year = " . ($year - 1) . "
+              AND {$userAlias}.school_id IN (" . lulavAustralianSchoolSql() . ")
+            )
+          )
+    )";
+}
+
+function lulavSchoolIsEligible(int $schoolId): bool
+{
+    global $MASHPIA_DB;
+    $year = lulavCurrentSchoolYear();
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT 1
+         FROM school_registrations registration
+         WHERE registration.school_id = :school
+           AND (
+             registration.year = :year
+             OR (
+               registration.year = :previous_year
+               AND registration.school_id IN (' . lulavAustralianSchoolSql() . ')
+             )
+           )
+         LIMIT 1'
+    );
+    $stmt->execute([
+        ':school' => $schoolId,
+        ':year' => $year,
+        ':previous_year' => $year - 1,
+    ]);
+    return (bool) $stmt->fetchColumn();
+}
+
+function lulavRequireEligibleSchool(int $schoolId): void
+{
+    if (!lulavSchoolIsEligible($schoolId)) {
+        lulavError('School is not registered for this campaign.', 404);
+    }
+}
+
 function lulavAdminScope(int $adminId): array
 {
     global $MASHPIA_DB;
@@ -269,7 +338,8 @@ function lulavKidBySerial(string $serial): array
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
-         WHERE u.user_serial = :serial AND u.user_registered > 0
+         WHERE u.user_serial = :serial
+           AND " . lulavEligibleUserCondition('u') . "
          LIMIT 1"
     );
     $stmt->execute([':serial' => $serial]);

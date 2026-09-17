@@ -91,53 +91,6 @@ function lulavPercent(int $total, int $goal): int
     return max(0, (int) floor(($total / max(1, $goal)) * 100));
 }
 
-function lulavCurrentSchoolYear(): int
-{
-    $year = (int) GlobalSettings::getCurrentYear();
-    if ($year < 1) {
-        lulavError('The current school year is not configured.', 503);
-    }
-    return $year;
-}
-
-function lulavAustralianSchoolSql(): string
-{
-    $ids = array_map('intval', GlobalSettings::getAustralian());
-    return $ids ? implode(',', $ids) : '0';
-}
-
-function lulavSchoolIsEligible(int $schoolId): bool
-{
-    global $MASHPIA_DB;
-    $year = lulavCurrentSchoolYear();
-    $stmt = $MASHPIA_DB->prepare(
-        'SELECT 1
-         FROM school_registrations registration
-         WHERE registration.school_id = :school
-           AND (
-             registration.year = :year
-             OR (
-               registration.year = :previous_year
-               AND registration.school_id IN (' . lulavAustralianSchoolSql() . ')
-             )
-           )
-         LIMIT 1'
-    );
-    $stmt->execute([
-        ':school' => $schoolId,
-        ':year' => $year,
-        ':previous_year' => $year - 1,
-    ]);
-    return (bool) $stmt->fetchColumn();
-}
-
-function lulavRequireEligibleSchool(int $schoolId): void
-{
-    if (!lulavSchoolIsEligible($schoolId)) {
-        lulavError('School is not registered for this campaign.', 404);
-    }
-}
-
 function lulavSchoolTotals(int $campaignId): array
 {
     global $MASHPIA_DB;
@@ -155,6 +108,7 @@ function lulavSchoolTotals(int $campaignId): array
          WHERE map.mivtzoim_id = :campaign
            AND map.field_name = 'day'
            AND m.mark_inactive = 0
+           AND " . lulavEligibleUserCondition('u') . "
          GROUP BY u.school_id"
     );
     $stmt->execute([':campaign' => $campaignId]);
@@ -176,7 +130,8 @@ function lulavSchoolRows(?int $onlyId = null): array
                    settings.motto, settings.color, settings.goal_override
             FROM schools s
             LEFT JOIN users u
-              ON u.school_id = s.school_id AND u.user_registered > 0
+              ON u.school_id = s.school_id
+             AND " . lulavEligibleUserCondition('u') . "
             LEFT JOIN lulav_school_settings settings
               ON settings.school_id = s.school_id
              AND settings.mivtzoim_id = :campaign
@@ -268,7 +223,8 @@ function lulavKidsForSchool(int $schoolId): array
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
-         WHERE u.school_id = :school AND u.user_registered > 0
+         WHERE u.school_id = :school
+           AND " . lulavEligibleUserCondition('u') . "
          ORDER BY c.class_grade, c.class_sub, u.last, u.first"
     );
     $stmt->execute([':school' => $schoolId]);
@@ -671,8 +627,8 @@ function lulavShakeRows(?int $schoolId, ?int $userId, bool $includeHidden, bool 
             JOIN date_tasks_marks mark ON mark.date_task_id = task.date_task_id
             JOIN users u ON u.user_id = mark.user_id
             WHERE map.mivtzoim_id = :campaign
-              AND map.field_name = 'peoplePersonal'
-              AND u.user_registered > 0";
+              AND map.field_name = 'day'
+              AND " . lulavEligibleUserCondition('u');
     $params = [':campaign' => $campaign['mivtzoim_id']];
     if ($schoolId !== null) {
         $sql .= ' AND u.school_id = :school';
@@ -1059,7 +1015,8 @@ function lulavDailyRows(?int $schoolId, ?int $userId, bool $includeHidden, bool 
              AND mission.end_date <= map.end_date
             JOIN date_tasks_marks mark
               ON mark.date_task_id = task.date_task_id AND mark.done_qty > 0
-            JOIN users u ON u.user_id = mark.user_id AND u.user_registered > 0
+            JOIN users u ON u.user_id = mark.user_id
+             AND " . lulavEligibleUserCondition('u') . "
             WHERE map.mivtzoim_id = :campaign AND map.field_name = 'day'";
     $params = [':campaign' => $campaign['mivtzoim_id']];
     if ($schoolId !== null) {
@@ -1142,7 +1099,7 @@ function lulavLeaderboard(int $schoolId): array
          WHERE map.mivtzoim_id = :campaign
            AND map.field_name = 'day'
            AND u.school_id = :school
-           AND u.user_registered > 0
+           AND " . lulavEligibleUserCondition('u') . "
          GROUP BY u.user_id
          ORDER BY total DESC, u.last, u.first
          LIMIT 100"
@@ -1176,7 +1133,8 @@ function lulavClassLeaderboard(int $schoolId): array
                 COALESCE(SUM(mark.done_qty), 0) AS total
          FROM classes c
          LEFT JOIN users roster
-           ON roster.class_id = c.class_id AND roster.user_registered > 0
+           ON roster.class_id = c.class_id
+          AND " . lulavEligibleUserCondition('roster') . "
          LEFT JOIN lulav_api_task_map map
            ON map.mivtzoim_id = :campaign AND map.field_name = 'day'
          LEFT JOIN date_tasks task ON task.grid_id = map.grid_id
@@ -1227,7 +1185,8 @@ function lulavHandleKidLogin(): void
     }
     $stmt = $MASHPIA_DB->prepare(
         'SELECT 1 FROM users
-         WHERE user_serial = :serial AND dob = :dob AND user_registered > 0
+         WHERE user_serial = :serial AND dob = :dob
+           AND ' . lulavEligibleUserCondition('users') . '
          LIMIT 1'
     );
     $stmt->execute([':serial' => $serial, ':dob' => $dob]);
@@ -1486,7 +1445,8 @@ try {
             "SELECT c.class_id, c.class_grade, c.class_sub, COUNT(u.user_id) AS kid_count
              FROM classes c
              LEFT JOIN users u
-               ON u.class_id = c.class_id AND u.user_registered > 0
+               ON u.class_id = c.class_id
+              AND " . lulavEligibleUserCondition('u') . "
              WHERE c.school_id = :school AND c.class_era = 0
              GROUP BY c.class_id
              ORDER BY c.class_grade, c.class_sub"
@@ -1565,7 +1525,8 @@ try {
         $day = $identity['day'];
         $stmt = $MASHPIA_DB->prepare(
             'SELECT user_serial, school_id FROM users
-             WHERE user_id = :user AND user_registered > 0'
+             WHERE user_id = :user
+               AND ' . lulavEligibleUserCondition('users')
         );
         $stmt->execute([':user' => $userId]);
         $user = $stmt->fetch();
@@ -1649,7 +1610,8 @@ try {
             lulavError('Shake not found.', 404);
         }
         $stmt = $MASHPIA_DB->prepare(
-            'SELECT user_serial, school_id FROM users WHERE user_id = :user AND user_registered > 0'
+            'SELECT user_serial, school_id FROM users
+             WHERE user_id = :user AND ' . lulavEligibleUserCondition('users')
         );
         $stmt->execute([':user' => $identity['userId']]);
         $user = $stmt->fetch();

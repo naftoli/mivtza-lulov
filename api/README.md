@@ -76,6 +76,11 @@ Participating schools are those with a `school_registrations` row for
 `GlobalSettings::getAustralian()` also qualify through a registration from the
 previous year.
 
+The roster and all child counts use the matching rule in `user_registration`:
+current-year registrations, plus previous-year registrations for Australian
+schools. This rule is centralized in `lulavEligibleUserCondition()` so it can
+later be replaced by a per-child Lulav flag.
+
 The default school goal is registered headcount × the HQ-managed per-child
 goal (initially 3). HQ can override one school. Percentages are calculated
 against that effective base goal and may exceed 100. Reaching the goal starts
