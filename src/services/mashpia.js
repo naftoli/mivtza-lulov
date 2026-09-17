@@ -35,7 +35,8 @@ async function req(path, { method = 'GET', body } = {}) {
 export async function verifyKid(serial, dob) {
   const { token, soldier } = await req('/soldier/login', { method: 'POST', body: { serial, dob } })
   authToken = token
-  // soldier: { serial→id, kidKey (opaque, server-issued), firstName, lastName, hebFirst, hebLast, dob, gender, grade, rank, schoolId }
+  // soldier: { serial→id, kidKey (opaque, server-issued), firstName, lastName, hebFirst, hebLast,
+  //           dob, gender, grade, rank, schoolId, photoUrl }
   // The caller persists this in localStorage — strip the credential (dob) and
   // gender before it leaves the adapter, same as the mock in ./api.js.
   const { dob: _dob, gender: _g, ...safe } = soldier
@@ -52,18 +53,19 @@ export async function getSchools() { return req('/schools') }
 export async function getSchool(id) { return req(`/schools/${id}`) }
 export async function getKidsForSchool(schoolId) { return req(`/schools/${schoolId}/soldiers`) }
 
-// ---- reports (write) — the teacher-checklist data, self-reported by the kid ----
-export async function getReport(serial) { return req(`/soldier/${serial}/lulav-report`) }
-export async function saveReport(serial, payload) {
-  return req(`/soldier/${serial}/lulav-report`, { method: 'POST', body: payload })
-}
-
-// ---- shakes (optional write) ----
+// ---- shakes (write — the two-way sync) ----
+// One entry per Sukkos day. There is no separate "report" object: the teacher
+// grid is derived from these entries (see api.getSchoolReportRows).
+// entry: { kidId, kidName, schoolId, rank, day, count, minutes, note, photos, createdAt }
 export async function addShake(entry) { return req('/shakes', { method: 'POST', body: entry }) }
 
-// NOTE: getShakes, getLeaderboard, getClassLeaderboard, updateSchool, addKid,
-// setShakeHidden, getReportsForSchool, etc. map to the corresponding Mashpia
-// endpoints the same way — add them once the API is confirmed.
+// The rest of the ./api.js surface maps to Mashpia endpoints the same way — add
+// them once the API is confirmed:
+//   reads:   getShakes, getRecentShakes, getLeaderboard, getClassLeaderboard,
+//            getGlobalStats, getKidShakes, getSchoolReportRows
+//   goals:   getSettings, setPerKidGoal, setSchoolGoal        (HQ only)
+//   photos:  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos
+//   admin:   setShakeHidden, updateSchool
 //
 // PRIVACY: getShakes / getRecentShakes / getLeaderboard feed UNAUTHENTICATED
 // pages. Their rows must carry `kidKey` (the same opaque key the login response

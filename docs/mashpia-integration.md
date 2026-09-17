@@ -1,134 +1,88 @@
-# Mivtza Lulav ↔ Mashpia.com Integration Plan
+# Mivtza Lulav ↔ Mashpia.com — Integration Contract
 
-**Goal:** connect this Mivtza Lulav app to **Mashpia.com** (the existing Tzivos Hashem
-platform, where the teacher checklist and the soldier roster already live).
+Connect the Mivtza Lulav app to **Mashpia.com** (where the roster and teacher checklist
+already live). On our side the whole integration is one module —
+[`src/services/api.js`](../src/services/api.js) (currently a localStorage mock) with the
+adapter skeleton in [`src/services/mashpia.js`](../src/services/mashpia.js). Components
+never change.
 
-When the site is synced to Mashpia, the behavior below should hold. This document is
-the **contract** to hand to the Mashpia developer. On our side the whole integration
-happens in one module — [`src/services/api.js`](../src/services/api.js) — with a
-skeleton adapter at [`src/services/mashpia.js`](../src/services/mashpia.js); the
-components never change.
+## What the sync must do
+1. **Roster from Mashpia** — schools (Bases), classes (Platoons), children, and each child's school + class.
+2. **Kid login** = serial number + date of birth.
+3. **Staff login** = the same login they already use on Mashpia.com (SSO).
+4. **Photos are held pending** until a school admin approves them.
+5. **Goals are automatic; only HQ changes them** — a per-child number (default **3**) that HQ can change globally or override for one school. Goals run per class, per school, and nationwide.
+6. **End date is fixed to Isru Chag Sukkos** — derived from the calendar, editable by no one.
+7. **Profile pictures** show in Recent Shakes and on login.
+8. **Two-way** — every shake and photo a child logs writes back into Mashpia, into the same record behind the teacher checklist.
 
----
+## Endpoints the app needs
 
-## What the sync must do (summary)
+### A. Auth
+- `verifyKid(serial, dob)` → child record + session token + **`kidKey`**: an opaque,
+  **server-issued, non-reversible** key (e.g. HMAC of the serial with a server secret),
+  stable across logins. It is the only id public rows carry (see G).
+  **Rate-limit / lock out** this endpoint — serials are sequential and DOB is a small search space.
+- `verifyAdmin(...)` → Mashpia SSO; returns role (HQ vs school) + the school(s) administered.
 
-1. **Roster** comes from Mashpia: the lists of **children, schools, and classes**, and
-   **which school + class each child belongs to**.
-2. **Kid login** = the child's **ID (serial number) + date of birth**.
-3. **School/staff login** = the **same login they already use on Mashpia.com** (SSO).
-4. **Photos must be approved before they post** — uploads are held as *pending* and only
-   appear publicly once an admin approves them.
-5. **Goals default to automatic; only HQ can change them** — the automatic goal is a
-   per-child number (default **5**) that HQ can change globally, plus HQ can set a custom
-   goal for an individual school. Schools never set goals. Every bonus round still adds
-   1 more shake per child. Goals run at **three levels**: each **class**, each **school**,
-   and **Main Tzivos Hashem** (nationwide).
-6. **The campaign end date is fixed to Isru Chag Sukkos** — derived from the calendar
-   (the day after Simchas Torah), not editable by anyone.
-6. **Profile pictures**: each child's photo shows in Recent Shakes and when they log in.
-7. **Two-way**: everything entered in the app (shakes, reports, photos) **writes back into
-   the Mashpia database**, landing where the teacher data already lives.
+### B. Roster (read — admin-only wherever it includes serial / DOB)
+- `getSchools()` → `[{ id, name, city }]`
+- Classes per school → `[{ id, name, schoolId, kidCount }]`
+- `getKidsForSchool(schoolId)` → `[{ serial, firstName, lastName, hebFirst, hebLast, dob, gender, class, rank, schoolId, photoUrl }]`
+  - `rank` is a text label (e.g. "Sergeant"); `photoUrl` is the profile picture.
 
----
+### C. Goals
+Computed from headcount: **base goal = children × per-child number** (default 3, HQ-adjustable).
+**HQ may override one school** with a fixed number (blank = back to automatic).
+**Each bonus round = +1 shake per child**, auto-advancing as targets are hit.
+Applied per class, per school, and nationwide (sum of school base goals).
+Mashpia must supply accurate **class / school / national headcounts** and persist two HQ values:
+the **global per-child number** and any **per-school override**.
 
-## The contract — endpoints the app needs
+### D. End date
+Not stored, not editable. Derived in [`src/lib/succos.js`](../src/lib/succos.js) from
+`SUKKOS_START`; update that once a year and the end date + Lulav days follow.
 
-### A. Authentication
-- **Kid login** — verify **serial number + date of birth**, return the child's record
-  (+ a session token scoped to that child).
-  - App call: `verifyKid(serial, dob)` · suggested `POST /api/soldier/login`
-  - The response must also carry **`kidKey`**: an opaque, **server-issued, non-reversible**
-    key for the child (e.g. an HMAC of the serial with a server secret), stable across
-    logins. It is the only id public rows carry (see F); the app uses it just to highlight
-    the child's own leaderboard row. It must not be derivable from the serial client-side.
-  - This endpoint needs **rate limiting / lockout**: serials are sequential and a date of
-    birth has a small search space.
-- **School / staff login** — **use Mashpia's existing login** (SSO / same credentials as
-  Mashpia.com), returning which school(s) the user administers and their role (HQ vs school).
-  - App call: `verifyAdmin(...)`
+### E. Shakes (write — the two-way sync)
+The child logs **one entry per Sukkos day**. There is **no separate "report" object** — the
+teacher grid is derived from these entries (`getSchoolReportRows`).
 
-### B. Roster (read) — children, schools, classes
-- `getSchools()` → `[{ id, name, city }]` (**Base** = school)
-- Classes per school → `[{ id, name (Platoon), schoolId, kidCount }]`
-- `getKidsForSchool(schoolId)` → children, each mapped to their school **and class**:
-  `{ serial, firstName, lastName, hebFirst, hebLast, dob, gender, class (=Platoon), rank, schoolId, photoUrl }`
-  - **`photoUrl`** is the child's profile picture (used in Recent Shakes + on login).
+`addShake(entry)` — suggested `POST /api/shakes`:
 
-### C. Goals — automatic by default, HQ-adjustable (schools never pick them)
-Computed from headcount:
-- **Base goal = children × per-child number** (default **5**; HQ can change this global number)
-- **HQ may override an individual school's goal** with a fixed number (blank = back to automatic)
-- **Each bonus round = +1 shake per child** (and it auto-advances as targets are hit)
-
-Applied to **each class** (children in that class), **each school** (all its children), and
-**Main TH** (sum of every school's base goal). The app computes these from the roster counts,
-so Mashpia needs to supply accurate **class/school/national headcounts**, and to persist two
-HQ-set values: the **global per-child number** and any **per-school goal override**.
-
-### C2. Campaign end date — fixed to Isru Chag
-The end date is **not stored per school and not editable**. The app derives it from the
-Sukkos start date (Isru Chag = the day after Simchas Torah) in `src/lib/succos.js`; update
-`SUKKOS_START` there once a year and the end date (and the Lulav days) follow.
-
-### D. Reports & shakes (write — the two-way sync)
-Everything a child enters flows back to Mashpia. The Succos report mirrors the teacher
-checklist one-to-one:
-
-| App field | Teacher-checklist column |
+| Field | Meaning (teacher-checklist column) |
 |---|---|
-| `days: number[]` | went on מבצע לולב on the Nth day of Succos — a subset of that year's six Lulav days (the Shabbos day is skipped; for 5787 day 1 is Shabbos, so `[2,3,4,5,6,7]`). The app derives the list from the Sukkos start date in `src/lib/succos.js`; store the day numbers as sent. |
-| `minutes` | minutes spent on מבצע לולב |
-| `peopleWithFriends` | people shaken **with friends** (total together) |
-| `peoplePersonal` | people shaken **personally** (divide if shared) |
-| `story`, `photos[]` | extra (story + field photos) |
+| `day` | which Sukkos day, 2–7 (day 1 is Shabbos in 5787; derived from `succos.js` — store as sent) |
+| `count` | number of people helped to shake |
+| `minutes` | minutes spent on mivtzoim |
+| `note`, `photos[]` | story + field photos |
+| `rank`, `kidName`, `schoolId`, `createdAt` | copied from the child record / system time |
 
-- App calls: `saveReport(serial, payload)` and `addShake(...)`
-- Suggested endpoints: `POST /api/soldier/:serial/lulav-report`, `POST /api/shakes`
-- **Write to the same record behind the teacher grid** so the teacher and kid views agree.
+Write to the same record the teacher grid reads, so both views agree.
 
-### E. Photos — approval workflow
-- Uploaded photos are submitted as **pending** and are **not shown publicly** until a school
-  admin **approves** them. Mashpia needs endpoints to: submit a photo (pending), list pending
-  photos for a school, approve/reject one entry, and **approve all pending for a school** in one
-  call (the admin page has an "Approve all (N)" button — `approveAllPhotos(schoolId)`).
-- Approval is per **entry**, and an entry can carry several photos, so the pending list must
-  return **every** photo URL of each entry (not just the first) — the admin sees them all
-  before approving.
-- Accepted format (multipart upload or base64?) and size limit — please specify.
+### F. Photos — approval workflow
+Uploads arrive **pending** and stay hidden publicly until approved. Needed: submit-pending,
+list-pending for a school (returning **every** photo of each entry), approve / reject an entry,
+and **approve-all** for a school (`approveAllPhotos(schoolId)`).
+Please specify the accepted format (multipart / base64) and size limit.
 
-### F. Public reads — never expose serials or DOB
-The school campaign page (recent-shakes feed, photo wall, leaderboard) and the home page are
-**unauthenticated**. Every row those endpoints return must contain **only**:
-`{ id, kidKey, kidName (first name + last initial), count, note, photos (approved only), createdAt }`
-— **never** `serial`, `dob`, or `gender`. The serial is half of the child's login credential,
-so a public name → serial mapping would materially lower the bar for logging in as a child.
-- `kidKey` is the same opaque key the login response returns (see A) — it is the only link
-  between a public row and the logged-in child.
-- App calls: `getShakes(schoolId)`, `getRecentShakes(schoolId)`, `getLeaderboard(schoolId)`
-  · suggested `GET /api/schools/:id/shakes`, `GET /api/schools/:id/leaderboard`
-- Roster reads that do include `serial` / `dob` (section B) are **admin-only** and must
-  require the staff token.
+### G. Public reads — never serial or DOB
+Home and school pages are **unauthenticated**. `getShakes`, `getRecentShakes`, `getLeaderboard`
+(suggested `GET /api/schools/:id/shakes`, `/leaderboard`) must return **only**:
+`{ id, kidKey, kidName (first + last initial), rank, count, note, photos (approved only), createdAt }`
+— **never** `serial`, `dob`, or `gender`. The serial is half the login credential.
 
----
+## Security
+The site is static — it **cannot hold a secret key**. Either issue **per-user tokens at login**,
+or route secret-key calls through a **small serverless proxy**. Allow **CORS** from the app's domain.
 
-## Security (browser app)
-- The site is **static** and **cannot hold a secret API key** (anything shipped to the
-  browser is public). So either the API issues **per-user tokens at login** (safe in the
-  browser), or secret-key calls go through a **small serverless proxy** we add.
-- The API must allow **CORS** from the app's domain.
+## Checklist for the Mashpia developer
+1. Base URL (+ test URL) and API docs.
+2. Kid auth: serial + DOB → token + `kidKey`; rate limiting.
+3. Staff SSO: how to authenticate; what it returns (role + schools).
+4. Roster endpoints: schools, classes, children (class mapping, rank, photo URL).
+5. Headcounts: class / school / national.
+6. `POST /shakes` in the shape above, hitting the teacher-grid record; public read endpoints in the no-serial shape (G).
+7. Photo endpoints + accepted format and size.
+8. App→API auth (token vs. proxy) and CORS.
 
----
-
-## What I need from the Mashpia developer
-1. **Base URL** (+ test URL) and any API docs.
-2. **Kid auth**: verify serial + DOB → token + `kidKey` (format/expiry); rate limiting on the login endpoint.
-3. **School/staff SSO**: how to authenticate against Mashpia's existing login; what it returns (role + schools).
-4. **Roster endpoints**: schools, **classes**, and children (with class mapping + **profile photo URL**).
-5. **Headcounts**: class / school / national counts (drive the automatic goals).
-6. **Report + shake write endpoints** + exact payloads — and confirmation they hit the same record as the teacher grid.
-   Plus the **public read endpoints** (shakes, leaderboard) in the no-serial / no-DOB shape from section F.
-7. **Photo endpoints**: submit-pending, list-pending, approve/reject; accepted format + size.
-8. **App→API auth** (per-user token vs. key+proxy) and **CORS** for our domain.
-
-With these, Phase 1 (login + roster) wires up quickly, then Phase 2 (reports/photos two-way sync).
+Phase 1 = login + roster. Phase 2 = shakes / photos two-way sync.
