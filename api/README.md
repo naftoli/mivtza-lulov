@@ -12,8 +12,7 @@ teacher-grid marks.
    `mashpia.com/sql/database.sql`.
 3. Add one `lulav_api_task_map` row for each field in the current campaign:
    - six quantity `day` rows, one for each non-Shabbos day;
-   - six quantity `minutes` rows for the same days;
-   - one `peoplePersonal` total row for compatibility with legacy reports.
+   - six quantity `minutes` rows for the same days.
 4. Point the app at:
 
    ```text

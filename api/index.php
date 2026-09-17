@@ -48,12 +48,9 @@ function lulavCampaignDays(): array
 function lulavValidateTaskMap(array $mapping): void
 {
     $mappedDays = ['day' => [], 'minutes' => []];
-    $fields = [];
     foreach ($mapping as $row) {
         if (isset($mappedDays[$row['field_name']])) {
             $mappedDays[$row['field_name']][] = (int) $row['day_number'];
-        } else {
-            $fields[] = $row['field_name'];
         }
     }
     $requiredDays = lulavCampaignDays();
@@ -64,15 +61,13 @@ function lulavValidateTaskMap(array $mapping): void
     unset($days);
     if (count($requiredDays) !== 6
         || $mappedDays['day'] !== $requiredDays
-        || $mappedDays['minutes'] !== $requiredDays
-        || !in_array('peoplePersonal', $fields, true)) {
+        || $mappedDays['minutes'] !== $requiredDays) {
         lulavError(
             'The Lulav teacher-grid task mapping is incomplete.',
             503,
             [
                 'requiredShakeDays' => $requiredDays,
                 'requiredMinuteDays' => $requiredDays,
-                'requiredTotals' => ['peoplePersonal'],
             ]
         );
     }
@@ -913,27 +908,6 @@ function lulavMapFor(string $field, int $day): array
     lulavError('The Lulav teacher-grid task mapping is incomplete.', 503);
 }
 
-function lulavUserDailyShakeTotal(int $userId): int
-{
-    global $MASHPIA_DB;
-    $campaign = lulavCampaign();
-    $stmt = $MASHPIA_DB->prepare(
-        "SELECT COALESCE(SUM(mark.done_qty), 0)
-         FROM lulav_api_task_map map
-         JOIN date_tasks task ON task.grid_id = map.grid_id
-         JOIN date_tasks_missions mission
-           ON mission.date_tasks_mission_id = task.date_tasks_mission_id
-          AND mission.start_date >= map.start_date
-          AND mission.end_date <= map.end_date
-         JOIN date_tasks_marks mark
-           ON mark.date_task_id = task.date_task_id AND mark.user_id = :user
-         WHERE map.mivtzoim_id = :campaign
-           AND map.field_name = 'day' AND mark.mark_inactive = 0"
-    );
-    $stmt->execute([':user' => $userId, ':campaign' => $campaign['mivtzoim_id']]);
-    return (int) $stmt->fetchColumn();
-}
-
 function lulavUpdateDayDescription(array $kid, array $map, string $note): void
 {
     global $MASHPIA_DB;
@@ -994,14 +968,6 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         lulavMarkMapValue($kid, $countMap, max($currentCount, (int) $count));
         lulavMarkMapValue($kid, $minuteMap, max($currentMinutes, (int) $minutes));
         lulavUpdateDayDescription($kid, $countMap, $note);
-        $totalMap = lulavMapFor('peoplePersonal', 0);
-        $currentTotal = (int) lulavMappedDayMark((int) $kid['user_id'], 'peoplePersonal', 0)['value'];
-        lulavMarkMapValue(
-            $kid,
-            $totalMap,
-            max($currentTotal, lulavUserDailyShakeTotal((int) $kid['user_id']))
-        );
-
         foreach ($photos as $photo) {
             if (strpos($photo, 'data:image/') === 0) {
                 lulavStoreDayPhoto($photo, $kid, $day);

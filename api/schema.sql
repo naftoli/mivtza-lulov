@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS `lulav_api_task_map` (
   `mivtzoim_id` int(10) unsigned NOT NULL,
-  `field_name` enum('day','minutes','peopleWithFriends','peoplePersonal') NOT NULL,
+  `field_name` enum('day','minutes') NOT NULL,
   `day_number` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `grid_id` int(10) unsigned NOT NULL,
   `start_date` mediumint(8) unsigned NOT NULL,
