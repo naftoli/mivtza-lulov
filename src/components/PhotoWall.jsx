@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { timeAgo } from '../lib/format.js'
-import { Card, SectionHeader } from './ui.jsx'
+import { Card, SectionHeader, Button } from './ui.jsx'
+
+const PHOTO_BATCH = 10
 
 // Gallery of photos kids uploaded from the field ("Mivtzoim Pictures").
 export default function PhotoWall({ shakes }) {
@@ -10,14 +12,17 @@ export default function PhotoWall({ shakes }) {
     return imgs.map((img, i) => ({ ...s, photo: img, id: `${s.id}-${i}` }))
   })
   const [active, setActive] = useState(null)
+  const [visible, setVisible] = useState(PHOTO_BATCH)
 
   if (photos.length === 0) return null
+
+  const shown = photos.slice(0, visible)
 
   return (
     <Card className="p-5 sm:p-6" topColor="var(--color-cyan)">
       <SectionHeader className="mb-4">Mivtzoim Pictures</SectionHeader>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
-        {photos.map((s) => (
+        {shown.map((s) => (
           <button key={s.id} onClick={() => setActive(s)}
             className="group relative aspect-square overflow-hidden rounded-2xl bg-white ring-1 ring-navy/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid">
             <img src={s.photo} alt={s.note || 'shake photo'} className="h-full w-full object-cover transition group-hover:scale-105" />
@@ -27,6 +32,14 @@ export default function PhotoWall({ shakes }) {
           </button>
         ))}
       </div>
+
+      {photos.length > visible && (
+        <div className="mt-4 text-center">
+          <Button variant="outline" onClick={() => setVisible((v) => v + PHOTO_BATCH)}>
+            Load More
+          </Button>
+        </div>
+      )}
 
       <PhotoLightbox photo={active} onClose={() => setActive(null)} />
     </Card>

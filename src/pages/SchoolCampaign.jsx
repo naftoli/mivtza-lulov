@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getSchool, getShakes, getLeaderboard, getClassLeaderboard } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
-import { fmt, daysLeft, shortSchoolName } from '../lib/format.js'
+import { fmt, shortSchoolName } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
 import { Button, Card, Spinner, SchoolLogo } from '../components/ui.jsx'
 import GoalMeter from '../components/GoalMeter.jsx'
@@ -61,20 +61,24 @@ export default function SchoolCampaign() {
 
         <div className="relative mx-auto max-w-6xl px-4 py-6 sm:py-9">
           <div className="hero-glass rounded-[28px] p-5 sm:rounded-[36px] sm:px-8 sm:py-7">
-            <Link to="/" className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/75 hover:text-white">← All campaigns</Link>
+            <Link to="/" className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/75 hover:text-white">← Army Wide Campaign</Link>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
                 <SchoolLogo school={school} size={72} className="ring-2 ring-white/30" />
                 <div className="min-w-0">
                   <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[16px]">Mivtza Lulav</p>
                   <h1 className="font-display text-[26px] font-black uppercase leading-[1.1] text-white sm:text-4xl lg:text-[40px]">{shortSchoolName(school)}</h1>
-                  <p className="mt-1 font-display text-white/85 sm:text-[17px]">{school.city} · “{school.motto}”</p>
+                  <p className="mt-1 font-display text-white/85 sm:text-[17px]">{school.city}</p>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-cond text-[16px] uppercase tracking-[0.04em] text-green"
-                style={{ background: 'var(--grad-pill-green)' }}>
-                ⏳ {daysLeft(school.endDate)} days left
-              </span>
+              {/* Share moved up here (where the days-left pill used to be) */}
+              <Button variant="outlineWhite" onClick={() => setShowShare(true)}>↗ Share</Button>
+            </div>
+            {/* Soldier CTA — prominent pill on the green hero band, above the meter */}
+            <div className="mt-5">
+              <Button to={isMySchool ? '/me' : '/login'} variant="gold" className="w-full sm:w-auto sm:min-w-[240px]">
+                I'm a Soldier — Log Shakes
+              </Button>
             </div>
           </div>
         </div>
@@ -84,12 +88,7 @@ export default function SchoolCampaign() {
         {/* Left column */}
         <div className="space-y-6">
           <Card className="p-6" topColor={school.color}>
-            <GoalMeter school={school} variant="wide"
-              actions={isMySchool
-                ? <Button to="/me" variant="gold">Log my shakes</Button>
-                : <Button to="/login" variant="gold">I'm a soldier here</Button>}
-              centerAction={<Button variant="outline" onClick={() => setShowShare(true)}>↗ Share</Button>}
-            />
+            <GoalMeter school={school} variant="wide" />
           </Card>
 
           {school.bonusActive ? (

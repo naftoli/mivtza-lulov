@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { fmt } from '../lib/format.js'
 import { Card, SectionHeader } from './ui.jsx'
 import { RankBadge } from './Leaderboard.jsx'
@@ -16,15 +17,26 @@ const RACE_FILLS = [
 // Class/platoon standings — each class races toward its own goal (kids × 5).
 // `color` still drives the percent figure (defaults to green-deep).
 export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--color-green)' }) {
+  const [sort, setSort] = useState('percent')
+  const ranked = [...rows].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.count - a.count))
+  // Same green pill toggle as Home's race — the active segment shades sky -> teal-green.
+  const seg = (active) =>
+    `rounded-full px-3.5 py-2 text-green transition ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
+  const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6e0f6 0%, #6db58d 45%, #549182 100%)' } : undefined)
   return (
     <Card className="p-5 sm:p-6" topColor="var(--color-green)">
-      <SectionHeader className="mb-1">Class Standings</SectionHeader>
-      <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-navy/60">Each class vs. its own goal (5 per soldier)</p>
-      {rows.length === 0 ? (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <SectionHeader>Platoon Leaderboard</SectionHeader>
+        <div className="inline-flex rounded-full bg-[#69c07c] p-1 font-cond text-[13px] uppercase leading-none tracking-[0.04em] sm:text-[15px]">
+          <button type="button" onClick={() => setSort('percent')} className={seg(sort === 'percent')} style={segStyle(sort === 'percent')}>% of goal</button>
+          <button type="button" onClick={() => setSort('total')} className={seg(sort === 'total')} style={segStyle(sort === 'total')}>Total shakes</button>
+        </div>
+      </div>
+      {ranked.length === 0 ? (
         <p className="py-6 text-center text-sm text-navy/70">No classes ranked yet.</p>
       ) : (
         <ol className="space-y-3">
-          {rows.map((r, i) => (
+          {ranked.map((r, i) => (
             <li key={r.grade} className={`rounded-2xl px-2 py-1.5 ${r.grade === highlightGrade ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
               <div className="flex items-center gap-3">
                 <RankBadge index={i} />

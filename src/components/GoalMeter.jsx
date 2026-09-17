@@ -100,7 +100,7 @@ function GoalTrend({ percent, d = TREND, sparkleAtTip = false }) {
   )
 }
 
-export default function GoalMeter({ school, celebrateMilestones = true, variant = 'default', actions = null, centerAction = null }) {
+export default function GoalMeter({ school, celebrateMilestones = true, variant = 'default' }) {
   const { total, percent, percentOfBase, goalReached, bonusActive, bonusLevel, goal, bonusGoal } = school
   const prevPercent = useRef(percent)
   const prevReached = useRef(goalReached)
@@ -152,15 +152,12 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
     )
     return (
       <div className="relative mx-auto w-full max-w-[560px]">
-        {/* phones (below sm): stacked flow — count, arrow, then panel + buttons.
+        {/* phones (below sm): stacked flow — count, arrow, then the % panel.
             The arrow is only ~135px tall at 375px, so overlays would pile up. */}
         <div className="mb-1 sm:hidden">{count}</div>
         <GoalTrend percent={percent} d={SCHOOL_TREND} sparkleAtTip />
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 sm:hidden">
-          <div className="rounded-2xl bg-sky/95 px-3 py-2 text-center shadow-sm ring-1 ring-navy/10">{panel}</div>
-          {(actions || centerAction) && (
-            <div className="flex flex-wrap items-center gap-2">{actions}{centerAction}</div>
-          )}
+        <div className="mt-3 sm:hidden">
+          <div className="inline-block rounded-2xl bg-sky/95 px-3 py-2 text-center shadow-sm ring-1 ring-navy/10">{panel}</div>
         </div>
         {/* sm and up: the overlay composition (client-tuned — keep as is) */}
         <div className="pointer-events-none absolute inset-0 hidden sm:block">
@@ -168,14 +165,6 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
           <div className="absolute -left-8 -top-2 text-left">{count}</div>
           {/* goal — standing panel overlaying the arrow */}
           <div className="pointer-events-none absolute bottom-[5%] -right-6 rounded-2xl bg-sky/95 px-3 py-9 text-center shadow-md ring-1 ring-navy/10 backdrop-blur-sm">{panel}</div>
-          {/* share — back in the valley, lower-left */}
-          {actions && (
-            <div className="pointer-events-auto absolute bottom-[13%] left-[30%]">{actions}</div>
-          )}
-          {/* primary action — up in the open pocket, centered */}
-          {centerAction && (
-            <div className="pointer-events-auto absolute left-[59%] top-[33%] -translate-x-1/2 -translate-y-1/2">{centerAction}</div>
-          )}
         </div>
       </div>
     )

@@ -29,7 +29,7 @@ export function RankBadge({ index }) {
 export default function Leaderboard({ rows, highlightKidKey }) {
   return (
     <Card className="p-5 sm:p-6" topColor="var(--color-gold)">
-      <SectionHeader className="mb-1">Leaderboard</SectionHeader>
+      <SectionHeader className="mb-1">Chayol Leaderboard</SectionHeader>
       <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-navy/60">Most shakes in school</p>
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-navy/70">No soldiers ranked yet.</p>
@@ -38,7 +38,14 @@ export default function Leaderboard({ rows, highlightKidKey }) {
           {rows.map((r, i) => (
             <li key={r.kidKey}
               className={`flex items-center gap-3 rounded-2xl px-2 py-1.5 ${r.kidKey === highlightKidKey ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
-              <RankBadge index={i} />
+              {/* the child's army rank (falls back to the medal/number when absent) */}
+              {r.rank ? (
+                <span className="grid w-14 shrink-0 place-items-center" title={r.rank}>
+                  <span className="text-center font-cond text-[11px] font-semibold uppercase leading-[1.05] tracking-[0.01em] text-green">{r.rank}</span>
+                </span>
+              ) : (
+                <RankBadge index={i} />
+              )}
               <span className="flex-1 truncate text-[15px] font-semibold text-navy">{r.name}</span>
               <span className="font-display text-base font-bold tabular-nums text-green">{fmt(r.count)}</span>
             </li>
