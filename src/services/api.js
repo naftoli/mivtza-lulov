@@ -119,8 +119,8 @@ function loggedTotal(schoolId, shakes) {
     .reduce((sum, s) => sum + s.count, 0)
 }
 
-// Goals are AUTOMATIC (never picked): 3 shakes per soldier for the base goal,
-// and every bonus round adds 1 more shake per soldier.
+// Goals are automatic unless HQ overrides one school: 3 shakes per soldier by
+// default, followed by one bonus round worth 1 more shake per soldier.
 // The per-soldier default. HQ can change it (setPerKidGoal) and it drives every
 // automatic goal — school, class and nationwide. Schools never set goals.
 const DEFAULT_PER_KID = 3

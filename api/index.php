@@ -32,12 +32,17 @@ function lulavCampaignTaskMap(): array
 
 function lulavCampaignDays(): array
 {
-    $campaign = lulavCampaign();
-    $weekday = (int) gmdate('w', strtotime(lulavDateFromJd((int) $campaign['start']) . ' UTC'));
-    $shabbosDay = ((6 - $weekday + 7) % 7) + 1;
-    return array_values(array_filter(range(1, 7), static function (int $day) use ($shabbosDay): bool {
-        return $day !== $shabbosDay;
-    }));
+    $days = [];
+    foreach (lulavCampaignTaskMap() as $map) {
+        if ($map['field_name'] === 'day') {
+            $day = (int) $map['day_number'];
+            if ($day >= 1 && $day <= 7) {
+                $days[$day] = $day;
+            }
+        }
+    }
+    sort($days);
+    return array_values($days);
 }
 
 function lulavValidateTaskMap(array $mapping): void
@@ -57,7 +62,8 @@ function lulavValidateTaskMap(array $mapping): void
         sort($days);
     }
     unset($days);
-    if ($mappedDays['day'] !== $requiredDays
+    if (count($requiredDays) !== 6
+        || $mappedDays['day'] !== $requiredDays
         || $mappedDays['minutes'] !== $requiredDays
         || !in_array('peoplePersonal', $fields, true)) {
         lulavError(
