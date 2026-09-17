@@ -37,7 +37,8 @@ Computed from headcount: **base goal = children × per-child number** (default 3
 **Each bonus round = +1 shake per child**, auto-advancing as targets are hit.
 Applied per class, per school, and nationwide (sum of school base goals).
 Mashpia must supply accurate **class / school / national headcounts** and persist two HQ values:
-the **global per-child number** and any **per-school override**.
+the **global per-child number** and any **per-school override**, scoped to the
+current school year.
 
 ### D. End date
 Not stored, not editable. Derived in [`src/lib/succos.js`](../src/lib/succos.js) from
@@ -93,6 +94,7 @@ The Mashpia-side endpoints now live in [`../api`](../api/README.md) and are
 served from `/mivtzoim/lulav/api`. Their setup guide documents authentication,
 routes, photo limits, CORS, and the task map that connects each child's
 cumulative daily report to the same `date_tasks_marks` records used by the
-teacher checklist.
+teacher checklist. Supporting task mappings, settings, and photos are scoped
+by both the reusable `mivtzoim_id` and the current school year.
 
 The included `api/schema.sql` is intentionally not applied automatically.

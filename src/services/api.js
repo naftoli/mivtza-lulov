@@ -1,21 +1,15 @@
 // ---------------------------------------------------------------------------
 // API facade with a local demo implementation.
 //
-// Every function returns a Promise and reads/writes localStorage, so the app
-// behaves like it's talking to a real backend. When the Tzivos Hashem backend
-// + database are ready, replace the bodies of these functions with real fetch()
-// calls — the component code above them never has to change.
-//
-// Setting VITE_MASHPIA_API routes every exported operation through mashpia.js.
+// Demo localStorage is the default. Add ?real=1 to the URL to use Mashpia.
 // ---------------------------------------------------------------------------
 
 import { SEED } from '../data/seed.js'
 import { ISRU_CHAG, LULAV_DAYS } from '../lib/succos.js'
+import { IS_DEMO } from '../lib/liveMode.js'
 import * as mashpia from './mashpia.js'
 
-const MASHPIA_API = import.meta.env.VITE_MASHPIA_API
-  || (import.meta.env.PROD ? '/mivtzoim/lulav/api' : '')
-export const IS_DEMO = !MASHPIA_API
+export { IS_DEMO }
 
 // Exported so the session keys in AuthContext can be versioned with the data:
 // a session saved against an older seed must not log a ghost soldier in.

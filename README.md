@@ -16,7 +16,14 @@ npm run dev      # start the dev server
 npm run build    # production build
 ```
 
-Then open the local URL (default http://localhost:5173).
+Then open the local URL (default http://localhost:5173/mivtzoim/lulav/).
+The app **defaults to demo data**. Append `?real=1` to use the live Mashpia API:
+
+```text
+https://mashpia.com/mivtzoim/lulav/?real=1
+```
+
+`?real=0` returns to the demo. Live mode stays on for the rest of that tab.
 
 ### Demo logins
 - **Soldier:** serial `100000` · DOB `2015-01-01`
@@ -33,8 +40,9 @@ Then open the local URL (default http://localhost:5173).
 
 ## Data & the backend
 
-All screens read/write through a single module, [`src/services/api.js`](src/services/api.js),
-which is currently backed by the browser (localStorage) for a self-contained demo.
+All screens read/write through a single module, [`src/services/api.js`](src/services/api.js).
+The default is a localStorage demo. `?real=1` switches the same screens to
+[`src/services/mashpia.js`](src/services/mashpia.js) at `/mivtzoim/lulav/api`.
 
 The repo ships with **anonymized demo data** — [`src/data/roster.demo.js`](src/data/roster.demo.js)
 contains **fake** soldiers. **No real children's data is in this repository.**

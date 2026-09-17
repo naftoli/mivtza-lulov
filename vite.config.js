@@ -30,4 +30,12 @@ function rosterGuard() {
 export default defineConfig({
   base: '/mivtzoim/lulav/',
   plugins: [rosterGuard(), react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/mivtzoim/lulav/api': {
+        target: process.env.LULAV_API_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
 })

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+const LULAV_MIVTZOIM_ID = 10;
+
 define('LULAV_PUBLIC_ROOT', dirname(__DIR__, 3));
 define('LULAV_STORAGE_ROOT', dirname(LULAV_PUBLIC_ROOT) . '/storage/lulav');
 define('LULAV_PHOTO_ROOT', LULAV_STORAGE_ROOT . '/photos');
@@ -13,6 +15,15 @@ require_once dirname(__DIR__, 2) . '/classes/mivtzoim.php';
 
 $MASHPIA_DB->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+function lulavEnv(string $name, string $default = ''): string
+{
+    $value = getenv($name);
+    if ($value === false || $value === '') {
+        $value = $_SERVER[$name] ?? $_ENV[$name] ?? $default;
+    }
+    return (string) $value;
+}
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -20,7 +31,7 @@ header('Vary: Origin');
 
 $requestOrigin = isset($_SERVER['HTTP_ORIGIN']) ? (string) $_SERVER['HTTP_ORIGIN'] : '';
 $requestHost = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
-$allowedOrigins = array_filter(array_map('trim', explode(',', (string) getenv('LULAV_ALLOWED_ORIGINS'))));
+$allowedOrigins = array_filter(array_map('trim', explode(',', lulavEnv('LULAV_ALLOWED_ORIGINS'))));
 $originHost = $requestOrigin ? (string) parse_url($requestOrigin, PHP_URL_HOST) : '';
 if ($requestOrigin && ($originHost === $requestHost || in_array($requestOrigin, $allowedOrigins, true))) {
     header('Access-Control-Allow-Origin: ' . $requestOrigin);
@@ -34,7 +45,17 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
 function lulavJson($data, int $status = 200): void
 {
     http_response_code($status);
-    echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    $json = json_encode($data, $flags);
+    if ($json === false) {
+        http_response_code(500);
+        echo '{"error":"The request could not be completed."}';
+        exit;
+    }
+    echo $json;
     exit;
 }
 
@@ -92,7 +113,13 @@ function lulavBase64UrlDecode(string $value): string
 
 function lulavSigningSecret(): string
 {
-    $secret = (string) getenv('LULAV_TOKEN_SECRET');
+    $secret = '';
+    if (defined('LULAV_TOKEN_SECRET')) {
+        $secret = (string) LULAV_TOKEN_SECRET;
+    }
+    if (strlen($secret) < 32) {
+        $secret = lulavEnv('LULAV_TOKEN_SECRET');
+    }
     if (strlen($secret) < 32) {
         lulavError('LULAV_TOKEN_SECRET must be configured with at least 32 characters.', 503);
     }
@@ -101,7 +128,7 @@ function lulavSigningSecret(): string
 
 function lulavIssueToken(string $type, int $id, array $extra = []): string
 {
-    $ttl = (int) (getenv('LULAV_TOKEN_TTL') ?: 43200);
+    $ttl = (int) (lulavEnv('LULAV_TOKEN_TTL') ?: 43200);
     $payload = array_merge([
         'v' => 1,
         'type' => $type,
@@ -161,13 +188,13 @@ function lulavCampaign(): array
         return $campaign;
     }
 
-    $stmt = $MASHPIA_DB->query(
-        "SELECT mivtzoim_id, name, start, end
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT mivtzoim_id, name, start, end
          FROM mivtzoim
-         WHERE LOWER(name) LIKE '%lulav%'
-         ORDER BY start DESC, mivtzoim_id DESC
-         LIMIT 1"
+         WHERE mivtzoim_id = :id
+         LIMIT 1'
     );
+    $stmt->execute([':id' => LULAV_MIVTZOIM_ID]);
     $campaign = $stmt->fetch();
     if (!$campaign) {
         lulavError('No Mivtza Lulav campaign is configured.', 503);
@@ -424,10 +451,15 @@ function lulavUserIdFromMarkId(string $markId): ?int
 
 function lulavSchemaError(PDOException $error): void
 {
-    if ($error->getCode() === '42S02') {
-        lulavError('The Lulav API schema has not been installed. Apply api/schema.sql first.', 503);
+    $sqlState = (string) ($error->errorInfo[0] ?? $error->getCode());
+    if ($sqlState === '42S02' || $sqlState === '42S22') {
+        lulavError(
+            'The Lulav API schema is missing required tables or columns. Apply api/schema.sql, and api/schema.upgrade.sql if the tables already exist.',
+            503
+        );
     }
-    throw $error;
+    error_log('Lulav API SQL: ' . $error->getMessage());
+    lulavError('The request could not be completed.', 500);
 }
 
 function lulavRequireTables(array $tables): void

@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "php -S localhost:8080 -t ../../ api/dev-router.php",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:api": "php api/tests/run.php"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

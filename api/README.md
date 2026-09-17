@@ -2,28 +2,43 @@
 
 The API is served from `/mivtzoim/lulav/api`. It uses short-lived, signed bearer
 tokens and the existing Mashpia roster, admin accounts, Mivtzoim campaigns, and
-teacher-grid marks.
+teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
+(currently `10`). Change that constant when a new campaign row is used.
 
 ## Setup
 
 1. Review and apply `schema.sql` to `mashpiadb`. It creates only photo, goal,
    and task-map tables; the API never applies schema changes automatically.
+   If those tables already exist from an earlier draft, also apply
+   `schema.upgrade.sql` so `school_year` is present.
 2. Ensure `date_tasks_marks` has the `updated DATETIME` column recorded in
    `mashpia.com/sql/database.sql`.
-3. Add one `lulav_api_task_map` row for each field in the current campaign:
+3. Add one `lulav_api_task_map` row for each field in the current school year:
    - six quantity `day` rows, one for each non-Shabbos day;
    - six quantity `minutes` rows for the same days.
-4. Point the app at:
+   Set `school_year` to `GlobalSettings::getCurrentYear()`. Task mappings,
+   campaign goals, school overrides, and photos are all isolated by this value
+   because the same `mivtzoim_id` is reused in later years.
+4. The built app defaults to demo data. Open `?real=1` to use this API.
 
-   ```text
-   VITE_MASHPIA_API=/mivtzoim/lulav/api
+5. For local UI testing without a VM, start the PHP API and Vite together:
+
+   ```bash
+   npm run dev:api
+   npm run dev
    ```
 
-5. Set `LULAV_TOKEN_SECRET` to an application-specific random secret of at
-   least 32 characters. Do not reuse Mashpia's legacy mobile-token secret.
-6. If the app is hosted on another origin, set `LULAV_ALLOWED_ORIGINS` to a
+   Vite proxies `/mivtzoim/lulav/api` to `http://localhost:8080`. Open
+   `http://localhost:5173/mivtzoim/lulav/?real=1` and log in with a real serial
+   and DOB.
+
+6. Set `LULAV_TOKEN_SECRET` in `mashpia.com/includes/globals.php` (gitignored)
+   to a random secret of at least 32 characters. Do not reuse Mashpia's
+   legacy mobile-token secret. The local `dev:api` router supplies a
+   development-only fallback if that constant is missing.
+7. If the app is hosted on another origin, set `LULAV_ALLOWED_ORIGINS` to a
    comma-separated allowlist. Same-origin requests work without configuration.
-7. Optionally set `LULAV_TOKEN_TTL` in seconds. The default is 43,200 (12 hours).
+8. Optionally set `LULAV_TOKEN_TTL` in seconds. The default is 43,200 (12 hours).
 
 Runtime photos and login-rate-limit files are written to
 `mashpia.com/storage/lulav`, outside the public document root. The web-server
@@ -42,7 +57,7 @@ FROM mivtzoim m
 JOIN mivtzoim_tasks mt USING (mivtzoim_id)
 JOIN date_tasks dt ON dt.short_name = mt.short_name
 JOIN date_tasks_missions mission USING (date_tasks_mission_id)
-WHERE LOWER(m.name) LIKE '%lulav%'
+WHERE m.mivtzoim_id = 10
   AND mission.subject_id = 12
   AND mission.lang_id = 1
   AND mission.start_date >= m.start

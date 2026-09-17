@@ -1,7 +1,4 @@
-const BASE = (
-  import.meta.env.VITE_MASHPIA_API
-  || (import.meta.env.PROD ? '/mivtzoim/lulav/api' : '')
-).replace(/\/$/, '')
+const BASE = (import.meta.env.VITE_MASHPIA_API || '/mivtzoim/lulav/api').replace(/\/$/, '')
 const TOKEN_KEY = 'ml_mashpia_token'
 const listeners = new Set()
 let timer = null
