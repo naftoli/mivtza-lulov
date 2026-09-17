@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSchools, getGlobalStats, goalPercent } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
-import { fmt, daysLeft, shortSchoolName } from '../lib/format.js'
+import { fmt, shortSchoolName } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Spinner, Pill, SchoolLogo } from '../components/ui.jsx'
+import { Button, Card, Spinner, Pill, SchoolLogo, Input } from '../components/ui.jsx'
 import GoalBar from '../components/GoalBar.jsx'
 
 // Race bar fills — one per rank, cycling, each a light -> full gradient of the
@@ -45,7 +45,9 @@ function Stat({ value, label, icon }) {
 
 function SchoolsRace({ schools }) {
   const [sort, setSort] = useState('percent')
+  const [visible, setVisible] = useState(10)
   const ranked = [...schools].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.total - a.total))
+  const shown = ranked.slice(0, visible)
   // Toggle: green pill, the active segment darker (spec: #549182 vs #69c07c) — in the
   // comp it shades sky -> teal-green from left to right. Condensed caps, green-deep text.
   // From 2xl the toggle is the comp's 215x30 pill: 20px caps in 3px + 2px of padding.
@@ -71,7 +73,7 @@ function SchoolsRace({ schools }) {
           width) · percent 91, with 26px gaps; the row's own 12px side padding is pulled outside the
           card's inner edge so the medal sits flush with it while the hover wash keeps its inset. */}
       <div className="space-y-2 sm:space-y-3 2xl:space-y-[15px]">
-        {ranked.map((s, i) => (
+        {shown.map((s, i) => (
           <Link
             key={s.id}
             to={`/s/${s.id}`}
@@ -98,9 +100,11 @@ function SchoolsRace({ schools }) {
         ))}
       </div>
 
-      <p className="mt-5 font-display text-[13px] font-light italic text-navy sm:text-[14px] 2xl:ml-2.5 2xl:mt-2.5">
-        Ranked by {sort === 'percent' ? 'percent of each school’s own goal — so every school competes fairly' : 'total shakes logged'}.
-      </p>
+      {ranked.length > visible && (
+        <div className="mt-6 flex justify-center 2xl:mt-4">
+          <Button variant="outline" onClick={() => setVisible((v) => v + 10)}>View more</Button>
+        </div>
+      )}
     </Card>
   )
 }
@@ -128,7 +132,6 @@ function SchoolCard({ s }) {
           </div>
           <div className="mt-2 flex items-center justify-between text-[13px] font-semibold uppercase tracking-[0.04em]">
             <span className="text-green">{s.percent}% there</span>
-            <span className="text-muted">{daysLeft(s.endDate)} days left</span>
           </div>
         </div>
       </Card>
@@ -139,9 +142,15 @@ function SchoolCard({ s }) {
 export default function Home() {
   const { data: schools, loading } = useLiveData(() => getSchools(), [])
   const { data: stats } = useLiveData(() => getGlobalStats(), [])
+  const [query, setQuery] = useState('')
 
   const percent = stats ? goalPercent(stats.totalShakes, Math.max(1, stats.totalGoal)) : 0
   const goalReached = !!stats && stats.totalShakes >= stats.totalGoal
+
+  const q = query.trim().toLowerCase()
+  const filteredSchools = (schools || []).filter(
+    (s) => !q || s.name.toLowerCase().includes(q) || shortSchoolName(s).toLowerCase().includes(q),
+  )
 
   return (
     <div>
@@ -165,14 +174,14 @@ export default function Home() {
               29px pitch from y 500, pills at y 603-641, panel bottom at 666. */}
           <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[560px] lg:max-w-[520px] lg:p-10 xl:max-w-[640px] 2xl:max-w-[650px] 2xl:rounded-[40px] 2xl:px-10 2xl:pb-[25px] 2xl:pt-8">
             <p className="font-display text-[14px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[18px]">
-              Sukkos 5787 · Nationwide Mivtza
+              Sukkos 5787 · Worldwide Mivtza
             </p>
             <h1 className="mt-4 font-display text-[26px] font-black uppercase leading-[1.15] text-white sm:text-[34px] lg:text-[38px] 2xl:mt-[30px] 2xl:text-[36px] 2xl:leading-[1.2]">
-              Every soldier.<br />Every Lulav.<br /><span className="text-gold">One giant mission.</span>
+              Every soldier.<br />Every <span className="text-gold">Shake.</span>
             </h1>
             <p className="mt-5 font-display text-[17px] leading-[1.35] text-white sm:text-[20px] lg:text-[22px] 2xl:mt-7 2xl:text-[24px] 2xl:leading-[1.2]">
               Tzivos Hashem soldiers are hitting the streets to help every Yid shake the Lulav and Esrog.
-              Pick your school, watch the count climb, and join the mivtza!
+              Join the Mivtza today!
             </p>
             {/* two equal-width pills, as in the comp — 225x38 from 2xl (20px condensed caps is the
                 largest Bebas size whose longest label still fits that width with 16px sides) */}
@@ -218,7 +227,7 @@ export default function Home() {
           <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12 2xl:px-[63px] 2xl:pb-[53px] 2xl:pt-10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* lulav-icon.png is a mis-export (traffic light); the 12x45 small render is the correct subject and never upscaled here */}
-              <Eyebrow icon={asset('design/lulav-esrog-small.png')} iconClass="h-6 sm:h-7">One Giant Mission · Nationwide</Eyebrow>
+              <Eyebrow icon={asset('design/lulav-esrog-small.png')} iconClass="h-6 sm:h-7">Mivtza Lulov 5787</Eyebrow>
               {goalReached && <Pill className="!bg-green !text-white">🎉 Goal reached!</Pill>}
             </div>
 
@@ -254,7 +263,7 @@ export default function Home() {
             <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8 2xl:-ml-2.5 2xl:mt-[26px] 2xl:grid-cols-[repeat(3,320px)] 2xl:gap-0">
               <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.activeSoldiers)} label="Soldiers" />
               <Stat icon={asset('design/icon-school.png')} value={fmt(stats.totalSchools)} label="Schools" />
-              <Stat icon={asset('design/icon-camera.png')} value={fmt(stats.totalPhotos)} label="Field Photos" />
+              <Stat icon={asset('design/icon-camera.png')} value={fmt(stats.totalPhotos)} label="Photos" />
             </div>
           </Card>
         </section>
@@ -266,13 +275,27 @@ export default function Home() {
 
       <section id="schools" className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 sm:py-12 lg:px-10 2xl:max-w-[1512px] 2xl:pl-[88px] 2xl:pr-4">
         <div className="mb-6">
-          <Eyebrow>Join a Campaign</Eyebrow>
-          <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">School Campaigns</h2>
+          <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Bases In Action</h2>
         </div>
         {loading || !schools ? <Spinner /> : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {schools.map((s) => <SchoolCard key={s.id} s={s} />)}
-          </div>
+          <>
+            <div className="mb-6 max-w-md">
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search schools by name…"
+                aria-label="Search schools by name"
+              />
+            </div>
+            {filteredSchools.length > 0 ? (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredSchools.map((s) => <SchoolCard key={s.id} s={s} />)}
+              </div>
+            ) : (
+              <p className="font-display text-[16px] italic text-muted">No schools match “{query}”.</p>
+            )}
+          </>
         )}
       </section>
     </div>
