@@ -310,16 +310,20 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
 export async function getGlobalStats() {
   if (!IS_DEMO) return mashpia.getGlobalStats()
   await delay()
-  const shakes = read(KEYS.shakes, []).filter((s) => !s.hidden)
+  const all = read(KEYS.shakes, [])
+  const shakes = all.filter((s) => !s.hidden)
   const schools = read(KEYS.schools, [])
-  const kids = new Set(shakes.map((s) => s.kidId))
   const baseline = schools.reduce((sum, s) => sum + (s.baseline || 0), 0)
+  // Same meanings as the live /stats (api/index.php): soldiers = registered
+  // headcount, photos = approved photos (each one, hidden entries included).
   return {
     totalShakes: baseline + shakes.reduce((sum, s) => sum + s.count, 0),
     totalGoal: schools.reduce((sum, s) => sum + baseGoalOf(s), 0), // nationwide = sum of every school's base goal
     totalSchools: schools.length,
-    activeSoldiers: kids.size,
-    totalPhotos: shakes.filter((s) => s.photo).length,
+    activeSoldiers: schools.reduce((sum, s) => sum + kidCountOf(s), 0),
+    totalPhotos: all
+      .filter((s) => s.photoApproved)
+      .reduce((n, s) => n + (s.photos?.length || (s.photo ? 1 : 0)), 0),
   }
 }
 
