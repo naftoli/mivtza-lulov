@@ -1201,7 +1201,7 @@ function lulavClassLeaderboard(int $schoolId): array
         // empty class shows 0 of 0 rather than a phantom target of 1.
         $goal = $kidCount * $perKidGoal;
         $total = (int) $row['total'];
-        $grade = $row['class_grade'] . ($row['class_sub'] ? '-' . $row['class_sub'] : '');
+        $grade = lulavGradeLabel($row);
         $rows[] = [
             'classId' => (string) $row['class_id'],
             'grade' => $grade,
@@ -1438,7 +1438,7 @@ try {
         $stmt->execute([':school' => $schoolId]);
         $classes = [];
         foreach ($stmt->fetchAll() as $row) {
-            $name = $row['class_grade'] . ($row['class_sub'] ? '-' . $row['class_sub'] : '');
+            $name = lulavGradeLabel($row);
             $classes[] = [
                 'id' => (string) $row['class_id'],
                 'name' => $name,

@@ -497,12 +497,20 @@ function lulavPhotoUrl(array $user): string
     return '/mobile/reg/images/profile-photo-default.jpg';
 }
 
-function lulavSerializeKid(array $row): array
+// The platoon label ("5-Boys") for a row carrying class_grade / class_sub. The
+// soldier record, the class leaderboard and the classes list all go through
+// here, because the page highlights a soldier's own platoon by comparing these
+// strings: a stray space in one copy and not the other broke that match.
+function lulavGradeLabel(array $row): string
 {
     $grade = trim((string) ($row['class_grade'] ?? ''));
-    if (!empty($row['class_sub'])) {
-        $grade .= '-' . $row['class_sub'];
-    }
+    $sub = trim((string) ($row['class_sub'] ?? ''));
+    return empty($sub) ? $grade : $grade . '-' . $sub;
+}
+
+function lulavSerializeKid(array $row): array
+{
+    $grade = lulavGradeLabel($row);
     return [
         'id' => (string) $row['user_serial'],
         'serial' => (string) $row['user_serial'],
