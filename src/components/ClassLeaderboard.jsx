@@ -14,7 +14,8 @@ const RACE_FILLS = [
   'linear-gradient(90deg, #6fd0c3 0%, var(--color-race-teal) 55%, #0b8a7e 100%)',
 ]
 
-// Class/platoon standings — each class races toward its own goal (kids × 5).
+// Class/platoon standings — each class races toward its own goal (kids × the
+// per-soldier goal: 3 by default, set by HQ).
 // `color` still drives the percent figure (defaults to green-deep).
 export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--color-green)' }) {
   const [sort, setSort] = useState('percent')

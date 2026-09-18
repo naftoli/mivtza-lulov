@@ -157,8 +157,10 @@ export async function setSchoolGoal(schoolId, goalOverride) {
   return updateSchool(schoolId, { goalOverride: v })
 }
 
-// Percent of a goal, floored and clamped to 0-100. It is 100 ONLY once the
-// total actually reaches the goal — 4,922 of 4,930 is "99%", never "100%".
+// Percent of a goal, floored and never negative. It is 100 ONLY once the total
+// actually reaches the goal — 4,922 of 4,930 is "99%", never "100%" — and keeps
+// climbing past 100 through the bonus rounds (bars cap their width; labels don't).
+// Must match lulavPercent() in api/index.php.
 export function goalPercent(total, goal) {
   return Math.max(0, Math.floor((Number(total) / Math.max(1, Number(goal))) * 100))
 }
