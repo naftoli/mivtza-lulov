@@ -31,7 +31,8 @@ const MEDALS = ['medal-gold.png', 'medal-silver.png', 'medal-bronze.png']
 function Section({ title, children, right }) {
   return (
     <Card className="p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      {/* wraps so a long hint drops under the title instead of squeezing it */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <SectionHeader>{title}</SectionHeader>
         {right}
       </div>
@@ -42,7 +43,7 @@ function Section({ title, children, right }) {
 
 export default function AdminDashboard() {
   const { admin, logoutAdmin } = useAuth()
-  const { data: schools } = useLiveData(() => getSchools(), [])
+  const { data: schools, error: schoolsError, reload: reloadSchools } = useLiveData(() => getSchools(), [])
   const [selectedId, setSelectedId] = useState(null)
   const selectedSchool = schools?.find((s) => s.id === selectedId)
 
@@ -68,25 +69,31 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {admin.role === 'hq' && !schools && (
+        <div className="mt-6">
+          {schoolsError ? <ErrorNote error={schoolsError} onRetry={reloadSchools} what="the schools" /> : <Spinner />}
+        </div>
+      )}
+
       {admin.role === 'hq' && schools && (
         <div className="mt-6">
           <Section title="All Schools — the Race">
             <div className="space-y-2">
               {[...schools].sort((a, b) => b.percent - a.percent).map((s, i) => (
                 <button key={s.id} onClick={() => setSelectedId(s.id)}
-                  className={`flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition hover:bg-white/45 sm:gap-3 ${selectedId === s.id ? 'bg-white/55 ring-1 ring-green-mid/50' : ''}`}>
+                  className={`grid w-full grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 rounded-2xl px-2 py-2 text-left transition hover:bg-white/45 sm:flex sm:gap-3 ${selectedId === s.id ? 'bg-white/55 ring-1 ring-green-mid/50' : ''}`}>
                   <span className="grid w-5 flex-none place-items-center sm:w-8">
                     {MEDALS[i] && s.total > 0
                       ? <img src={asset(`design/${MEDALS[i]}`)} alt={`Rank ${i + 1}`} className="h-5 w-5 object-contain sm:h-8 sm:w-8" />
                       : <span className="font-display text-base font-bold italic text-blue-accent sm:text-lg">{i + 1}</span>}
                   </span>
                   <SchoolLogo school={s} size={32} />
-                  <span className="w-24 flex-none truncate font-semibold text-navy sm:w-36">{s.name}</span>
-                  <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-track">
+                  <span className="min-w-0 truncate font-semibold text-navy sm:w-36 sm:flex-none">{s.name}</span>
+                  <span className="relative order-last col-span-4 h-3 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:flex-1">
                     <span className="absolute inset-y-0 left-0 rounded-full"
                       style={{ width: `${Math.min(100, Math.max(s.percent, 3))}%`, background: `linear-gradient(90deg, rgba(255,255,255,.22), rgba(0,28,76,.16)), ${RACE[i % RACE.length]}` }} />
                   </span>
-                  <span className="w-20 flex-none text-right text-[12px] font-bold tabular-nums text-green sm:w-28 sm:text-[13px]">{fmt(s.total)} · {s.percent}%</span>
+                  <span className="flex-none text-right text-[12px] font-bold tabular-nums text-green sm:w-28 sm:text-[13px]">{fmt(s.total)} · {s.percent}%</span>
                 </button>
               ))}
             </div>
