@@ -1,14 +1,19 @@
 RewriteEngine On
+Options -MultiViews
 
-# Let the PHP API's own rewrite rules handle API requests.
-RewriteRule ^api(?:/|$) - [L]
+# Send every API URL to PHP. A no-op pass-through plus the SPA catch-all
+# below lets Apache/LiteSpeed still rewrite /api/* to dist/index.html.
+RewriteRule ^api/index\.php$ - [L]
+RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
 
 # Serve Vite's generated files from dist while keeping the public URL at
 # /mivtzoim/lulav/.
-RewriteRule ^dist(?:/|$) - [L]
+RewriteRule ^dist(/.*)?$ - [L]
 RewriteCond %{DOCUMENT_ROOT}/mivtzoim/lulav/dist/$1 -f
 RewriteRule ^(.+)$ dist/$1 [L]
 
 # React Router handles application routes such as /admin and /s/example.
+RewriteCond %{REQUEST_URI} !/api(/|$)
 RewriteRule ^$ dist/index.html [L]
+RewriteCond %{REQUEST_URI} !/api(/|$)
 RewriteRule . dist/index.html [L]
