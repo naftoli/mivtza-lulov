@@ -161,13 +161,14 @@ export async function setSchoolGoal(schoolId, goalOverride) {
 // actually reaches the goal — 4,922 of 4,930 is "99%", never "100%" — and keeps
 // climbing past 100 through the bonus rounds (bars cap their width; labels don't).
 // Must match lulavPercent() in api/index.php.
-// Rounded UP (as lulavPercent() in the API) so any shakes show at least 1%,
-// held at 99 until the goal is met so 100% always means reached. Multiplying
-// before dividing keeps 7 of 100 at exactly 7 — (7 / 100) * 100 is
-// 7.000000000000001, which Math.ceil would make 8.
+// Rounded to the nearest whole number, .5 up (as lulavPercent() in the API),
+// held at 99 until the goal is met so 99.5% does not read as 100% early.
+// floor((200 * total + goal) / (2 * goal)) is floor(x + 0.5) without the
+// floating-point error of (total / goal) * 100.
 export function goalPercent(total, goal) {
   const t = Math.max(0, Number(total) || 0)
-  const percent = Math.ceil((t * 100) / Math.max(1, Number(goal)))
+  const divisor = Math.max(1, Number(goal))
+  const percent = Math.floor((t * 200 + divisor) / (2 * divisor))
   return t < Number(goal) ? Math.min(99, percent) : percent
 }
 
