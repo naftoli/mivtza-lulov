@@ -33,10 +33,8 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
   )
 }
 
-// School badge: an initials monogram in the school's colour.
-// There is no uploaded-logo path — neither the API nor the demo seed carries a
-// `logo` field, so the branch that used to render one was unreachable. To add
-// real logos, return one from lulavSchoolRows() and branch on it here again.
+// School badge: the school's own logo when it has one, else an initials monogram
+// in the school's colour (see the guard below).
 export function SchoolLogo({ school, size = 56, className = '' }) {
   const initials = school.name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   // Show the school's own logo when we have one — the demo roster carries them,

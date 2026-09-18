@@ -159,8 +159,12 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
         </div>
         {/* sm and up: the overlay composition (client-tuned — keep as is) */}
         <div className="pointer-events-none absolute inset-0 hidden sm:block">
-          {/* count — top left */}
-          <div className="absolute -left-8 -top-2 text-left">{count}</div>
+          {/* count — top left. The left offset is capped so the big number never spills
+              past the card's overflow-hidden edge: -left-8 clipped it wherever the meter
+              is flush inside the card (the ~1024px two-column band and the ~640px single
+              column). The comp's fuller corner bleed is restored from 2xl, where the card
+              has slack to its left. */}
+          <div className="absolute -left-3 -top-2 text-left 2xl:-left-8">{count}</div>
           {/* goal — standing panel overlaying the arrow */}
           <div className="pointer-events-none absolute bottom-[5%] -right-6 rounded-2xl bg-sky/95 px-3 py-9 text-center shadow-md ring-1 ring-navy/10 backdrop-blur-sm">{panel}</div>
         </div>
