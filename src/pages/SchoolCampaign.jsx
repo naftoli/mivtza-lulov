@@ -72,30 +72,38 @@ export default function SchoolCampaign() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[1.6fr_1fr] lg:gap-8 lg:py-10">
-        {/* Left column */}
-        <div className="space-y-6">
-          <Card className="p-6">
-            <GoalMeter school={school} variant="wide" />
-          </Card>
-
-          {school.bonusActive ? (
-            <Card className="!bg-green p-5 text-white sm:p-6">
-              <p className="sh !text-gold">⭐ Bonus Round {school.bonusLevel} is ON</p>
-              <p className="mt-1 text-sm text-white/90">
-                {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward the
-                round {school.bonusLevel} target of <strong className="text-gold">{fmt(school.bonusGoal)}</strong> — reach
-                it and the next round starts. Keep going, soldiers!
-              </p>
+      <div className="mx-auto max-w-6xl px-4 py-8 lg:py-10">
+        {/* Goal meter + photo wall on the left; Recent Shakes fills the right so
+            its feed ends level with the bottom of the photos (items-stretch, and
+            the feed spreads down its cell). The leaderboards then run the full
+            width beneath — keeping them stacked in this column would leave a big
+            empty band under the shorter left side. Phones stack in source order. */}
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-stretch lg:gap-8">
+          {/* Left column */}
+          <div className="space-y-6">
+            <Card className="p-6">
+              <GoalMeter school={school} variant="wide" />
             </Card>
-          ) : null}
 
-          <PhotoWall shakes={shakes || []} />
+            {school.bonusActive ? (
+              <Card className="!bg-green p-5 text-white sm:p-6">
+                <p className="sh !text-gold">⭐ Bonus Round {school.bonusLevel} is ON</p>
+                <p className="mt-1 text-sm text-white/90">
+                  {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward the
+                  round {school.bonusLevel} target of <strong className="text-gold">{fmt(school.bonusGoal)}</strong> — reach
+                  it and the next round starts. Keep going, soldiers!
+                </p>
+              </Card>
+            ) : null}
+
+            <PhotoWall shakes={shakes || []} />
+          </div>
+
+          {/* Right column: the feed, stretched to end with the photos */}
+          <RecentShakes shakes={(shakes || []).slice(0, 8)} fill />
         </div>
 
-        {/* Right column */}
-        <div className="space-y-6">
-          <RecentShakes shakes={(shakes || []).slice(0, 8)} />
+        <div className="mt-6 grid gap-6 lg:mt-8 lg:grid-cols-2 lg:items-start lg:gap-8">
           <Leaderboard rows={board || []} highlightKidKey={kid?.kidKey} />
           <ClassLeaderboard rows={classBoard || []} highlightGrade={isMySchool ? kid?.grade : undefined} highlightClassId={isMySchool ? kid?.classId : undefined} />
         </div>

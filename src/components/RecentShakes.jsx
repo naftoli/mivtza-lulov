@@ -3,9 +3,12 @@ import { Card, SectionHeader, Avatar } from './ui.jsx'
 
 // The "recent donors" equivalent — a live feed of the latest shakes.
 // Sky card: names navy, counts green-deep, small labels Exo semibold caps.
-export default function RecentShakes({ shakes }) {
+// `fill`: stretch to the cell's height (h-full) and spread the entries down it,
+// so beside the photo wall the feed ends level with the photos instead of
+// stopping short.
+export default function RecentShakes({ shakes, fill = false }) {
   return (
-    <Card className="p-5 sm:p-6">
+    <Card className={`p-5 sm:p-6 ${fill ? 'flex h-full flex-col' : ''}`}>
       <div className="mb-4 flex items-center justify-between">
         <SectionHeader>Recent Shakes</SectionHeader>
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-green">
@@ -16,7 +19,7 @@ export default function RecentShakes({ shakes }) {
       {shakes.length === 0 ? (
         <p className="py-8 text-center text-sm text-navy/70">No shakes yet — be the first soldier on the board!</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className={fill ? 'flex flex-1 flex-col justify-between gap-3' : 'space-y-3'}>
           {shakes.map((s) => (
             <li key={s.id} className="flex animate-rise items-center gap-3">
               {s.rankImageUrl ? (
