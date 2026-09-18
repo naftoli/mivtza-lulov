@@ -1,5 +1,14 @@
 RewriteEngine On
 
+# See ../.htaccess: Apache running PHP as FastCGI drops the Authorization header, so every
+# signed-in call arrived without its Bearer token, got a 401, and logged the
+# soldier or admin straight back out. Copy it into the environment, where
+# lulavBearerToken() reads it (HTTP_ or REDIRECT_HTTP_AUTHORIZATION). Same fix
+# as Mashpia's /api/.htaccess.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [L,QSA]
