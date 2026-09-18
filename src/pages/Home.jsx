@@ -161,49 +161,49 @@ export default function Home() {
       {/* 2xl (>= 1536px) is the comp's geometry on a 1920 canvas: hero 636 tall; the 1552px container
           with a 16px gutter puts the glass panel's left edge at x=200; the panel (650 wide, ~410 tall)
           sits on the hero's bottom edge with a 70px gap, so its top lands at y~255 under the 100px header. */}
-      <section className="relative isolate flex min-h-[520px] md:min-h-[600px] 2xl:min-h-[636px]">
+      <section className="relative isolate flex min-h-[430px] sm:min-h-[520px] md:min-h-[600px] 2xl:min-h-[636px]">
         <img
           src={asset('design/hero-city.jpg')}
           alt=""
           draggable="false"
           className="absolute inset-0 h-full w-full select-none object-cover object-[62%_center]"
         />
-        <div className="relative mx-auto flex w-full max-w-[1400px] flex-col items-center gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:flex-row lg:items-center lg:gap-0 lg:px-10 2xl:max-w-[1552px] 2xl:items-end 2xl:px-4 2xl:pb-[70px]">
+        <div className="relative mx-auto flex w-full max-w-[1400px] flex-row items-center gap-2 px-4 py-8 sm:gap-4 sm:px-6 sm:py-10 lg:gap-0 lg:px-10 2xl:max-w-[1552px] 2xl:items-end 2xl:px-4 2xl:pb-[70px]">
           {/* 2xl rhythm is the comp's, measured on its canvas: eyebrow caps at y 287-301, the H1's three
               cap rows at 347 / 392 / 434 (Exo Black 36px — "ONE GIANT MISSION." is 353px wide in the
               comp, which 36px reproduces and 42px overshoots by 60px — on a 1.2 pitch), body lines on a
               29px pitch from y 500, pills at y 603-641, panel bottom at 666. */}
-          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[560px] lg:max-w-[520px] lg:p-10 xl:max-w-[640px] 2xl:max-w-[650px] 2xl:rounded-[40px] 2xl:px-10 2xl:pb-[25px] 2xl:pt-8">
-            <p className="font-display text-[14px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[18px]">
+          <div className="hero-glass relative z-30 min-w-0 max-w-[68%] flex-1 rounded-[22px] p-4 sm:max-w-[66%] sm:rounded-[36px] sm:p-7 md:max-w-[60%] lg:w-full lg:max-w-[520px] lg:flex-none lg:p-10 xl:max-w-[640px] 2xl:max-w-[650px] 2xl:rounded-[40px] 2xl:px-10 2xl:pb-[25px] 2xl:pt-8">
+            <p className="font-display text-[10px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px] lg:text-[18px]">
               Sukkos {CAMPAIGN_YEAR} · Worldwide Mivtza
             </p>
-            <h1 className="mt-4 font-display text-[26px] font-black uppercase leading-[1.15] text-white sm:text-[34px] lg:text-[38px] 2xl:mt-[30px] 2xl:text-[36px] 2xl:leading-[1.2]">
+            <h1 className="mt-2 font-display text-[19px] font-black uppercase leading-[1.15] text-white sm:mt-4 sm:text-[30px] lg:text-[38px] 2xl:mt-[30px] 2xl:text-[36px] 2xl:leading-[1.2]">
               Every soldier.<br />Every <span className="text-gold">Shake.</span>
             </h1>
-            <p className="mt-5 font-display text-[17px] leading-[1.35] text-white sm:text-[20px] lg:text-[22px] 2xl:mt-7 2xl:text-[24px] 2xl:leading-[1.2]">
+            <p className="mt-2.5 font-display text-[12px] leading-[1.35] text-white sm:mt-5 sm:text-[18px] lg:text-[22px] 2xl:mt-7 2xl:text-[24px] 2xl:leading-[1.2]">
               Tzivos Hashem soldiers are hitting the streets to help every Yid shake the Lulav and Esrog.
               Join the Mivtza today!
             </p>
             {/* two equal-width pills, as in the comp — 225x38 from 2xl (20px condensed caps is the
                 largest Bebas size whose longest label still fits that width with 16px sides) */}
-            <div className="mt-6 flex flex-wrap gap-3 sm:mt-7 sm:gap-4 2xl:mt-5 2xl:gap-5">
-              <Button to="/login" variant="navy" className="sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-2 2xl:text-[22px] 2xl:tracking-normal">I'm a Soldier — Log Shakes</Button>
+            <div className="mt-4 flex flex-col gap-2 sm:mt-7 sm:flex-row sm:flex-wrap sm:gap-4 2xl:mt-5 2xl:gap-5">
+              <Button to="/login" variant="navy" className="w-full px-3 py-2 text-[12px] sm:w-auto sm:px-6 sm:py-3 sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-2 2xl:text-[22px] 2xl:tracking-normal">I'm a Soldier — Log Shakes</Button>
               <button
                 type="button"
                 onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })}
-                className="btn btn-gold sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-2 2xl:text-[22px] 2xl:tracking-normal"
+                className="btn btn-gold w-full px-3 py-2 text-[12px] sm:w-auto sm:px-6 sm:py-3 sm:min-w-[250px] sm:text-[21px] 2xl:min-w-[225px] 2xl:px-4 2xl:py-2 2xl:text-[22px] 2xl:tracking-normal"
               >
                 See the Campaigns
               </button>
             </div>
           </div>
-          {/* Phones/tablets: the full-height cutout can't sit beside a narrow panel, so the boy stands
-              below it (right-aligned); the nationwide card below still overlaps his feet. */}
+          {/* Phones/tablets: same side-by-side arrangement as the desktop comp — panel left, cutout
+              right — at a reduced height, with the nationwide card below still overlapping his feet. */}
           <img
             src={asset('design/hero-boy.png')}
             alt=""
             draggable="false"
-            className="pointer-events-none -mb-12 h-[240px] w-auto max-w-none select-none self-end sm:h-[320px] lg:hidden"
+            className="pointer-events-none absolute bottom-0 right-0 z-20 h-[290px] w-auto max-w-none select-none sm:right-2 sm:h-[400px] lg:hidden"
           />
           {/* Top-anchored with its height tied to the hero so the PNG's flat top crop stays under the
               header. From 2xl the comp places the cutout at exactly the hero's height (470x636, x 1170-1640
