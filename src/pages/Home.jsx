@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getSchools, getGlobalStats, goalPercent } from '../services/api.js'
+import { getSchools, getGlobalStats, goalPercent, byGoalProgress } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, shortSchoolName } from '../lib/format.js'
 import { CAMPAIGN_YEAR } from '../lib/succos.js'
@@ -47,7 +47,7 @@ function Stat({ value, label, icon }) {
 function SchoolsRace({ schools }) {
   const [sort, setSort] = useState('percent')
   const [visible, setVisible] = useState(10)
-  const ranked = [...schools].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.total - a.total))
+  const ranked = [...schools].sort((a, b) => (sort === 'percent' ? byGoalProgress(a, b) : b.total - a.total))
   const shown = ranked.slice(0, visible)
   // Toggle: green pill, the active segment darker (spec: #549182 vs #69c07c) — in the
   // comp it shades sky -> teal-green from left to right. Condensed caps, green-deep text.

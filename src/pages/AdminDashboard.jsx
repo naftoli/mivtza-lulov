@@ -5,7 +5,7 @@ import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   setShakeHidden, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos,
-  getSettings, setPerKidGoal, setSchoolGoal, IS_DEMO,
+  getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
 // Fixed campaign end (Isru Chag), shown read-only — e.g. "Mon, Oct 5".
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
         <div className="mt-6">
           <Section title="All Schools — the Race">
             <div className="space-y-2">
-              {[...schools].sort((a, b) => b.percent - a.percent).map((s, i) => (
+              {[...schools].sort(byGoalProgress).map((s, i) => (
                 <button key={s.id} onClick={() => setSelectedId(s.id)}
                   className={`grid w-full grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 rounded-2xl px-2 py-2 text-left transition hover:bg-white/45 sm:flex sm:gap-3 ${selectedId === s.id ? 'bg-white/55 ring-1 ring-green-mid/50' : ''}`}>
                   <span className="grid w-5 flex-none place-items-center sm:w-8">

@@ -165,6 +165,15 @@ export function goalPercent(total, goal) {
   return Math.max(0, Math.floor((Number(total) / Math.max(1, Number(goal))) * 100))
 }
 
+// Ranks schools by % of goal on the exact ratio, not the floored `percent`
+// shown beside them: that tied a school at 0.0009% with one still at 0 (and
+// 12.9% with 12.1%), so a school with shakes could sit below one with none.
+// Equal progress falls back to the bigger total.
+export function byGoalProgress(a, b) {
+  const progress = (s) => Number(s.total) / Math.max(1, Number(s.goal))
+  return progress(b) - progress(a) || b.total - a.total
+}
+
 function decorateSchool(school, shakes) {
   const kids = kidCountOf(school)
   const pk = perKid()
