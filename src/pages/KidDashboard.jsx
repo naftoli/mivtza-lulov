@@ -134,8 +134,10 @@ export default function KidDashboard() {
               {kid.grade && <span><span className={LABEL}>Platoon</span> <strong className="font-bold text-navy">{kid.grade}</strong></span>}
               {school && <Link to={`/s/${school.id}`} className="font-semibold text-green hover:underline">{school.name} · view campaign →</Link>}
             </div>
+            {/* phones: Log out sits under the details instead of squeezing the name */}
+            <Button variant="ghost" onClick={logoutKid} className="-ml-3 mt-2 px-3 py-1.5 sm:hidden">Log out</Button>
           </div>
-          <Button variant="ghost" onClick={logoutKid}>Log out</Button>
+          <Button variant="ghost" onClick={logoutKid} className="hidden sm:inline-flex">Log out</Button>
         </div>
       </Card>
 
@@ -161,7 +163,7 @@ export default function KidDashboard() {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <SectionHeader>Log your shakes</SectionHeader>
-            <button type="button" title={muted ? 'Sound off' : 'Sound on'}
+            <button type="button" title={muted ? 'Sound off' : 'Sound on'} aria-label="Sound effects" aria-pressed={!muted}
               onClick={() => { const v = !muted; setMuted(v); setMutedState(v); if (!v) playShake() }}
               className="grid h-9 w-9 place-items-center rounded-full bg-white/70 text-navy transition hover:bg-white">
               {muted ? '🔇' : '🔊'}
@@ -213,7 +215,7 @@ export default function KidDashboard() {
                       {photos.map((p, i) => (
                         <div key={i} className="relative aspect-square">
                           <img src={p} alt="" className="h-full w-full rounded-xl object-cover ring-2 ring-white" />
-                          <button type="button" onClick={() => setPhotos((arr) => arr.filter((_, j) => j !== i))}
+                          <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => setPhotos((arr) => arr.filter((_, j) => j !== i))}
                             className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red text-[11px] font-bold text-white shadow">×</button>
                         </div>
                       ))}
@@ -253,6 +255,9 @@ export default function KidDashboard() {
                       ? <img src={imgs[0]} alt="" className="h-12 w-12 flex-none rounded-xl object-cover ring-2 ring-white" />
                       : <span className="grid h-12 w-12 flex-none place-items-center rounded-xl bg-white/70"><LulavIcon className="h-9" /></span>}
                     <div className="min-w-0 flex-1">
+                      {s.day > 0 && (
+                        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-green">{ordinal(s.day)} day of Sukkos</p>
+                      )}
                       <p className="text-[15px] font-bold text-navy">
                         {fmt(s.count)} Shakes <span className="text-navy/40">|</span> {fmt(s.minutes || 0)} Minutes on Mivtzoim
                       </p>
