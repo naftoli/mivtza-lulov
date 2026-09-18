@@ -206,8 +206,8 @@ export async function getSchool(id) {
   return school ? decorateSchool(school, shakes) : null
 }
 
-export async function getShakes(schoolId, { includeHidden = false } = {}) {
-  if (!IS_DEMO) return mashpia.getShakes(schoolId, { includeHidden })
+export async function getShakes(schoolId, { includeHidden = false, limit } = {}) {
+  if (!IS_DEMO) return mashpia.getShakes(schoolId, { includeHidden, limit })
   await delay()
   // Public rows carry the child's rank (never the serial). New entries store it,
   // but backfill from the roster so seeded/older entries expose it too.
@@ -215,7 +215,7 @@ export async function getShakes(schoolId, { includeHidden = false } = {}) {
   for (const k of read(KEYS.kids, [])) {
     if (k.schoolId === schoolId) rankOf[k.id] = { name: k.rank || '', image: k.rankImageUrl || null }
   }
-  return read(KEYS.shakes, [])
+  const rows = read(KEYS.shakes, [])
     .filter((s) => s.schoolId === schoolId && (includeHidden || !s.hidden))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((s) => publicShake({
@@ -223,6 +223,8 @@ export async function getShakes(schoolId, { includeHidden = false } = {}) {
       rank: s.rank || rankOf[s.kidId]?.name || '',
       rankImageUrl: s.rankImageUrl || rankOf[s.kidId]?.image || null,
     }))
+  // Match the live API, which caps the public feed server-side.
+  return limit ? rows.slice(0, limit) : rows
 }
 
 export async function getRecentShakes(schoolId, limit = 8) {

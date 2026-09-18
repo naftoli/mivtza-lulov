@@ -18,6 +18,10 @@ function lulavRoutePath(): string
 function lulavCampaignTaskMap(): array
 {
     global $MASHPIA_DB;
+    static $map;
+    if ($map !== null) {
+        return $map;
+    }
     lulavRequireTables(['lulav_api_task_map']);
     $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
@@ -30,11 +34,101 @@ function lulavCampaignTaskMap(): array
         ':campaign' => $campaign['mivtzoim_id'],
         ':school_year' => lulavCurrentSchoolYear(),
     ]);
-    return $stmt->fetchAll();
+    return $map = $stmt->fetchAll();
+}
+
+/**
+ * Resolves the campaign's teacher-grid cells to concrete date_task_id sets, ONCE
+ * per request.
+ *
+ * Every aggregate used to re-derive this inside its own hot query:
+ *
+ *   lulav_api_task_map -> date_tasks ON grid_id -> date_tasks_missions -> marks
+ *
+ * date_tasks is MyISAM and is not indexed on grid_id, so each of the ~12 map rows
+ * could drive a table scan — a leaderboard returning zero rows measured 3.3 s on
+ * production, and the unfiltered nationwide variant in lulavSchoolTotals() never
+ * finished at all (Cloudflare 524 after 125 s).
+ *
+ * Resolving the ids up front lets every caller filter on
+ * `date_tasks_marks.date_task_id IN (...)`, which is covered by that table's
+ * PRIMARY KEY (user_id, date_task_id) and UNIQUE KEY (date_task_id, user_id).
+ *
+ * A grid cell legitimately maps to many date_tasks (one per level / lang_id /
+ * school_type_id), so each field+day owns a LIST of ids.
+ *
+ * @return array{byField: array<string, array<int, int[]>>, day: int[], minutes: int[], all: int[]}
+ */
+function lulavCampaignTaskIds(): array
+{
+    global $MASHPIA_DB;
+    static $resolved;
+    if ($resolved !== null) {
+        return $resolved;
+    }
+    lulavRequireTables(['lulav_api_task_map']);
+    $campaign = lulavCampaign();
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT map.field_name, map.day_number, task.date_task_id
+         FROM lulav_api_task_map map
+         JOIN date_tasks task ON task.grid_id = map.grid_id
+         JOIN date_tasks_missions mission
+           ON mission.date_tasks_mission_id = task.date_tasks_mission_id
+          AND mission.start_date >= map.start_date
+          AND mission.end_date <= map.end_date
+         WHERE map.mivtzoim_id = :campaign
+           AND map.school_year = :school_year'
+    );
+    $stmt->execute([
+        ':campaign' => $campaign['mivtzoim_id'],
+        ':school_year' => lulavCurrentSchoolYear(),
+    ]);
+
+    $byField = [];
+    $flat = ['day' => [], 'minutes' => [], 'all' => []];
+    foreach ($stmt->fetchAll() as $row) {
+        $field = (string) $row['field_name'];
+        $day = (int) $row['day_number'];
+        $taskId = (int) $row['date_task_id'];
+        $byField[$field][$day][] = $taskId;
+        if (isset($flat[$field])) {
+            $flat[$field][$taskId] = $taskId;
+        }
+        $flat['all'][$taskId] = $taskId;
+    }
+
+    return $resolved = [
+        'byField' => $byField,
+        'day' => array_values($flat['day']),
+        'minutes' => array_values($flat['minutes']),
+        'all' => array_values($flat['all']),
+    ];
+}
+
+/** date_task_id list backing one field+day, or [] when the mapping is incomplete. */
+function lulavTaskIdsFor(string $field, int $day): array
+{
+    return lulavCampaignTaskIds()['byField'][$field][$day] ?? [];
+}
+
+/** date_task_id => Sukkos day, for the given field. */
+function lulavDayByTaskId(string $field): array
+{
+    $days = [];
+    foreach (lulavCampaignTaskIds()['byField'][$field] ?? [] as $day => $taskIds) {
+        foreach ($taskIds as $taskId) {
+            $days[$taskId] = (int) $day;
+        }
+    }
+    return $days;
 }
 
 function lulavCampaignDays(): array
 {
+    static $days;
+    if ($days !== null) {
+        return $days;
+    }
     $days = [];
     foreach (lulavCampaignTaskMap() as $map) {
         if ($map['field_name'] === 'day') {
@@ -45,7 +139,7 @@ function lulavCampaignDays(): array
         }
     }
     sort($days);
-    return array_values($days);
+    return $days = array_values($days);
 }
 
 function lulavValidateTaskMap(array $mapping): void
@@ -79,6 +173,10 @@ function lulavValidateTaskMap(array $mapping): void
 function lulavPerKidGoal(): int
 {
     global $MASHPIA_DB;
+    static $cached;
+    if ($cached !== null) {
+        return $cached;
+    }
     $campaign = lulavCampaign();
     lulavRequireTables(['lulav_campaign_settings']);
     $stmt = $MASHPIA_DB->prepare(
@@ -90,7 +188,7 @@ function lulavPerKidGoal(): int
         ':school_year' => lulavCurrentSchoolYear(),
     ]);
     $goal = $stmt->fetchColumn();
-    return $goal === false ? 3 : max(1, (int) $goal);
+    return $cached = ($goal === false ? 3 : max(1, (int) $goal));
 }
 
 function lulavPercent(int $total, int $goal): int
@@ -98,31 +196,31 @@ function lulavPercent(int $total, int $goal): int
     return max(0, (int) floor(($total / max(1, $goal)) * 100));
 }
 
-function lulavSchoolTotals(int $campaignId): array
+function lulavSchoolTotals(?int $onlyId = null): array
 {
     global $MASHPIA_DB;
-    lulavRequireTables(['lulav_api_task_map']);
-    $stmt = $MASHPIA_DB->prepare(
-        "SELECT u.school_id, SUM(m.done_qty) AS total
-         FROM lulav_api_task_map map
-         JOIN date_tasks dt ON dt.grid_id = map.grid_id
-         JOIN date_tasks_missions mission
-           ON mission.date_tasks_mission_id = dt.date_tasks_mission_id
-          AND mission.start_date >= map.start_date
-          AND mission.end_date <= map.end_date
-         JOIN date_tasks_marks m ON m.date_task_id = dt.date_task_id
-         JOIN users u ON u.user_id = m.user_id
-         WHERE map.mivtzoim_id = :campaign
-           AND map.school_year = :school_year
-           AND map.field_name = 'day'
-           AND m.mark_inactive = 0
-           AND " . lulavEligibleUserCondition('u') . "
-         GROUP BY u.school_id"
-    );
-    $stmt->execute([
-        ':campaign' => $campaignId,
-        ':school_year' => lulavCurrentSchoolYear(),
-    ]);
+    $taskIds = lulavCampaignTaskIds()['day'];
+    if (!$taskIds) {
+        return [];
+    }
+    [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
+    // Driven from date_tasks_marks on the resolved date_task_id set: the old
+    // shape re-joined date_tasks/date_tasks_missions for the whole country and
+    // never returned. Scoped to one school when only one is being rendered.
+    $sql = "SELECT u.school_id, SUM(m.done_qty) AS total
+            FROM date_tasks_marks m
+            JOIN users u ON u.user_id = m.user_id
+            WHERE m.date_task_id IN ($taskIn)
+              AND m.mark_inactive = 0
+              AND " . lulavEligibleUserCondition('u');
+    if ($onlyId !== null) {
+        $sql .= ' AND u.school_id = :school';
+        $params[':school'] = $onlyId;
+    }
+    $sql .= ' GROUP BY u.school_id';
+
+    $stmt = $MASHPIA_DB->prepare($sql);
+    $stmt->execute($params);
     $totals = [];
     foreach ($stmt->fetchAll() as $row) {
         $totals[(int) $row['school_id']] = (int) $row['total'];
@@ -136,13 +234,40 @@ function lulavSchoolRows(?int $onlyId = null): array
     $campaign = lulavCampaign();
     lulavRequireTables(['lulav_school_settings', 'lulav_campaign_settings', 'lulav_api_task_map']);
 
+    $year = lulavCurrentSchoolYear();
+    $australian = lulavAustralianSchoolSql();
+    $params = [
+        ':campaign' => $campaign['mivtzoim_id'],
+        ':current_year' => $year,
+        ':previous_year' => $year - 1,
+    ];
+
+    // Headcount comes from a grouped derived table driven by user_registration
+    // (selective on `year`) rather than a correlated EXISTS evaluated once per
+    // row of `users`. The correlated form never returned on production.
+    $rosterFilter = '';
+    if ($onlyId !== null) {
+        $rosterFilter = ' AND u.school_id = :roster_school';
+        $params[':roster_school'] = $onlyId;
+    }
     $sql = "SELECT s.school_id, s.school_name, s.school_city,
-                   COUNT(u.user_id) AS soldier_count,
+                   COALESCE(roster.soldier_count, 0) AS soldier_count,
                    settings.motto, settings.color, settings.goal_override
             FROM schools s
-            LEFT JOIN users u
-              ON u.school_id = s.school_id
-             AND " . lulavEligibleUserCondition('u') . "
+            LEFT JOIN (
+                SELECT u.school_id, COUNT(DISTINCT u.user_id) AS soldier_count
+                FROM user_registration reg
+                JOIN users u ON u.user_id = reg.user_id
+                WHERE (
+                        reg.year = :current_year
+                        OR (
+                            reg.year = :previous_year
+                            AND u.school_id IN ($australian)
+                        )
+                      )
+                      $rosterFilter
+                GROUP BY u.school_id
+            ) roster ON roster.school_id = s.school_id
             LEFT JOIN lulav_school_settings settings
               ON settings.school_id = s.school_id
              AND settings.mivtzoim_id = :campaign
@@ -157,25 +282,19 @@ function lulavSchoolRows(?int $onlyId = null): array
                         registration.year = :current_year
                         OR (
                             registration.year = :previous_year
-                            AND s.school_id IN (" . lulavAustralianSchoolSql() . ")
+                            AND s.school_id IN ($australian)
                         )
                     )
               )";
-    $year = lulavCurrentSchoolYear();
-    $params = [
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':current_year' => $year,
-        ':previous_year' => $year - 1,
-    ];
     if ($onlyId !== null) {
         $sql .= ' AND s.school_id = :school';
         $params[':school'] = $onlyId;
     }
-    $sql .= ' GROUP BY s.school_id ORDER BY s.school_name';
+    $sql .= ' ORDER BY s.school_name';
 
     $stmt = $MASHPIA_DB->prepare($sql);
     $stmt->execute($params);
-    $totals = lulavSchoolTotals((int) $campaign['mivtzoim_id']);
+    $totals = lulavSchoolTotals($onlyId);
     $perKidGoal = lulavPerKidGoal();
     $colors = ['#1479b8', '#e4a11b', '#25845b', '#9b3f87', '#d45145', '#5867b1'];
     $rows = [];
@@ -301,31 +420,51 @@ function lulavValidateMarkTargets(array $kid, array $mapping): void
         lulavError('This soldier does not have a Mivtzoim track.', 422);
     }
 
+    // One query for the whole mapping instead of one per mapped cell (12 round
+    // trips on every child's save).
+    $gridIds = array_map(static function (array $row): int {
+        return (int) $row['grid_id'];
+    }, $mapping);
+    if (!$gridIds) {
+        lulavError('The Lulav teacher-grid task mapping is incomplete.', 503);
+    }
+    [$gridIn, $params] = lulavIdPlaceholders('grid', array_unique($gridIds));
+    $params += [
+        ':level' => $track['level'],
+        ':lang' => $track['lang_id'],
+        ':school_type' => $track['school_type_id'],
+    ];
     $stmt = $MASHPIA_DB->prepare(
-        'SELECT task.quantity
+        "SELECT task.grid_id, task.quantity, mission.start_date, mission.end_date
          FROM date_tasks task
          JOIN date_tasks_missions mission USING (date_tasks_mission_id)
-         WHERE task.grid_id = :grid
-           AND mission.start_date >= :start
-           AND mission.end_date <= :end
+         WHERE task.grid_id IN ($gridIn)
            AND mission.subject_id = 12
            AND mission.level = :level
            AND mission.lang_id = :lang
-           AND mission.school_type_id = :school_type
-         LIMIT 1'
+           AND mission.school_type_id = :school_type"
     );
+    $stmt->execute($params);
+    $candidates = [];
+    foreach ($stmt->fetchAll() as $task) {
+        $candidates[(int) $task['grid_id']][] = $task;
+    }
+
     foreach ($mapping as $row) {
-        $stmt->execute([
-            ':grid' => $row['grid_id'],
-            ':start' => $row['start_date'],
-            ':end' => $row['end_date'],
-            ':level' => $track['level'],
-            ':lang' => $track['lang_id'],
-            ':school_type' => $track['school_type_id'],
-        ]);
-        $task = $stmt->fetch();
         $requiresQuantity = in_array($row['field_name'], ['day', 'minutes'], true);
-        if (!$task || ($requiresQuantity && (int) $task['quantity'] < 1)) {
+        $matched = false;
+        foreach ($candidates[(int) $row['grid_id']] ?? [] as $task) {
+            if ((int) $task['start_date'] < (int) $row['start_date']
+                || (int) $task['end_date'] > (int) $row['end_date']) {
+                continue;
+            }
+            if ($requiresQuantity && (int) $task['quantity'] < 1) {
+                continue;
+            }
+            $matched = true;
+            break;
+        }
+        if (!$matched) {
             lulavError(
                 'No matching quantity teacher-grid task exists for this soldier.',
                 422,
@@ -361,32 +500,65 @@ function lulavDayReportIdentity(string $reportId): ?array
         : null;
 }
 
-function lulavDayPhotos(int $userId, int $day, bool $allowPending): array
+/**
+ * Loads non-rejected photos for one school, or one child, in a SINGLE query and
+ * folds them to [user_id][day] => [url|dataUrl, ...].
+ */
+function lulavLoadDayPhotos(?int $schoolId, ?int $userId, bool $allowPending): array
 {
     global $MASHPIA_DB;
     $campaign = lulavCampaign();
     lulavRequireTables(['lulav_photos']);
-    $stmt = $MASHPIA_DB->prepare(
-        "SELECT * FROM lulav_photos
-         WHERE mivtzoim_id = :campaign AND user_id = :user
-           AND school_year = :school_year
-           AND day_number = :day AND status != 'rejected'
-         ORDER BY photo_id"
-    );
-    $stmt->execute([
+    $sql = "SELECT user_id, day_number, public_id, status, mime_type, file_name
+            FROM lulav_photos
+            WHERE mivtzoim_id = :campaign
+              AND school_year = :school_year
+              AND status != 'rejected'";
+    $params = [
         ':campaign' => $campaign['mivtzoim_id'],
         ':school_year' => lulavCurrentSchoolYear(),
-        ':user' => $userId,
-        ':day' => $day,
-    ]);
+    ];
+    if ($userId !== null) {
+        $sql .= ' AND user_id = :user';
+        $params[':user'] = $userId;
+    } elseif ($schoolId !== null) {
+        $sql .= ' AND school_id = :school';
+        $params[':school'] = $schoolId;
+    }
+    $sql .= ' ORDER BY photo_id';
+
+    $stmt = $MASHPIA_DB->prepare($sql);
+    $stmt->execute($params);
     $photos = [];
     foreach ($stmt->fetchAll() as $photo) {
         $value = lulavPhotoValue($photo, $allowPending);
         if ($value) {
-            $photos[] = $value;
+            $photos[(int) $photo['user_id']][(int) $photo['day_number']][] = $value;
         }
     }
     return $photos;
+}
+
+function &lulavUserPhotoCache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
+function lulavForgetUserPhotos(int $userId): void
+{
+    $cache = &lulavUserPhotoCache();
+    unset($cache[$userId . ':pending'], $cache[$userId . ':approved']);
+}
+
+function lulavDayPhotos(int $userId, int $day, bool $allowPending): array
+{
+    $cache = &lulavUserPhotoCache();
+    $key = $userId . ($allowPending ? ':pending' : ':approved');
+    if (!isset($cache[$key])) {
+        $cache[$key] = lulavLoadDayPhotos(null, $userId, $allowPending)[$userId] ?? [];
+    }
+    return $cache[$key][$day] ?? [];
 }
 
 function lulavStoreDayPhoto(string $dataUrl, array $kid, int $day): void
@@ -509,36 +681,9 @@ function lulavReconcileDayPhotos(array $kid, int $day, array $photos): void
     $stmt->execute($params);
 }
 
-function lulavMappedDayMark(int $userId, string $field, int $day): array
+function lulavEmptyMark(): array
 {
-    global $MASHPIA_DB;
-    $campaign = lulavCampaign();
-    $stmt = $MASHPIA_DB->prepare(
-        "SELECT COALESCE(MAX(mark.done_qty), 0) AS value,
-                COALESCE(MAX(mark.mark_inactive), 0) AS hidden,
-                MAX(mark.mark_description) AS note,
-                MAX(mark.updated) AS updated,
-                MAX(mark.mark_date) AS mark_date
-         FROM lulav_api_task_map map
-         JOIN date_tasks task ON task.grid_id = map.grid_id
-         JOIN date_tasks_missions mission
-           ON mission.date_tasks_mission_id = task.date_tasks_mission_id
-          AND mission.start_date >= map.start_date
-          AND mission.end_date <= map.end_date
-         LEFT JOIN date_tasks_marks mark
-           ON mark.date_task_id = task.date_task_id AND mark.user_id = :user
-         WHERE map.mivtzoim_id = :campaign
-           AND map.school_year = :school_year
-           AND map.field_name = :field AND map.day_number = :day"
-    );
-    $stmt->execute([
-        ':user' => $userId,
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-        ':field' => $field,
-        ':day' => $day,
-    ]);
-    return $stmt->fetch() ?: [
+    return [
         'value' => 0,
         'hidden' => 0,
         'note' => '',
@@ -547,15 +692,129 @@ function lulavMappedDayMark(int $userId, string $field, int $day): array
     ];
 }
 
+/**
+ * Loads every mapped mark for one school, or one child, in a SINGLE query and
+ * folds it to [user_id][day] => ['day' => mark, 'minutes' => mark].
+ *
+ * This replaces two queries per child per Sukkos day (lulavMappedDayMark), which
+ * made the report grid cost roster x 6 x 2 round trips.
+ */
+function lulavLoadDayMarks(?int $schoolId, ?int $userId): array
+{
+    global $MASHPIA_DB;
+    $taskIds = lulavCampaignTaskIds()['all'];
+    if (!$taskIds) {
+        return [];
+    }
+    [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
+    // A plain JOIN rather than `user_id IN (SELECT ...)`: semi-join handling
+    // varies across the MySQL/MariaDB versions this platform has run on, and
+    // this shape is driven by date_tasks_marks' own index either way.
+    $join = '';
+    $where = '';
+    if ($userId !== null) {
+        $where = ' AND m.user_id = :user';
+        $params[':user'] = $userId;
+    } elseif ($schoolId !== null) {
+        $join = 'JOIN users u ON u.user_id = m.user_id';
+        $where = ' AND u.school_id = :school AND ' . lulavEligibleUserCondition('u');
+        $params[':school'] = $schoolId;
+    }
+    $sql = "SELECT m.user_id, m.date_task_id, m.done_qty, m.mark_inactive,
+                   m.mark_description, m.updated, m.mark_date
+            FROM date_tasks_marks m
+            $join
+            WHERE m.date_task_id IN ($taskIn)$where";
+    // Highest count wins, and its own note/timestamp travels with it. The old
+    // per-column MAX() could pair one mark's count with another mark's story.
+    $sql .= ' ORDER BY m.done_qty ASC, m.updated ASC';
+
+    $stmt = $MASHPIA_DB->prepare($sql);
+    $stmt->execute($params);
+
+    $dayOf = [
+        'day' => lulavDayByTaskId('day'),
+        'minutes' => lulavDayByTaskId('minutes'),
+    ];
+    $marks = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $taskId = (int) $row['date_task_id'];
+        $user = (int) $row['user_id'];
+        foreach ($dayOf as $field => $map) {
+            if (!isset($map[$taskId])) {
+                continue;
+            }
+            $marks[$user][$map[$taskId]][$field] = [
+                'value' => (int) $row['done_qty'],
+                'hidden' => (int) $row['mark_inactive'],
+                'note' => (string) $row['mark_description'],
+                'updated' => $row['updated'],
+                'mark_date' => $row['mark_date'],
+            ];
+        }
+    }
+    return $marks;
+}
+
+/**
+ * Per-child mark cache. Reads within one request hit it repeatedly (prefill,
+ * then the response body); writes must drop it via lulavForgetUserMarks().
+ */
+function &lulavUserMarkCache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
+function lulavForgetUserMarks(int $userId): void
+{
+    $cache = &lulavUserMarkCache();
+    unset($cache[$userId]);
+}
+
+function lulavMarksForUser(int $userId): array
+{
+    $cache = &lulavUserMarkCache();
+    if (!isset($cache[$userId])) {
+        $cache[$userId] = lulavLoadDayMarks(null, $userId)[$userId] ?? [];
+    }
+    return $cache[$userId];
+}
+
+function lulavMappedDayMark(int $userId, string $field, int $day): array
+{
+    return lulavMarksForUser($userId)[$day][$field] ?? lulavEmptyMark();
+}
+
 function lulavDayReport(array $kid, int $day, bool $allowPending): array
 {
     lulavRequireEligibleSchool((int) $kid['school_id']);
     if (!in_array($day, lulavCampaignDays(), true)) {
         lulavError('Invalid Sukkos day.', 422);
     }
-    $countMark = lulavMappedDayMark((int) $kid['user_id'], 'day', $day);
-    $minuteMark = lulavMappedDayMark((int) $kid['user_id'], 'minutes', $day);
-    $photos = lulavDayPhotos((int) $kid['user_id'], $day, $allowPending);
+    return lulavBuildDayReport(
+        $kid,
+        $day,
+        lulavMappedDayMark((int) $kid['user_id'], 'day', $day),
+        lulavMappedDayMark((int) $kid['user_id'], 'minutes', $day),
+        lulavDayPhotos((int) $kid['user_id'], $day, $allowPending),
+        $allowPending
+    );
+}
+
+/**
+ * Serializes one child/day report from values the caller already holds. The
+ * batch endpoints load every mark and photo for a school in two queries and
+ * call this, instead of issuing ~7 queries per row.
+ */
+function lulavBuildDayReport(
+    array $kid,
+    int $day,
+    array $countMark,
+    array $minuteMark,
+    array $photos,
+    bool $allowPending
+): array {
     $updated = $countMark['updated'] ?: $minuteMark['updated'];
     $createdAt = $updated ? gmdate(DATE_ATOM, strtotime($updated)) : null;
     if (!$createdAt && !empty($countMark['mark_date'])) {
@@ -608,24 +867,22 @@ function lulavMapFor(string $field, int $day): array
     lulavError('The Lulav teacher-grid task mapping is incomplete.', 503);
 }
 
-function lulavUpdateDayDescription(array $kid, array $map, string $note): void
+function lulavUpdateDayDescription(array $kid, int $day, string $note): void
 {
     global $MASHPIA_DB;
+    $taskIds = lulavTaskIdsFor('day', $day);
+    if (!$taskIds) {
+        return;
+    }
+    [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
+    $params[':note'] = $note;
+    $params[':user'] = (int) $kid['user_id'];
     $stmt = $MASHPIA_DB->prepare(
-        'UPDATE date_tasks_marks mark
-         JOIN date_tasks task ON task.date_task_id = mark.date_task_id
-         JOIN date_tasks_missions mission USING (date_tasks_mission_id)
+        "UPDATE date_tasks_marks mark
          SET mark.mark_description = :note, mark.updated = NOW()
-         WHERE mark.user_id = :user AND task.grid_id = :grid
-           AND mission.start_date >= :start AND mission.end_date <= :end'
+         WHERE mark.user_id = :user AND mark.date_task_id IN ($taskIn)"
     );
-    $stmt->execute([
-        ':note' => $note,
-        ':user' => $kid['user_id'],
-        ':grid' => $map['grid_id'],
-        ':start' => $map['start_date'],
-        ':end' => $map['end_date'],
-    ]);
+    $stmt->execute($params);
 }
 
 function lulavSaveDayReport(array $kid, int $day, array $input): array
@@ -667,71 +924,138 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         $currentMinutes = (int) lulavMappedDayMark((int) $kid['user_id'], 'minutes', $day)['value'];
         lulavMarkMapValue($kid, $countMap, max($currentCount, (int) $count));
         lulavMarkMapValue($kid, $minuteMap, max($currentMinutes, (int) $minutes));
-        lulavUpdateDayDescription($kid, $countMap, $note);
+        lulavUpdateDayDescription($kid, $day, $note);
         foreach ($photos as $photo) {
             if (strpos($photo, 'data:image/') === 0) {
                 lulavStoreDayPhoto($photo, $kid, $day);
             }
         }
         lulavReconcileDayPhotos($kid, $day, $photos);
+        // The marks and photos just changed — drop the per-request read caches
+        // so the response body reflects what was written.
+        lulavForgetUserMarks((int) $kid['user_id']);
+        lulavForgetUserPhotos((int) $kid['user_id']);
         return lulavDayReport($kid, $day, true);
     });
 }
 
-function lulavDailyRows(?int $schoolId, ?int $userId, bool $includeHidden, bool $allowPending): array
+/** Roster rows for a set of user ids, in one query, keyed by user_id. */
+function lulavKidRowsByUserId(array $userIds): array
 {
     global $MASHPIA_DB;
+    $unique = array_values(array_unique(array_map('intval', $userIds)));
+    if (!$unique) {
+        return [];
+    }
+    [$userIn, $params] = lulavIdPlaceholders('user', $unique);
+    $stmt = $MASHPIA_DB->prepare(
+        "SELECT u.user_id, u.user_serial, u.first, u.last, u.first_he, u.last_he,
+                u.dob, u.gender, u.school_id, u.class_id, u.mobile_pic, u.user_photo_id,
+                c.class_grade, c.class_sub, s.school_name,
+                (SELECT r.rank_name
+                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
+                  WHERE rm.user_id = u.user_id
+                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
+                (SELECT r.rank_image_id
+                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
+                  WHERE rm.user_id = u.user_id
+                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
+         FROM users u
+         JOIN schools s ON s.school_id = u.school_id
+         LEFT JOIN classes c ON c.class_id = u.class_id
+         WHERE u.user_id IN ($userIn)
+           AND " . lulavEligibleUserCondition('u')
+    );
+    $stmt->execute($params);
+    $kids = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $kids[(int) $row['user_id']] = $row;
+    }
+    return $kids;
+}
+
+/**
+ * Cumulative daily reports for a school or a single child.
+ *
+ * Three queries total (marks, photos, roster). The previous implementation ran
+ * one row-set query and then ~7 more per row — a 200-child school produced
+ * roughly 8,400 round trips on a page the public campaign view polls every 30 s.
+ *
+ * $limit caps the feed; RecentShakes only renders the newest handful.
+ */
+function lulavDailyRows(
+    ?int $schoolId,
+    ?int $userId,
+    bool $includeHidden,
+    bool $allowPending,
+    int $limit = 0
+): array {
     if ($schoolId !== null) {
         lulavRequireEligibleSchool($schoolId);
     }
-    $campaign = lulavCampaign();
-    $sql = "SELECT DISTINCT u.user_serial, map.day_number, mark.updated
-            FROM lulav_api_task_map map
-            JOIN date_tasks task ON task.grid_id = map.grid_id
-            JOIN date_tasks_missions mission
-              ON mission.date_tasks_mission_id = task.date_tasks_mission_id
-             AND mission.start_date >= map.start_date
-             AND mission.end_date <= map.end_date
-            JOIN date_tasks_marks mark
-              ON mark.date_task_id = task.date_task_id AND mark.done_qty > 0
-            JOIN users u ON u.user_id = mark.user_id
-             AND " . lulavEligibleUserCondition('u') . "
-            WHERE map.mivtzoim_id = :campaign
-              AND map.school_year = :school_year
-              AND map.field_name = 'day'";
-    $params = [
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-    ];
-    if ($schoolId !== null) {
-        $sql .= ' AND u.school_id = :school';
-        $params[':school'] = $schoolId;
-    }
-    if ($userId !== null) {
-        $sql .= ' AND u.user_id = :user';
-        $params[':user'] = $userId;
-    }
-    if (!$includeHidden) {
-        $sql .= ' AND mark.mark_inactive = 0';
-    }
-    $sql .= ' ORDER BY mark.updated DESC';
-    $stmt = $MASHPIA_DB->prepare($sql);
-    $stmt->execute($params);
-    $rows = [];
-    foreach ($stmt->fetchAll() as $row) {
-        $kid = lulavKidBySerial((string) $row['user_serial']);
-        $report = lulavDayReport($kid, (int) $row['day_number'], $allowPending);
-        if ($includeHidden || !$report['hidden']) {
-            $rows[] = $report;
+
+    $marks = $userId !== null
+        ? [$userId => lulavMarksForUser($userId)]
+        : lulavLoadDayMarks($schoolId, null);
+    $photos = lulavLoadDayPhotos($schoolId, $userId, $allowPending);
+
+    $entries = [];
+    foreach ($marks as $markUserId => $days) {
+        foreach ($days as $day => $fields) {
+            if ((int) ($fields['day']['value'] ?? 0) < 1) {
+                continue;
+            }
+            if (!$includeHidden && !empty($fields['day']['hidden'])) {
+                continue;
+            }
+            $entries[] = [
+                'userId' => (int) $markUserId,
+                'day' => (int) $day,
+                'sort' => (string) ($fields['day']['updated'] ?? ''),
+            ];
         }
+    }
+    // One entry per child/day, newest first. The old SELECT DISTINCT included
+    // mark.updated, so a child holding marks on two mapped tasks (a level or
+    // language change) was emitted twice with duplicate ids.
+    usort($entries, static function (array $a, array $b): int {
+        return strcmp($b['sort'], $a['sort'])
+            ?: ($a['userId'] <=> $b['userId'] ?: $a['day'] <=> $b['day']);
+    });
+    if ($limit > 0) {
+        $entries = array_slice($entries, 0, $limit);
+    }
+
+    $kids = lulavKidRowsByUserId(array_column($entries, 'userId'));
+    $rows = [];
+    foreach ($entries as $entry) {
+        $kid = $kids[$entry['userId']] ?? null;
+        // Same gate lulavDayReport() applies per row; lulavSchoolIsEligible() is
+        // memoized, so this stays one query per distinct school.
+        if (!$kid || !lulavSchoolIsEligible((int) $kid['school_id'])) {
+            continue;
+        }
+        $fields = $marks[$entry['userId']][$entry['day']] ?? [];
+        $rows[] = lulavBuildDayReport(
+            $kid,
+            $entry['day'],
+            $fields['day'] ?? lulavEmptyMark(),
+            $fields['minutes'] ?? lulavEmptyMark(),
+            $photos[$entry['userId']][$entry['day']] ?? [],
+            $allowPending
+        );
     }
     return $rows;
 }
 
 function lulavSchoolReportRows(int $schoolId): array
 {
+    // Two queries: the roster, then every mapped mark for that roster.
+    $marks = lulavLoadDayMarks($schoolId, null);
+    $days = lulavCampaignDays();
     $rows = [];
     foreach (lulavKidsForSchool($schoolId) as $serialized) {
+        $userId = (int) $serialized['userId'];
         $row = [
             'id' => $serialized['serial'],
             'name' => trim($serialized['firstName'] . ' ' . $serialized['lastName']),
@@ -741,11 +1065,11 @@ function lulavSchoolReportRows(int $schoolId): array
             'totalShakes' => 0,
             'totalMinutes' => 0,
         ];
-        $kid = lulavKidBySerial((string) $serialized['serial']);
-        foreach (lulavCampaignDays() as $day) {
-            $report = lulavDayReport($kid, $day, true);
-            $count = $report['hidden'] ? 0 : (int) $report['count'];
-            $minutes = $report['hidden'] ? 0 : (int) $report['minutes'];
+        foreach ($days as $day) {
+            $fields = $marks[$userId][$day] ?? [];
+            $hidden = !empty($fields['day']['hidden']);
+            $count = $hidden ? 0 : (int) ($fields['day']['value'] ?? 0);
+            $minutes = $hidden ? 0 : (int) ($fields['minutes']['value'] ?? 0);
             $row['perDay'][(string) $day] = $count;
             $row['totalShakes'] += $count;
             $row['totalMinutes'] += $minutes;
@@ -759,8 +1083,12 @@ function lulavLeaderboard(int $schoolId): array
 {
     global $MASHPIA_DB;
     lulavRequireEligibleSchool($schoolId);
-    $campaign = lulavCampaign();
-    lulavRequireTables(['lulav_api_task_map']);
+    $taskIds = lulavCampaignTaskIds()['day'];
+    if (!$taskIds) {
+        return [];
+    }
+    [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
+    $params[':school'] = $schoolId;
     $stmt = $MASHPIA_DB->prepare(
         "SELECT u.user_id, u.first, u.last, SUM(mark.done_qty) AS total,
                 (SELECT r.rank_name
@@ -771,29 +1099,17 @@ function lulavLeaderboard(int $schoolId): array
                    FROM rank_marks rm JOIN ranks r USING (rank_ord)
                   WHERE rm.user_id = u.user_id
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
-         FROM lulav_api_task_map map
-         JOIN date_tasks task ON task.grid_id = map.grid_id
-         JOIN date_tasks_missions mission
-           ON mission.date_tasks_mission_id = task.date_tasks_mission_id
-          AND mission.start_date >= map.start_date
-          AND mission.end_date <= map.end_date
-         JOIN date_tasks_marks mark
-           ON mark.date_task_id = task.date_task_id AND mark.mark_inactive = 0
+         FROM date_tasks_marks mark
          JOIN users u ON u.user_id = mark.user_id
-         WHERE map.mivtzoim_id = :campaign
-           AND map.school_year = :school_year
-           AND map.field_name = 'day'
+         WHERE mark.date_task_id IN ($taskIn)
+           AND mark.mark_inactive = 0
            AND u.school_id = :school
            AND " . lulavEligibleUserCondition('u') . "
          GROUP BY u.user_id
          ORDER BY total DESC, u.last, u.first
          LIMIT 100"
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-        ':school' => $schoolId,
-    ]);
+    $stmt->execute($params);
     $rows = [];
     foreach ($stmt->fetchAll() as $row) {
         $rows[] = [
@@ -814,8 +1130,20 @@ function lulavClassLeaderboard(int $schoolId): array
 {
     global $MASHPIA_DB;
     lulavRequireEligibleSchool($schoolId);
-    $campaign = lulavCampaign();
-    lulavRequireTables(['lulav_api_task_map']);
+    $taskIds = lulavCampaignTaskIds()['day'];
+    // The mark join is now filtered directly on the resolved date_task_id set.
+    // Previously `mission` was LEFT JOINed, so date_tasks rows whose mission fell
+    // OUTSIDE the campaign window survived with mission.* = NULL and their marks
+    // were still summed — every prior year's Lulav marks landed in this year's
+    // class standings. (Observed on production: school 40 reported 14 shakes and
+    // 233% here while /leaderboard, whose joins are inner, correctly reported 0.)
+    $taskCondition = 'FALSE';
+    $params = [':school' => $schoolId];
+    if ($taskIds) {
+        [$taskIn, $taskParams] = lulavIdPlaceholders('task', $taskIds);
+        $taskCondition = "mark.date_task_id IN ($taskIn)";
+        $params += $taskParams;
+    }
     $stmt = $MASHPIA_DB->prepare(
         "SELECT c.class_id, c.class_grade, c.class_sub,
                 COUNT(DISTINCT roster.user_id) AS kid_count,
@@ -824,28 +1152,15 @@ function lulavClassLeaderboard(int $schoolId): array
          LEFT JOIN users roster
            ON roster.class_id = c.class_id
           AND " . lulavEligibleUserCondition('roster') . "
-         LEFT JOIN lulav_api_task_map map
-           ON map.mivtzoim_id = :campaign
-          AND map.school_year = :school_year
-          AND map.field_name = 'day'
-         LEFT JOIN date_tasks task ON task.grid_id = map.grid_id
-         LEFT JOIN date_tasks_missions mission
-           ON mission.date_tasks_mission_id = task.date_tasks_mission_id
-          AND mission.start_date >= map.start_date
-          AND mission.end_date <= map.end_date
          LEFT JOIN date_tasks_marks mark
-           ON mark.date_task_id = task.date_task_id
-          AND mark.user_id = roster.user_id
+           ON mark.user_id = roster.user_id
           AND mark.mark_inactive = 0
+          AND $taskCondition
          WHERE c.school_id = :school AND c.class_era = 0
          GROUP BY c.class_id
          ORDER BY c.class_grade, c.class_sub"
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-        ':school' => $schoolId,
-    ]);
+    $stmt->execute($params);
     $perKidGoal = lulavPerKidGoal();
     $rows = [];
     foreach ($stmt->fetchAll() as $row) {
@@ -1051,18 +1366,22 @@ try {
         lulavRequireTables(['lulav_school_settings']);
         $input = lulavInput();
         $campaign = lulavCampaign();
-        $motto = trim((string) ($input['motto'] ?? ''));
-        $stmt = $MASHPIA_DB->prepare(
-            "INSERT INTO lulav_school_settings (mivtzoim_id, school_year, school_id, motto)
-             VALUES (:campaign, :school_year, :school, :motto)
-             ON DUPLICATE KEY UPDATE motto = VALUES(motto)"
-        );
-        $stmt->execute([
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
-            ':school' => $schoolId,
-            ':motto' => $motto,
-        ]);
+        // Only write the motto when the caller actually sent one — an unrelated
+        // PATCH used to blank it, because `?? ''` made "absent" and "cleared"
+        // indistinguishable.
+        if (array_key_exists('motto', $input)) {
+            $stmt = $MASHPIA_DB->prepare(
+                "INSERT INTO lulav_school_settings (mivtzoim_id, school_year, school_id, motto)
+                 VALUES (:campaign, :school_year, :school, :motto)
+                 ON DUPLICATE KEY UPDATE motto = VALUES(motto)"
+            );
+            $stmt->execute([
+                ':campaign' => $campaign['mivtzoim_id'],
+                ':school_year' => lulavCurrentSchoolYear(),
+                ':school' => $schoolId,
+                ':motto' => trim((string) $input['motto']),
+            ]);
+        }
         $schools = lulavSchoolRows($schoolId);
         lulavJson($schools[0] ?? null);
     }
@@ -1136,7 +1455,10 @@ try {
             $includeHidden = !empty($_GET['includeHidden']);
             $allowPending = true;
         }
-        lulavJson(lulavDailyRows($schoolId, null, $includeHidden, $allowPending));
+        // Public callers only render a short feed; cap the payload so the
+        // campaign page's 30-second poll stays cheap.
+        $limit = isset($_GET['limit']) ? max(0, min(500, (int) $_GET['limit'])) : 0;
+        lulavJson(lulavDailyRows($schoolId, null, $includeHidden, $allowPending, $limit));
     }
     if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $match)) {
         lulavJson(lulavLeaderboard((int) $match[1]));
@@ -1167,37 +1489,30 @@ try {
         lulavRequireSchoolAccess($actor, (int) $user['school_id']);
         lulavRequireEligibleSchool((int) $user['school_id']);
         $hidden = !empty(lulavInput()['hidden']) ? 1 : 0;
+        $taskIds = array_merge(
+            lulavTaskIdsFor('day', $day),
+            lulavTaskIdsFor('minutes', $day)
+        );
+        if (!$taskIds) {
+            lulavError('The Lulav teacher-grid task mapping is incomplete.', 503);
+        }
         lulavWithUserLock($userId, static function () use (
             $userId,
-            $day,
             $hidden,
+            $taskIds,
             $MASHPIA_DB
         ): void {
-            $campaign = lulavCampaign();
+            [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
+            $params[':hidden'] = $hidden;
+            $params[':user'] = $userId;
             $stmt = $MASHPIA_DB->prepare(
                 "UPDATE date_tasks_marks mark
-                 JOIN date_tasks task ON task.date_task_id = mark.date_task_id
-                 JOIN date_tasks_missions mission
-                   ON mission.date_tasks_mission_id = task.date_tasks_mission_id
-                 JOIN lulav_api_task_map map
-                   ON map.grid_id = task.grid_id
-                  AND mission.start_date >= map.start_date
-                  AND mission.end_date <= map.end_date
                  SET mark.mark_inactive = :hidden
-                 WHERE mark.user_id = :user
-                   AND map.mivtzoim_id = :campaign
-                   AND map.school_year = :school_year
-                   AND map.field_name IN ('day', 'minutes')
-                   AND map.day_number = :day"
+                 WHERE mark.user_id = :user AND mark.date_task_id IN ($taskIn)"
             );
-            $stmt->execute([
-                ':hidden' => $hidden,
-                ':user' => $userId,
-                ':campaign' => $campaign['mivtzoim_id'],
-                ':school_year' => lulavCurrentSchoolYear(),
-                ':day' => $day,
-            ]);
+            $stmt->execute($params);
         });
+        lulavForgetUserMarks($userId);
         $kid = lulavKidBySerial((string) $user['user_serial']);
         lulavJson(lulavDayReport($kid, $day, true));
     }
@@ -1232,10 +1547,27 @@ try {
             ':campaign' => $campaign['mivtzoim_id'],
             ':school_year' => lulavCurrentSchoolYear(),
         ]);
+        $queue = $stmt->fetchAll();
+        // Batch the roster, marks and photos instead of ~7 queries per queued row.
+        $kids = lulavKidRowsByUserId(array_column($queue, 'user_id'));
+        $marks = lulavLoadDayMarks($schoolId, null);
+        $photos = lulavLoadDayPhotos($schoolId, null, true);
         $pending = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $kid = lulavKidBySerial((string) $row['user_serial']);
-            $pending[] = lulavDayReport($kid, (int) $row['day_number'], true);
+        foreach ($queue as $row) {
+            $userId = (int) $row['user_id'];
+            $day = (int) $row['day_number'];
+            if (!isset($kids[$userId])) {
+                continue;
+            }
+            $fields = $marks[$userId][$day] ?? [];
+            $pending[] = lulavBuildDayReport(
+                $kids[$userId],
+                $day,
+                $fields['day'] ?? lulavEmptyMark(),
+                $fields['minutes'] ?? lulavEmptyMark(),
+                $photos[$userId][$day] ?? [],
+                true
+            );
         }
         lulavJson($pending);
     }
@@ -1275,6 +1607,7 @@ try {
             ':user' => $identity['userId'],
             ':day' => $identity['day'],
         ]);
+        lulavForgetUserPhotos((int) $identity['userId']);
         $kid = lulavKidBySerial((string) $user['user_serial']);
         lulavJson(lulavDayReport($kid, $identity['day'], true));
     }

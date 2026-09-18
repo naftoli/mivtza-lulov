@@ -8,10 +8,52 @@ define('LULAV_PUBLIC_ROOT', dirname(__DIR__, 3));
 define('LULAV_STORAGE_ROOT', dirname(LULAV_PUBLIC_ROOT) . '/storage/lulav');
 define('LULAV_PHOTO_ROOT', LULAV_STORAGE_ROOT . '/photos');
 
+// api/header/db.php prints "Connection failed: <PDO message>" and exit()s when
+// MySQL is unreachable. That reached the client as HTTP 200 plain text, so the
+// SPA saw response.ok with an unparseable body and rendered empty pages instead
+// of an error — and the raw driver message leaked. Buffer the platform includes
+// and turn any bail-out into a JSON 503.
+$lulavBootstrapped = false;
+ob_start();
+register_shutdown_function(static function () use (&$lulavBootstrapped): void {
+    if ($lulavBootstrapped) {
+        return;
+    }
+    $stray = '';
+    while (ob_get_level() > 0) {
+        $stray .= (string) ob_get_clean();
+    }
+    if ($stray !== '') {
+        error_log('Lulav API bootstrap output: ' . trim($stray));
+    }
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_COMPILE_ERROR, E_CORE_ERROR], true)) {
+        error_log('Lulav API bootstrap fatal: ' . $error['message']);
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(503);
+    }
+    echo '{"error":"The Lulav API is temporarily unavailable. Please try again."}';
+});
+
 require_once LULAV_PUBLIC_ROOT . '/api/header/db.php';
 require_once LULAV_PUBLIC_ROOT . '/api/auth/classes/Auth.php';
 require_once LULAV_PUBLIC_ROOT . '/class.globalSettings.php';
 require_once dirname(__DIR__, 2) . '/classes/mivtzoim.php';
+
+// Nothing the legacy includes print belongs in a JSON body; log and drop it.
+$lulavStrayOutput = (string) ob_get_clean();
+if ($lulavStrayOutput !== '') {
+    error_log('Lulav API stray include output: ' . trim($lulavStrayOutput));
+}
+$lulavBootstrapped = true;
+
+if (!isset($MASHPIA_DB) || !$MASHPIA_DB instanceof PDO) {
+    http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    exit('{"error":"The Lulav API is temporarily unavailable. Please try again."}');
+}
 
 $MASHPIA_DB->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -216,11 +258,34 @@ function lulavDateFromJd($jd): ?string
 
 function lulavCurrentSchoolYear(): int
 {
+    // Memoized: this is read while building almost every SQL string (see
+    // lulavEligibleUserCondition), and GlobalSettings::getHelper() queries
+    // global_settings on every call.
+    static $year;
+    if ($year !== null) {
+        return $year;
+    }
     $year = (int) GlobalSettings::getCurrentYear();
     if ($year < 1) {
         lulavError('The current school year is not configured.', 503);
     }
     return $year;
+}
+
+/**
+ * Builds a named-placeholder list for an integer id set, e.g.
+ * [':task_0,:task_1', [':task_0' => 7, ':task_1' => 9]].
+ */
+function lulavIdPlaceholders(string $prefix, array $ids): array
+{
+    $placeholders = [];
+    $params = [];
+    foreach (array_values($ids) as $index => $id) {
+        $key = ':' . $prefix . $index;
+        $placeholders[] = $key;
+        $params[$key] = (int) $id;
+    }
+    return [implode(',', $placeholders), $params];
 }
 
 function lulavAustralianSchoolSql(): string
@@ -254,11 +319,23 @@ function lulavEligibleUserCondition(string $userAlias): string
 function lulavSchoolIsEligible(int $schoolId): bool
 {
     global $MASHPIA_DB;
+    // Memoized: report and feed endpoints re-check the same school for every row.
+    static $cache = [];
+    if (isset($cache[$schoolId])) {
+        return $cache[$schoolId];
+    }
     $year = lulavCurrentSchoolYear();
+    // Mirrors the filter in lulavSchoolRows(). Without the school_era /
+    // test_school checks, a closed or test school was rejected from /schools but
+    // still passed the gate on /schools/:id/leaderboard, /shakes and
+    // /report-rows.
     $stmt = $MASHPIA_DB->prepare(
         'SELECT 1
          FROM school_registrations registration
+         JOIN schools s ON s.school_id = registration.school_id
          WHERE registration.school_id = :school
+           AND s.school_era IS NULL
+           AND s.test_school = 0
            AND (
              registration.year = :year
              OR (
@@ -273,7 +350,7 @@ function lulavSchoolIsEligible(int $schoolId): bool
         ':year' => $year,
         ':previous_year' => $year - 1,
     ]);
-    return (bool) $stmt->fetchColumn();
+    return $cache[$schoolId] = (bool) $stmt->fetchColumn();
 }
 
 function lulavRequireEligibleSchool(int $schoolId): void
@@ -286,6 +363,12 @@ function lulavRequireEligibleSchool(int $schoolId): void
 function lulavAdminScope(int $adminId): array
 {
     global $MASHPIA_DB;
+    // Memoized: lulavRequireSchoolAccess() re-resolves the same admin on every
+    // moderation row, and the scope query is three UNIONed joins.
+    static $cache = [];
+    if (isset($cache[$adminId])) {
+        return $cache[$adminId];
+    }
 
     $stmt = $MASHPIA_DB->prepare('SELECT auth, first, last, username FROM admins WHERE admin_id = :id');
     $stmt->execute([':id' => $adminId]);
@@ -325,7 +408,7 @@ function lulavAdminScope(int $adminId): array
         $schoolIds = array_map('intval', array_column($stmt->fetchAll(), 'school_id'));
     }
 
-    return [
+    return $cache[$adminId] = [
         'id' => $adminId,
         'name' => trim($admin['first'] . ' ' . $admin['last']),
         'username' => $admin['username'],
@@ -350,6 +433,12 @@ function lulavRequireSchoolAccess(array $actor, int $schoolId): array
 function lulavKidBySerial(string $serial): array
 {
     global $MASHPIA_DB;
+    // Memoized: feed and moderation endpoints look the same child up once per
+    // Sukkos day, and this query carries two correlated rank subqueries.
+    static $cache = [];
+    if (isset($cache[$serial])) {
+        return $cache[$serial];
+    }
     $stmt = $MASHPIA_DB->prepare(
         "SELECT u.user_id, u.user_serial, u.first, u.last, u.first_he, u.last_he,
                 u.dob, u.gender, u.school_id, u.class_id, u.mobile_pic, u.user_photo_id,
@@ -374,7 +463,7 @@ function lulavKidBySerial(string $serial): array
     if (!$row) {
         lulavError('Soldier not found.', 404);
     }
-    return $row;
+    return $cache[$serial] = $row;
 }
 
 function lulavPhotoUrl(array $user): string

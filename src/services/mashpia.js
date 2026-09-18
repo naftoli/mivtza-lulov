@@ -108,10 +108,20 @@ export const setSchoolGoal = (schoolId, goalOverride) =>
 export const getSchools = () => req('/schools')
 export const getSchool = (id) => req(`/schools/${id}`)
 export const getKidsForSchool = (schoolId) => req(`/schools/${schoolId}/soldiers`)
-export const getShakes = (schoolId, { includeHidden = false } = {}) =>
-  req(`/schools/${schoolId}/shakes${includeHidden ? '?includeHidden=1' : ''}`)
-export async function getRecentShakes(schoolId, limit = 8) {
-  return (await getShakes(schoolId)).slice(0, limit)
+// A school's whole campaign can be thousands of child/day reports, so the public
+// feed asks the API for a bounded slice (the newest first). Admin moderation
+// still pulls the full set, hidden rows included.
+export const PUBLIC_SHAKE_LIMIT = 200
+export const getShakes = (schoolId, { includeHidden = false, limit } = {}) => {
+  const params = new URLSearchParams()
+  if (includeHidden) params.set('includeHidden', '1')
+  const cap = limit ?? (includeHidden ? null : PUBLIC_SHAKE_LIMIT)
+  if (cap) params.set('limit', String(cap))
+  const query = params.toString()
+  return req(`/schools/${schoolId}/shakes${query ? `?${query}` : ''}`)
+}
+export function getRecentShakes(schoolId, limit = 8) {
+  return getShakes(schoolId, { limit })
 }
 export async function getLeaderboard(schoolId, limit = 10) {
   return (await req(`/schools/${schoolId}/leaderboard`)).slice(0, limit)
@@ -120,6 +130,9 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
   return (await req(`/schools/${schoolId}/class-leaderboard`)).slice(0, limit)
 }
 export const getGlobalStats = () => req('/stats')
+// Scoped to the bearer token, so the kidId the facade passes is ignored here:
+// a soldier can only ever read their own reports. Admin views go through
+// /schools/:id/shakes and /schools/:id/report-rows instead.
 export const getKidShakes = () => req('/me/shakes')
 export const getKidDayReport = (day) => req(`/me/days/${day}`)
 export const getSchoolReportRows = (schoolId) => req(`/schools/${schoolId}/report-rows`)
