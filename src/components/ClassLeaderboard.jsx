@@ -19,7 +19,10 @@ const RACE_FILLS = [
 // `color` still drives the percent figure (defaults to green-deep).
 export default function ClassLeaderboard({ rows, highlightGrade, highlightClassId, color = 'var(--color-green)' }) {
   const [sort, setSort] = useState('percent')
-  const ranked = [...rows].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.count - a.count))
+  // Highest first; a tie goes alphabetically by class name, in natural order so
+  // Grade 2 comes before Grade 10. Matches lulavClassLeaderboard() in api/index.php.
+  const byName = (a, b) => String(a.grade).localeCompare(String(b.grade), undefined, { numeric: true, sensitivity: 'base' })
+  const ranked = [...rows].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.count - a.count) || byName(a, b))
   // The soldier's own class: by id when both sides have one (two classes can share
   // a label), else by label (the demo roster has no class ids).
   const isMine = (r) => (r.classId && highlightClassId ? r.classId === highlightClassId : r.grade === highlightGrade)

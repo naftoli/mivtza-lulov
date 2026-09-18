@@ -304,7 +304,7 @@ export async function getClassLeaderboard(schoolId) {
       const goal = kidCount * pk
       return { grade: g, count, kidCount, goal, percent: goalPercent(count, goal) }
     })
-    .sort((a, b) => b.percent - a.percent || b.count - a.count)
+    .sort((a, b) => b.percent - a.percent || a.grade.localeCompare(b.grade, undefined, { numeric: true, sensitivity: 'base' }))
 }
 
 export async function getGlobalStats() {

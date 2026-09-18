@@ -1229,7 +1229,9 @@ function lulavClassLeaderboard(int $schoolId): array
         ];
     }
     usort($rows, static function (array $a, array $b): int {
-        return $b['percent'] <=> $a['percent'] ?: $b['count'] <=> $a['count'];
+        // Goal accomplished, then alphabetically by class name (natural order, so
+        // 2 sorts before 10). Must match ClassLeaderboard.jsx.
+        return $b['percent'] <=> $a['percent'] ?: strnatcasecmp($a['grade'], $b['grade']);
     });
     return $rows;
 }
