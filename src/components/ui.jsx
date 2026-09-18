@@ -39,6 +39,21 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
 // real logos, return one from lulavSchoolRows() and branch on it here again.
 export function SchoolLogo({ school, size = 56, className = '' }) {
   const initials = school.name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+  // Show the school's own logo when we have one — the demo roster carries them,
+  // and a live Mashpia /schools payload can too (a `logo` URL). Falls back to a
+  // colored initials tile. Live currently sends no logo, so it shows initials;
+  // that path is why an earlier cleanup dropped this, which also lost the demo
+  // logos, so keep the guard rather than removing it.
+  if (school.logo) {
+    return (
+      <span
+        style={{ height: size, width: size }}
+        className={`grid shrink-0 place-items-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-line ${className}`}
+      >
+        <img src={school.logo} alt="" className="max-h-full max-w-full object-contain" />
+      </span>
+    )
+  }
   return (
     <span
       style={{ height: size, width: size, background: school.color || 'var(--color-navy)' }}

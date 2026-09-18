@@ -26,7 +26,11 @@ never change.
 - `verifyAdmin(...)` → Mashpia SSO; returns role (HQ vs school) + the school(s) administered.
 
 ### B. Roster (read — admin-only wherever it includes serial / DOB)
-- `getSchools()` → `[{ id, name, city }]`
+- `getSchools()` → `[{ id, name, city, logo? }]`
+  - **`logo`** is optional: a URL (or data URI) for the school's crest, shown on the
+    school tile in the race, cards and hero. When it is absent the app falls back to a
+    colored initials tile, so live currently shows initials everywhere. Send `logo` if
+    Mashpia has per-school crests and you want them on the public pages.
 - Classes per school → `[{ id, name, schoolId, kidCount }]`
 - `getKidsForSchool(schoolId)` → `[{ serial, firstName, lastName, hebFirst, hebLast, dob, gender, class, rank, schoolId, photoUrl }]`
   - `rank` is a text label (e.g. "Sergeant"); `photoUrl` is the profile picture.
