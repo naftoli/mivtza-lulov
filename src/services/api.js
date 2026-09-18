@@ -276,9 +276,10 @@ export async function getLeaderboard(schoolId, limit = 10) {
 }
 
 // Class/platoon standings — each class has its OWN goal (kids in class × the
-// per-soldier default), same automatic rule as schools.
-export async function getClassLeaderboard(schoolId, limit = 12) {
-  if (!IS_DEMO) return mashpia.getClassLeaderboard(schoolId, limit)
+// per-soldier default), same automatic rule as schools. Every class is returned:
+// big schools run 40-50 platoons, and a cap hid most of them.
+export async function getClassLeaderboard(schoolId) {
+  if (!IS_DEMO) return mashpia.getClassLeaderboard(schoolId)
   await delay()
   const pk = perKid()
   const kidsAll = read(KEYS.kids, []).filter((k) => k.schoolId === schoolId)
@@ -304,7 +305,6 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
       return { grade: g, count, kidCount, goal, percent: goalPercent(count, goal) }
     })
     .sort((a, b) => b.percent - a.percent || b.count - a.count)
-    .slice(0, limit)
 }
 
 export async function getGlobalStats() {

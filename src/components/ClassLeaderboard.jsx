@@ -17,9 +17,12 @@ const RACE_FILLS = [
 // Class/platoon standings — each class races toward its own goal (kids × the
 // per-soldier goal: 3 by default, set by HQ).
 // `color` still drives the percent figure (defaults to green-deep).
-export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--color-green)' }) {
+export default function ClassLeaderboard({ rows, highlightGrade, highlightClassId, color = 'var(--color-green)' }) {
   const [sort, setSort] = useState('percent')
   const ranked = [...rows].sort((a, b) => (sort === 'percent' ? b.percent - a.percent : b.count - a.count))
+  // The soldier's own class: by id when both sides have one (two classes can share
+  // a label), else by label (the demo roster has no class ids).
+  const isMine = (r) => (r.classId && highlightClassId ? r.classId === highlightClassId : r.grade === highlightGrade)
   // Same green pill toggle as Home's race — the active segment shades sky -> teal-green.
   const seg = (active) =>
     `rounded-full px-3.5 py-2 text-green transition ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
@@ -38,7 +41,8 @@ export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--
       ) : (
         <ol className="space-y-3">
           {ranked.map((r, i) => (
-            <li key={r.grade} className={`rounded-2xl px-2 py-1.5 ${r.grade === highlightGrade ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
+            // Keyed by class id: some schools have two classes with the same label.
+            <li key={r.classId || r.grade} className={`rounded-2xl px-2 py-1.5 ${isMine(r) ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
               <div className="flex items-center gap-3">
                 <RankBadge index={i} score={r.count} />
                 <span className="flex-1 truncate text-[15px] font-semibold text-navy">Grade {r.grade}</span>

@@ -126,9 +126,7 @@ export function getRecentShakes(schoolId, limit = 8) {
 export async function getLeaderboard(schoolId, limit = 10) {
   return (await req(`/schools/${schoolId}/leaderboard`)).slice(0, limit)
 }
-export async function getClassLeaderboard(schoolId, limit = 12) {
-  return (await req(`/schools/${schoolId}/class-leaderboard`)).slice(0, limit)
-}
+export const getClassLeaderboard = (schoolId) => req(`/schools/${schoolId}/class-leaderboard`)
 export const getGlobalStats = () => req('/stats')
 // Scoped to the bearer token, so the kidId the facade passes is ignored here:
 // a soldier can only ever read their own reports. Admin views go through

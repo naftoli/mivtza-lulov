@@ -1204,6 +1204,9 @@ function lulavClassLeaderboard(int $schoolId): array
           AND $taskCondition
          WHERE c.school_id = :school AND c.class_era = 0
          GROUP BY c.class_id
+         -- A class with no registered children can't race (0 of 0), so leave it
+         -- out, as lulavSchoolRows() leaves out schools with no children.
+         HAVING kid_count > 0
          ORDER BY c.class_grade, c.class_sub"
     );
     $stmt->execute($params);

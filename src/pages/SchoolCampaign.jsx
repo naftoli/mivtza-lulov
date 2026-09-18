@@ -97,7 +97,7 @@ export default function SchoolCampaign() {
         <div className="space-y-6">
           <RecentShakes shakes={(shakes || []).slice(0, 8)} />
           <Leaderboard rows={board || []} highlightKidKey={kid?.kidKey} />
-          <ClassLeaderboard rows={classBoard || []} highlightGrade={isMySchool ? kid?.grade : undefined} />
+          <ClassLeaderboard rows={classBoard || []} highlightGrade={isMySchool ? kid?.grade : undefined} highlightClassId={isMySchool ? kid?.classId : undefined} />
         </div>
       </div>
 
