@@ -467,16 +467,17 @@ function lulavValidateMarkTargets(array $kid, array $mapping): void
     $params += [
         ':level' => $track['level'],
         ':lang' => $track['lang_id'],
+        ':fallback_lang' => LULAV_FALLBACK_LANG_ID,
         ':school_type' => $track['school_type_id'],
     ];
     $stmt = $MASHPIA_DB->prepare(
-        "SELECT task.grid_id, task.quantity, mission.start_date, mission.end_date
+        "SELECT task.grid_id, task.quantity, mission.start_date, mission.end_date, mission.lang_id
          FROM date_tasks task
          JOIN date_tasks_missions mission USING (date_tasks_mission_id)
          WHERE task.grid_id IN ($gridIn)
            AND mission.subject_id = 12
            AND mission.level = :level
-           AND mission.lang_id = :lang
+           AND mission.lang_id IN (:lang, :fallback_lang)
            AND mission.school_type_id = :school_type"
     );
     $stmt->execute($params);
@@ -487,12 +488,17 @@ function lulavValidateMarkTargets(array $kid, array $mapping): void
 
     foreach ($mapping as $row) {
         $requiresQuantity = in_array($row['field_name'], ['day', 'minutes'], true);
+        $inDates = array_filter($candidates[(int) $row['grid_id']] ?? [], static function (array $task) use ($row): bool {
+            return (int) $task['start_date'] >= (int) $row['start_date']
+                && (int) $task['end_date'] <= (int) $row['end_date'];
+        });
+        // The task markTasks() will write: the child's own language when the
+        // cell has one, else the fallback language (LULAV_FALLBACK_LANG_ID).
+        $ownLanguage = array_filter($inDates, static function (array $task) use ($track): bool {
+            return (int) $task['lang_id'] === (int) $track['lang_id'];
+        });
         $matched = false;
-        foreach ($candidates[(int) $row['grid_id']] ?? [] as $task) {
-            if ((int) $task['start_date'] < (int) $row['start_date']
-                || (int) $task['end_date'] > (int) $row['end_date']) {
-                continue;
-            }
+        foreach ($ownLanguage ?: $inDates as $task) {
             if ($requiresQuantity && (int) $task['quantity'] < 1) {
                 continue;
             }
@@ -901,7 +907,7 @@ function lulavMarkMapValue(array $kid, array $map, int $value): void
         ],
     ];
     $mivtzoim = new Mivtzoim((int) $campaign['mivtzoim_id']);
-    $mivtzoim->markTasks($marks);
+    $mivtzoim->markTasks($marks, LULAV_FALLBACK_LANG_ID);
 }
 
 function lulavMapFor(string $field, int $day): array

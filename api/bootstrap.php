@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 const LULAV_MIVTZOIM_ID = 10;
+// A child whose language has no Lulav grid task for a day is marked on this
+// language's task instead (Mivtzoim::markTasks' fallback). Lulav only: the
+// Mashpia teacher grid does not pass it.
+const LULAV_FALLBACK_LANG_ID = 1;
 
 define('LULAV_PUBLIC_ROOT', dirname(__DIR__, 3));
 define('LULAV_STORAGE_ROOT', dirname(LULAV_PUBLIC_ROOT) . '/storage/lulav');
