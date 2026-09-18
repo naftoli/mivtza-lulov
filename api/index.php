@@ -191,9 +191,18 @@ function lulavPerKidGoal(): int
     return $cached = ($goal === false ? 3 : max(1, (int) $goal));
 }
 
+/**
+ * Percent of goal, rounded UP so a school or class with any shakes shows at
+ * least 1% instead of sitting at 0% beside ones with none. It holds at 99 until
+ * the goal is actually met, so 100% always means reached (and bonus rounds on).
+ * Integer math: (7 / 100) * 100 is 7.000000000000001 in floating point, which
+ * ceil() would turn into 8.
+ */
 function lulavPercent(int $total, int $goal): int
 {
-    return max(0, (int) floor(($total / max(1, $goal)) * 100));
+    $total = max(0, $total);
+    $percent = intdiv($total * 100 + max(1, $goal) - 1, max(1, $goal));
+    return $total < $goal ? min(99, $percent) : $percent;
 }
 
 function lulavSchoolTotals(?int $onlyId = null): array
