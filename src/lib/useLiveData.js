@@ -27,7 +27,19 @@ export function useLiveData(loader, deps = []) {
 
   useEffect(() => {
     let alive = true
+    // One request at a time. A slow read (the admin's pending photos) used to
+    // get a second copy stacked on it by every 30s poll, and whichever came
+    // back last won — so a response started before an approve could land after
+    // the one started after it and put the approved card back. A change that
+    // arrives mid-request now just asks for one more run once it finishes.
+    let inFlight = false
+    let again = false
     const refresh = () => {
+      if (inFlight) {
+        again = true
+        return
+      }
+      inFlight = true
       run().then(
         (d) => {
           if (alive) {
@@ -42,7 +54,13 @@ export function useLiveData(loader, deps = []) {
             setLoading(false)
           }
         },
-      )
+      ).finally(() => {
+        inFlight = false
+        if (again && alive) {
+          again = false
+          refresh()
+        }
+      })
     }
     refresh()
     const unsub = subscribe(refresh)

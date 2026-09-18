@@ -14,6 +14,7 @@ const prettyDate = (iso) =>
 import ReportGrid from '../components/ReportGrid.jsx'
 import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
+import { pendingPhotos } from '../lib/photos.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
 import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote, LulavIcon } from '../components/ui.jsx'
@@ -131,10 +132,12 @@ export default function AdminDashboard() {
 
 function SchoolAdmin({ schoolId, isHQ }) {
   const { data: school, error: schoolError, reload: reloadSchool } = useLiveData(() => getSchool(schoolId), [schoolId])
-  const { data: shakes } = useLiveData(() => getShakes(schoolId, { includeHidden: true }), [schoolId])
+  const { data: shakes, error: shakesError, reload: reloadShakes } = useLiveData(() => getShakes(schoolId, { includeHidden: true }), [schoolId])
   const { data: kids } = useLiveData(() => getKidsForSchool(schoolId), [schoolId])
   const { data: reportRows } = useLiveData(() => getSchoolReportRows(schoolId), [schoolId])
-  const { data: pending } = useLiveData(() => getPendingPhotos(schoolId), [schoolId])
+  // Pending photos come back inline, so this is the slowest read on the page. It
+  // loads on its own and only its section waits for it.
+  const { data: pending, error: pendingError, reload: reloadPending } = useLiveData(() => getPendingPhotos(schoolId), [schoolId])
 
   if (!school && schoolError) return <div className="mt-6"><ErrorNote error={schoolError} onRetry={reloadSchool} what="this school" /></div>
   if (!school) return <div className="mt-6"><Spinner /></div>
@@ -143,8 +146,8 @@ function SchoolAdmin({ schoolId, isHQ }) {
     <div className="mt-6 space-y-6">
       <CampaignSettings school={school} isHQ={isHQ} />
       {/* Photo Approvals above the roster; "Remove entry" moderation right under it. */}
-      <PhotoApprovals schoolId={schoolId} shakes={pending || []} />
-      <Moderation shakes={shakes || []} />
+      <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} />
+      <Moderation shakes={shakes} error={shakesError} onRetry={reloadShakes} />
       <Roster kids={kids || []} />
       <ReportGrid rows={reportRows || []} />
     </div>
@@ -302,65 +305,110 @@ function Roster({ kids }) {
   )
 }
 
-function PhotoApprovals({ schoolId, shakes }) {
+function PhotoApprovals({ schoolId, shakes, error, onRetry }) {
   const [active, setActive] = useState(null) // photo open in the lightbox
   const [busy, setBusy] = useState(false)
+  const [allError, setAllError] = useState(null)
+  const loaded = Array.isArray(shakes)
 
   async function approveAll() {
     if (!confirm(`Approve all ${shakes.length} pending entries? Every photo in them will show on the public page.`)) return
     setBusy(true)
-    try { await approveAllPhotos(schoolId) } finally { setBusy(false) }
+    setAllError(null)
+    try {
+      await approveAllPhotos(schoolId)
+    } catch (e) {
+      setAllError(`Could not approve all — ${e.message}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <Section title="Photo Approvals"
-      right={
+      right={loaded && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Pill>{shakes.length} pending</Pill>
           {shakes.length > 0 && (
             <Button variant="navy" className={smallBtn} disabled={busy} onClick={approveAll}>
-              ✓ Approve all ({shakes.length})
+              {busy ? 'Approving…' : `✓ Approve all (${shakes.length})`}
             </Button>
           )}
         </div>
-      }>
-      {shakes.length === 0 ? (
+      )}>
+      {allError && <p role="alert" className="mb-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{allError}</p>}
+      {!loaded ? (
+        // Only this section waits on the photos; the rest of the page is already up.
+        error ? <ErrorNote error={error} onRetry={onRetry} what="the pending photos" /> : <Spinner label="Loading photos…" />
+      ) : shakes.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">Nothing to review — all photos approved. ✓</p>
       ) : (
         <>
-          <p className="mb-4 text-xs text-muted">Photos are hidden from the public page until you approve them. Approving an entry publishes every photo in it — tap a thumbnail to see it full size.</p>
+          <p className="mb-4 text-xs text-muted">Photos are hidden from the public page until you approve them. Approving an entry publishes the photos shown on it — tap a thumbnail to see it full size.</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {shakes.map((s) => {
-              const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
-              return (
-                <div key={s.id} className={`${tile} p-3`}>
-                  {/* every photo in the entry — the admin must be able to see what Approve will publish */}
-                  <div className="flex flex-wrap gap-2">
-                    {imgs.map((img, i) => (
-                      <button key={i} type="button" onClick={() => setActive({ ...s, photo: img })}
-                        aria-label={`View photo ${i + 1} of ${imgs.length} full size`}
-                        className="h-16 w-16 flex-none overflow-hidden rounded-xl ring-2 ring-white transition hover:ring-green-mid focus-visible:outline-none focus-visible:ring-green-mid">
-                        <img src={img} alt="" className="h-full w-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-2 min-w-0">
-                    <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
-                    {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
-                    <div className="mt-2 flex gap-2">
-                      <Button variant="navy" className={smallBtn} onClick={() => approvePhotos(s.id)}>✓ Approve{imgs.length > 1 ? ` all ${imgs.length}` : ''}</Button>
-                      <Button variant="red" className={dangerBtn} onClick={() => rejectPhotos(s.id)}>Reject</Button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            {shakes.map((s) => <PendingEntry key={s.id} entry={s} onOpen={setActive} />)}
           </div>
         </>
       )}
       <PhotoLightbox photo={active} onClose={() => setActive(null)} />
     </Section>
+  )
+}
+
+// One entry awaiting review. It holds its own busy/error state so a failed
+// approve or reject says so on that card, and a slow one cannot be sent twice.
+function PendingEntry({ entry: s, onOpen }) {
+  const [busy, setBusy] = useState(null) // 'approve' | 'reject' while the request runs
+  const [done, setDone] = useState(null) // what succeeded, until the list refresh drops the card
+  const [error, setError] = useState(null)
+  // Only the photos still waiting: a day can also hold ones approved earlier,
+  // which are already public and are not what these buttons act on.
+  const imgs = pendingPhotos(s)
+
+  async function review(action) {
+    setBusy(action)
+    setError(null)
+    try {
+      await (action === 'approve' ? approvePhotos : rejectPhotos)(s.id)
+      setDone(action)
+    } catch (e) {
+      setError(`Could not ${action} — ${e.message}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className={`${tile} p-3`}>
+      {/* every pending photo in the entry — the admin must be able to see what Approve will publish */}
+      <div className="flex flex-wrap gap-2">
+        {imgs.map((img, i) => (
+          <button key={i} type="button" onClick={() => onOpen({ ...s, photo: img })}
+            aria-label={`View photo ${i + 1} of ${imgs.length} full size`}
+            className="h-16 w-16 flex-none overflow-hidden rounded-xl ring-2 ring-white transition hover:ring-green-mid focus-visible:outline-none focus-visible:ring-green-mid">
+            <img src={img} alt="" className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 min-w-0">
+        <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
+        {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
+        {done ? (
+          <p className="mt-2 text-[12px] font-bold uppercase tracking-[0.08em] text-green">{done === 'approve' ? '✓ Approved' : 'Rejected'}</p>
+        ) : (
+          <div className="mt-2 flex gap-2">
+            <Button variant="navy" className={smallBtn} disabled={!!busy} onClick={() => review('approve')}>
+              {busy === 'approve' ? 'Approving…' : `✓ Approve${imgs.length > 1 ? ` all ${imgs.length}` : ''}`}
+            </Button>
+            <Button variant="red" className={dangerBtn} disabled={!!busy} onClick={() => review('reject')}>
+              {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+            </Button>
+          </div>
+        )}
+        {error && <p role="alert" className="mt-2 rounded-xl bg-white/60 px-3 py-2 text-xs font-semibold text-red">{error}</p>}
+      </div>
+    </div>
   )
 }
 
@@ -372,14 +420,15 @@ const MOD_SORTS = {
   oldest: { label: 'Oldest', fn: (a, b) => new Date(a.createdAt) - new Date(b.createdAt) },
 }
 
-function Moderation({ shakes }) {
+function Moderation({ shakes, error, onRetry }) {
   const [sort, setSort] = useState('shakes')
   const [q, setQ] = useState('')
   const [limit, setLimit] = useState(10)
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    const base = needle ? shakes.filter((s) => String(s.kidName).toLowerCase().includes(needle)) : shakes
+    const all = shakes || []
+    const base = needle ? all.filter((s) => String(s.kidName).toLowerCase().includes(needle)) : all
     return [...base].sort(MOD_SORTS[sort].fn)
   }, [shakes, q, sort])
 
@@ -392,7 +441,10 @@ function Moderation({ shakes }) {
   return (
     <Section title="Remove Mivtza Lulov Entry"
       right={<span className="text-xs text-muted">Hidden entries don’t count toward the goal or show publicly</span>}>
-      {shakes.length === 0 ? (
+      {!shakes ? (
+        // An admin's entries carry their pending photos inline too, so this can lag the rest of the page.
+        error ? <ErrorNote error={error} onRetry={onRetry} what="the entries" /> : <Spinner label="Loading entries…" />
+      ) : shakes.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">No entries yet.</p>
       ) : (
         <>

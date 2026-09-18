@@ -1,17 +1,17 @@
 import { useRef, useState } from 'react'
 import { useDialog } from '../lib/useDialog.js'
 import { timeAgo } from '../lib/format.js'
+import { approvedPhotos } from '../lib/photos.js'
 import { Card, SectionHeader, Button } from './ui.jsx'
 
 const PHOTO_BATCH = 10
 
 // Gallery of photos kids uploaded from the field ("Mivtzoim Pictures").
 export default function PhotoWall({ shakes }) {
-  // one tile per photo (an entry can carry several) — only APPROVED photos show
-  const photos = shakes.filter((s) => s.photoApproved).flatMap((s) => {
-    const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
-    return imgs.map((img, i) => ({ ...s, photo: img, id: `${s.id}-${i}` }))
-  })
+  // one tile per photo (an entry can carry several) — only APPROVED photos show,
+  // picked per photo so a day's newer pending photo stays off the wall
+  const photos = shakes.flatMap((s) =>
+    approvedPhotos(s).map((img, i) => ({ ...s, photo: img, id: `${s.id}-${i}` })))
   const [active, setActive] = useState(null)
   const [visible, setVisible] = useState(PHOTO_BATCH)
 

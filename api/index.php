@@ -845,6 +845,14 @@ function lulavBuildDayReport(
     if (!$createdAt && !empty($countMark['mark_date'])) {
         $createdAt = lulavDateFromJd((int) $countMark['mark_date']) . 'T00:00:00Z';
     }
+    // lulavPhotoValue() hands out an approved photo as its public URL and a
+    // pending one (only to its child or an admin) as an inline data URL, so
+    // the prefix is the per-photo status. A day can hold both once a child
+    // adds a photo after an approval; photoApproved used to read only the
+    // first photo, which mislabeled the whole day either way.
+    $approvedPhotos = array_values(array_filter($photos, static function (string $photo): bool {
+        return strpos($photo, 'data:') !== 0;
+    }));
     return [
         'id' => lulavDayReportId((int) $kid['user_id'], $day),
         'kidId' => $allowPending ? (string) $kid['user_serial'] : null,
@@ -862,7 +870,10 @@ function lulavBuildDayReport(
         'note' => (string) ($countMark['note'] ?? ''),
         'photos' => $photos,
         'photo' => $photos[0] ?? null,
-        'photoApproved' => !$photos || strpos($photos[0], 'data:') !== 0,
+        // Public URLs only: what may appear on the school's photo wall.
+        'approvedPhotos' => $approvedPhotos,
+        // True once nothing on this day is waiting for review.
+        'photoApproved' => count($approvedPhotos) === count($photos),
         'createdAt' => $createdAt,
         'hidden' => (bool) $countMark['hidden'],
     ];
