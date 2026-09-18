@@ -127,10 +127,13 @@ function perKid() {
 }
 
 // A school's BASE goal: an HQ-set custom override if present, else soldiers × per-kid.
+// No floor — goalPercent() already guards the divisor, and a floor of 1 gave a
+// school with no soldiers a phantom target that inflated the nationwide total
+// (see the matching note in lulavSchoolRows()).
 function baseGoalOf(school, pk = perKid()) {
   const override = Number(school.goalOverride)
   if (Number.isFinite(override) && override >= 1) return Math.floor(override)
-  return Math.max(1, kidCountOf(school) * pk)
+  return kidCountOf(school) * pk
 }
 
 // HQ: read / change the per-soldier default (applies everywhere at once).
@@ -167,7 +170,8 @@ function decorateSchool(school, shakes) {
   const goalCustom = Number.isFinite(Number(school.goalOverride)) && Number(school.goalOverride) >= 1
   // total = shakes already on record (baseline) + everything logged live
   const total = (school.baseline || 0) + loggedTotal(school.id, shakes)
-  const goalReached = total >= goal
+  // goal > 0 guard: 0 >= 0 would badge every empty school as goal-complete.
+  const goalReached = goal > 0 && total >= goal
   // There is one bonus round only, worth one additional shake per soldier.
   const bonusActive = goalReached
   const bonusGoal = goal + kids
@@ -285,7 +289,7 @@ export async function getClassLeaderboard(schoolId, limit = 12) {
     .map((g) => {
       const count = shaken[g] || 0
       const kidCount = classKids[g] || 0
-      const goal = Math.max(1, kidCount * pk)
+      const goal = kidCount * pk
       return { grade: g, count, kidCount, goal, percent: goalPercent(count, goal) }
     })
     .sort((a, b) => b.percent - a.percent || b.count - a.count)

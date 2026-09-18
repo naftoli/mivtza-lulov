@@ -151,3 +151,22 @@ export function Spinner({ label = 'Loading…' }) {
     </div>
   )
 }
+
+// Shown wherever a useLiveData loader rejects. Every screen used to render a
+// spinner forever in that case, so an outage looked identical to a slow load.
+// The API sends readable messages ("Too many login attempts…", "The Lulav API
+// is temporarily unavailable…"), so the message is surfaced when there is one.
+export function ErrorNote({ error, onRetry, what = 'this', className = '' }) {
+  const detail = typeof error === 'string' ? error : error?.message
+  return (
+    <div className={`rounded-2xl bg-race-red/12 px-4 py-5 text-center ring-1 ring-race-red/45 ${className}`} role="alert">
+      <p className="font-display text-[15px] font-bold text-navy">Could not load {what}.</p>
+      {detail && <p className="mt-1 text-sm text-navy/80">{detail}</p>}
+      {onRetry && (
+        <Button variant="outline" className="mt-3 !px-4 !py-2 !text-[15px]" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
+  )
+}

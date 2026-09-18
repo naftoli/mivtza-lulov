@@ -29,10 +29,18 @@ export default function AdminLogin() {
   async function submit(e) {
     e.preventDefault()
     setError(''); setBusy(true)
-    const admin = await loginAdmin(username, password)
-    setBusy(false)
-    if (admin) navigate('/admin')
-    else setError('Incorrect username or password.')
+    try {
+      const admin = await loginAdmin(username, password)
+      if (admin) navigate('/admin')
+      else setError('Incorrect username or password.')
+    } catch (err) {
+      // verifyAdmin() only swallows bad credentials; a 429 from the login rate
+      // limiter, a 403 for an account that administers no school, or a 503
+      // reached here unhandled and left the button stuck on "Signing in…".
+      setError(err?.message || 'We could not reach the base right now. Please try again in a moment.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

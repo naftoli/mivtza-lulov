@@ -4,7 +4,7 @@ import { getSchool, getShakes, getLeaderboard, getClassLeaderboard } from '../se
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, shortSchoolName } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Spinner, SchoolLogo } from '../components/ui.jsx'
+import { Button, Card, Spinner, SchoolLogo, ErrorNote } from '../components/ui.jsx'
 import GoalMeter from '../components/GoalMeter.jsx'
 import RecentShakes from '../components/RecentShakes.jsx'
 import PhotoWall from '../components/PhotoWall.jsx'
@@ -29,12 +29,14 @@ export default function SchoolCampaign() {
   const { schoolId } = useParams()
   const { kid } = useAuth()
   const [showShare, setShowShare] = useState(false)
-  const { data: school, loading } = useLiveData(() => getSchool(schoolId), [schoolId])
+  const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId), [schoolId])
   const { data: shakes } = useLiveData(() => getShakes(schoolId), [schoolId])
   const { data: board } = useLiveData(() => getLeaderboard(schoolId), [schoolId])
   const { data: classBoard } = useLiveData(() => getClassLeaderboard(schoolId), [schoolId])
 
   if (loading) return <div className="mx-auto max-w-6xl px-4"><Spinner /></div>
+  // A failed request is not a missing school — say so, and offer a retry.
+  if (error) return <div className="mx-auto max-w-2xl px-4 py-20"><ErrorNote error={error} onRetry={reload} what="this campaign" /></div>
   if (!school) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">

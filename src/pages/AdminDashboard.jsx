@@ -16,7 +16,7 @@ import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo } from '../components/ui.jsx'
+import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote } from '../components/ui.jsx'
 
 // Shared bits of the admin skin (sky cards on mint, navy / green-deep type).
 const label = 'text-[11px] font-semibold uppercase tracking-[0.1em] text-navy'   // small Exo label
@@ -123,12 +123,13 @@ export default function AdminDashboard() {
 }
 
 function SchoolAdmin({ schoolId, isHQ }) {
-  const { data: school } = useLiveData(() => getSchool(schoolId), [schoolId])
+  const { data: school, error: schoolError, reload: reloadSchool } = useLiveData(() => getSchool(schoolId), [schoolId])
   const { data: shakes } = useLiveData(() => getShakes(schoolId, { includeHidden: true }), [schoolId])
   const { data: kids } = useLiveData(() => getKidsForSchool(schoolId), [schoolId])
   const { data: reportRows } = useLiveData(() => getSchoolReportRows(schoolId), [schoolId])
   const { data: pending } = useLiveData(() => getPendingPhotos(schoolId), [schoolId])
 
+  if (!school && schoolError) return <div className="mt-6"><ErrorNote error={schoolError} onRetry={reloadSchool} what="this school" /></div>
   if (!school) return <div className="mt-6"><Spinner /></div>
 
   return (

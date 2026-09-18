@@ -4,7 +4,7 @@ import { getSchools, getGlobalStats, goalPercent } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, shortSchoolName } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Spinner, Pill, SchoolLogo, Input } from '../components/ui.jsx'
+import { Button, Card, Spinner, Pill, SchoolLogo, Input, ErrorNote } from '../components/ui.jsx'
 import GoalBar from '../components/GoalBar.jsx'
 
 // Race bar fills — one per rank, cycling, each a light -> full gradient of the
@@ -140,8 +140,8 @@ function SchoolCard({ s }) {
 }
 
 export default function Home() {
-  const { data: schools, loading } = useLiveData(() => getSchools(), [])
-  const { data: stats } = useLiveData(() => getGlobalStats(), [])
+  const { data: schools, loading, error, reload } = useLiveData(() => getSchools(), [])
+  const { data: stats, error: statsError, reload: reloadStats } = useLiveData(() => getGlobalStats(), [])
   const [query, setQuery] = useState('')
 
   const percent = stats ? goalPercent(stats.totalShakes, Math.max(1, stats.totalGoal)) : 0
@@ -222,6 +222,11 @@ export default function Home() {
           overlapping the hero by 26px, padded 44/50 top/bottom and 63 at the sides; the row spacing
           below puts the labels at y~805, the 56px numbers' baseline at y~880, the bar at y 905-929 and the
           stat tiles at y 955-1039 on the comp's canvas. */}
+      {!stats && statsError && (
+        <section className="relative z-10 mx-auto -mt-6 max-w-[1400px] px-4 sm:px-6 lg:px-10">
+          <ErrorNote error={statsError} onRetry={reloadStats} what="the nationwide totals" />
+        </section>
+      )}
       {stats && (
         <section className="relative z-10 mx-auto -mt-6 max-w-[1400px] px-4 sm:px-6 lg:px-10 2xl:-mt-[26px] 2xl:max-w-[1512px] 2xl:pl-[88px] 2xl:pr-4">
           <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12 2xl:px-[63px] 2xl:pb-[53px] 2xl:pt-10">
@@ -277,7 +282,8 @@ export default function Home() {
         <div className="mb-6">
           <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Bases In Action</h2>
         </div>
-        {loading || !schools ? <Spinner /> : (
+        {error && !schools ? <ErrorNote error={error} onRetry={reload} what="the schools" />
+          : loading || !schools ? <Spinner /> : (
           <>
             <div className="mb-6 max-w-md">
               <Input

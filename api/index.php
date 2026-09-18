@@ -302,10 +302,18 @@ function lulavSchoolRows(?int $onlyId = null): array
         $schoolId = (int) $row['school_id'];
         $kidCount = (int) $row['soldier_count'];
         $total = $totals[$schoolId] ?? 0;
-        $automaticGoal = max(1, $kidCount * $perKidGoal);
+        // No max(1, ...) floor here. It was meant to keep a zero out of the
+        // divisor, but lulavPercent() already guards that itself, so all the
+        // floor did was give a school with no registered children a goal of 1 —
+        // and /stats sums these, so the nationwide goal came out one too high
+        // per empty school (9 of 76 on production: 25,260 instead of
+        // 8,417 x 3 = 25,251). The goal is now exactly headcount x per-child.
+        $automaticGoal = $kidCount * $perKidGoal;
         $goalCustom = $row['goal_override'] !== null && (int) $row['goal_override'] > 0;
         $goal = $goalCustom ? (int) $row['goal_override'] : $automaticGoal;
-        $bonusActive = $total >= $goal;
+        // A zero goal must not read as "reached": 0 >= 0 is true, which would
+        // badge every empty school as goal-complete and bonus-active.
+        $bonusActive = $goal > 0 && $total >= $goal;
         $bonusGoal = $goal + $kidCount;
         $rows[] = [
             'id' => (string) $schoolId,
@@ -324,7 +332,7 @@ function lulavSchoolRows(?int $onlyId = null): array
             'bonusComplete' => $bonusActive && $total >= $bonusGoal,
             'bonusLevel' => $bonusActive ? 1 : 0,
             'total' => $total,
-            'goalReached' => $total >= $goal,
+            'goalReached' => $goal > 0 && $total >= $goal,
             'percent' => lulavPercent($total, $goal),
             'percentOfBase' => lulavPercent($total, $goal),
             'motto' => $row['motto'] ?: '',
@@ -1186,7 +1194,9 @@ function lulavClassLeaderboard(int $schoolId): array
     $rows = [];
     foreach ($stmt->fetchAll() as $row) {
         $kidCount = (int) $row['kid_count'];
-        $goal = max(1, $kidCount * $perKidGoal);
+        // Same rule as the school goal: headcount x per-child, no floor. An
+        // empty class shows 0 of 0 rather than a phantom target of 1.
+        $goal = $kidCount * $perKidGoal;
         $total = (int) $row['total'];
         $grade = $row['class_grade'] . ($row['class_sub'] ? '-' . $row['class_sub'] : '');
         $rows[] = [

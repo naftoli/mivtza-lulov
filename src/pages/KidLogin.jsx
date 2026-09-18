@@ -18,10 +18,19 @@ export default function KidLogin() {
   async function submit(e) {
     e.preventDefault()
     setError(''); setBusy(true)
-    const kid = await loginKid(id, dob)
-    setBusy(false)
-    if (kid) navigate('/me')
-    else setError('We could not find a soldier with that serial number and date of birth. Double-check and try again.')
+    try {
+      const kid = await loginKid(id, dob)
+      if (kid) navigate('/me')
+      else setError('We could not find a soldier with that serial number and date of birth. Double-check and try again.')
+    } catch (err) {
+      // verifyKid() only swallows a wrong serial/DOB; everything else reaches
+      // here. Without this the promise rejected unhandled, `busy` stayed true
+      // and the button sat on "Checking…" forever — which is exactly what a
+      // child hit after 12 tries, since the API rate-limits logins with a 429.
+      setError(err?.message || 'We could not reach the base right now. Please try again in a moment.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

@@ -8,7 +8,7 @@ import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
 import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
-import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar } from '../components/ui.jsx'
+import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar, ErrorNote } from '../components/ui.jsx'
 import Mascot from '../components/Mascot.jsx'
 
 // Small-label style (Exo semibold caps, navy) — matches the Field label; condensed
@@ -25,7 +25,7 @@ export default function KidDashboard() {
   const dayRequestRef = useRef(0)
 
   const { data: school } = useLiveData(() => (kid ? getSchool(kid.schoolId) : Promise.resolve(null)), [kid?.schoolId])
-  const { data: myShakes, loading } = useLiveData(() => (kid ? getKidShakes(kid.id) : Promise.resolve([])), [kid?.id])
+  const { data: myShakes, loading, error: shakesError, reload: reloadShakes } = useLiveData(() => (kid ? getKidShakes(kid.id) : Promise.resolve([])), [kid?.id])
 
   const [day, setDay] = useState(null) // which Sukkos day this entry is for
   const [count, setCount] = useState('')
@@ -240,7 +240,8 @@ export default function KidDashboard() {
         {/* History */}
         <Card className="p-6" topColor="var(--color-blue)">
           <SectionHeader>My Mivtza Lulov Report</SectionHeader>
-          {loading ? <Spinner /> : (myShakes || []).length === 0 ? (
+          {shakesError && !myShakes ? <ErrorNote error={shakesError} onRetry={reloadShakes} what="your report" />
+            : loading ? <Spinner /> : (myShakes || []).length === 0 ? (
             <p className="py-10 text-center text-sm text-navy/80">No missions logged yet. Your first one is waiting! 🌿</p>
           ) : (
             <ul className="mt-3 space-y-3">
