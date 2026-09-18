@@ -240,13 +240,11 @@ function CampaignSettings({ school, isHQ }) {
       </div>
 
       <div className={`${tile} mt-4 p-4`}>
-        <p className="sh !text-gold-dark">⭐ Bonus Round (automatic)</p>
+        <p className="sh !text-gold-dark">⭐ Bonus Rounds (automatic)</p>
         <p className="mt-1 text-sm text-navy">
           {school.bonusActive
-            ? school.bonusComplete
-              ? `Bonus complete — ${fmt(school.total)} shakes against the ${fmt(school.bonusGoal)} bonus target.`
-              : `Bonus target: ${fmt(school.bonusGoal)} shakes (+1 per soldier).`
-            : `Once ${fmt(school.goal)} is reached, one bonus round starts, adding ${fmt(school.kidCount)} (1 per soldier).`}
+            ? `Round ${school.bonusLevel} — target ${fmt(school.bonusGoal)} shakes. Each round adds ${fmt(school.kidCount)} (1 per soldier), and the next one starts as soon as this target is reached.`
+            : `Once ${fmt(school.goal)} is reached, bonus rounds start on their own — each adds ${fmt(school.kidCount)} (1 per soldier), with no limit.`}
         </p>
       </div>
     </Section>

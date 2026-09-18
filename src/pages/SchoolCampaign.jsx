@@ -81,16 +81,12 @@ export default function SchoolCampaign() {
 
           {school.bonusActive ? (
             <Card className="!bg-green p-5 text-white sm:p-6">
-              <p className="sh !text-gold">⭐ Bonus Round is ON</p>
+              <p className="sh !text-gold">⭐ Bonus Round {school.bonusLevel} is ON</p>
               <p className="mt-1 text-sm text-white/90">
-                {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward a
-                stretch goal of <strong className="text-gold">{fmt(school.bonusGoal)}</strong>. Keep going, soldiers!
+                {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward the
+                round {school.bonusLevel} target of <strong className="text-gold">{fmt(school.bonusGoal)}</strong> — reach
+                it and the next round starts. Keep going, soldiers!
               </p>
-            </Card>
-          ) : school.goalReached ? (
-            <Card className="p-5 ring-2 ring-inset ring-green-mid/70 sm:p-6">
-              <p className="sh">🎉 Goal reached!</p>
-              <p className="mt-1 text-sm text-navy">The goal is complete — the school can unlock a <strong>bonus round</strong> to push even further.</p>
             </Card>
           ) : null}
 

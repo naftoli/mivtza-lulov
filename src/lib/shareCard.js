@@ -153,7 +153,7 @@ function setSpacing(ctx, value) {
 
 // Build the share card and resolve with a PNG Blob (for preview / share / save).
 export async function buildShareCard(school) {
-  const { name, city, total, goal, percent, bonusActive } = school
+  const { name, city, total, goal, percent, bonusActive, bonusLevel } = school
   const p = palette()
   const [, shield, marker] = await Promise.all([ensureFonts(), loadShield(), loadMarker()])
 
@@ -221,7 +221,7 @@ export async function buildShareCard(school) {
   ctx.font = exo(600, 26)
   ctx.fillStyle = p.navy
   setSpacing(ctx, '2px')
-  ctx.fillText(`TOTAL SHAKES${bonusActive ? ' · BONUS ROUND' : ''}`, L, 478)
+  ctx.fillText(`TOTAL SHAKES${bonusActive ? ` · BONUS ROUND ${bonusLevel}` : ''}`, L, 478)
   setSpacing(ctx, '0px')
 
   // big numbers — total left, percent right, both green-deep

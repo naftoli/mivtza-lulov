@@ -100,15 +100,15 @@ export default function KidDashboard() {
     setTimeout(() => setFlash(''), 5000)
 
     const updated = await getSchool(kid.schoolId).catch(() => null)
-    // Big celebration for reaching the goal or auto-launching the bonus round;
-    // medium for crossing a 25/50/75% milestone; a small burst otherwise.
+    // Big celebration for reaching the goal or pushing the school into its next
+    // bonus round; medium for crossing a 25/50/75% milestone; a small burst otherwise.
     const reachedGoal = updated && !before?.goalReached && updated.goalReached
-    const launchedBonus = updated && !before?.bonusActive && updated.bonusActive
+    const launchedBonus = updated && before?.goalReached && (updated.bonusLevel || 0) > (before.bonusLevel || 0)
     const crossedMilestone = updated && [25, 50, 75].some((m) => (before?.percent ?? 0) < m && updated.percent >= m)
     celebrate(reachedGoal || launchedBonus ? 1.8 : crossedMilestone ? 1.2 : 0.5)
     playShake()
     setMascotMsg(
-      reachedGoal ? 'GOAL REACHED! 🎉' : launchedBonus ? 'Bonus round unlocked! 🚀'
+      reachedGoal ? 'GOAL REACHED! 🎉' : launchedBonus ? `Bonus round ${updated.bonusLevel} unlocked! 🚀`
         : crossedMilestone ? 'You’re on fire! 🔥' : `Yasher koach, ${kid.firstName}!`,
     )
   }

@@ -114,7 +114,7 @@ function loggedTotal(schoolId, shakes) {
 }
 
 // Goals are automatic unless HQ overrides one school: 3 shakes per soldier by
-// default, followed by one bonus round worth 1 more shake per soldier.
+// default, followed by unlimited bonus rounds, each worth 1 more shake per soldier.
 // The per-soldier default. HQ can change it (setPerKidGoal) and it drives every
 // automatic goal — school, class and nationwide. Schools never set goals.
 const DEFAULT_PER_KID = 3
@@ -172,9 +172,14 @@ function decorateSchool(school, shakes) {
   const total = (school.baseline || 0) + loggedTotal(school.id, shakes)
   // goal > 0 guard: 0 >= 0 would badge every empty school as goal-complete.
   const goalReached = goal > 0 && total >= goal
-  // There is one bonus round only, worth one additional shake per soldier.
-  const bonusActive = goalReached
-  const bonusGoal = goal + kids
+  // Bonus rounds never run out. Reaching the goal starts round 1; each round's
+  // target is one more shake per soldier than the last, and the next round starts
+  // the moment a target is reached — so bonusGoal is always still ahead of total.
+  // Derived on every read (never stored), so hiding entries or changing a goal
+  // moves the round at once. Must match lulavSchoolRows() in api/index.php.
+  const step = Math.max(1, kids)
+  const bonusLevel = goalReached ? Math.floor((total - goal) / step) + 1 : 0
+  const bonusGoal = goal + Math.max(1, bonusLevel) * step // round 1's target until the goal is reached
   return {
     ...school,
     endDate: ISRU_CHAG, // fixed campaign end (Isru Chag) — not set by anyone
@@ -182,9 +187,9 @@ function decorateSchool(school, shakes) {
     perKidGoal: pk,
     goalCustom,
     goal,
+    bonusLevel,
     bonusGoal,
-    bonusActive,
-    bonusComplete: bonusActive && total >= bonusGoal,
+    bonusActive: goalReached,
     total,
     goalReached,
     percent: goalPercent(total, goal),

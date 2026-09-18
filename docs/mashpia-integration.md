@@ -38,7 +38,7 @@ never change.
 ### C. Goals
 Computed from headcount: **base goal = children × per-child number** (default 3, HQ-adjustable).
 **HQ may override one school** with a fixed number (blank = back to automatic).
-**Each bonus round = +1 shake per child**, auto-advancing as targets are hit.
+**Each bonus round = +1 shake per child**, with no limit on rounds — the next one starts as soon as a target is hit.
 Applied per class, per school, and nationwide (sum of school base goals).
 Mashpia must supply accurate **class / school / national headcounts** and persist two HQ values:
 the **global per-child number** and any **per-school override**, scoped to the

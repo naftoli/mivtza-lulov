@@ -115,7 +115,10 @@ later be replaced by a per-child Lulav flag.
 The default school goal is registered headcount × the HQ-managed per-child
 goal (initially 3). HQ can override one school. Percentages are calculated
 against that effective base goal and may exceed 100. Reaching the goal starts
-one bonus round whose target adds one shake per registered child.
+bonus round 1, and bonus rounds never run out: each round's target adds one
+more shake per registered child, and the next round starts as soon as the
+current target is reached. `bonusLevel` (0 before the goal) and `bonusGoal`
+(always still ahead of `total`) are derived from the totals on every read.
 
 ### Cumulative daily reports
 

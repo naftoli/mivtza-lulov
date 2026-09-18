@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { fmt } from '../lib/format.js'
 import { celebrate } from '../lib/celebrate.js'
-import { Pill, LulavIcon } from './ui.jsx'
+import { LulavIcon } from './ui.jsx'
 
 // Thick angular "campaign" line that climbs with a couple of bends to a stub
 // arrowhead — with a gradient, glow, milestone markers, a pulsing progress dot,
@@ -101,7 +101,7 @@ function GoalTrend({ percent, d = TREND, sparkleAtTip = false }) {
 }
 
 export default function GoalMeter({ school, celebrateMilestones = true, variant = 'default' }) {
-  const { total, percent, percentOfBase, goalReached, bonusActive, goal, bonusGoal } = school
+  const { total, percent, percentOfBase, goalReached, bonusActive, bonusLevel, goal, bonusGoal } = school
   const prevPercent = useRef(percent)
   const prevReached = useRef(goalReached)
 
@@ -141,13 +141,11 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
       <>
         <p className="font-display text-2xl font-black leading-none tabular-nums text-green">{percentOfBase ?? percent}%</p>
         <p className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-navy">of goal · {fmt(goal)}</p>
-        {bonusActive ? (
+        {bonusActive && (
           <div className="mt-3 border-t border-navy/10 pt-2.5">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-gold-dark">Bonus · {fmt(bonusGoal)}</p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-gold-dark">Bonus {bonusLevel} · {fmt(bonusGoal)}</p>
           </div>
-        ) : goalReached ? (
-          <p className="mt-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-green">🎉 Goal reached!</p>
-        ) : null}
+        )}
       </>
     )
     return (
@@ -176,7 +174,7 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
 
       <div className="flex-none text-center sm:text-right">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-navy">
-          {bonusActive ? 'Bonus Round' : 'Total Shakes'}
+          {bonusActive ? `Bonus Round ${bonusLevel}` : 'Total Shakes'}
         </p>
 
         <p className="mt-1 flex items-baseline justify-center gap-2 sm:justify-end">
@@ -189,13 +187,11 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
         <p className="mt-3 text-sm font-semibold uppercase tracking-[0.08em] text-navy">
           {percentOfBase ?? percent}% of goal · {fmt(goal)} shakes
         </p>
-        {bonusActive ? (
+        {bonusActive && (
           <p className="text-sm font-semibold uppercase tracking-[0.08em] text-gold-dark">
-            Bonus goal · {fmt(bonusGoal)} shakes
+            Round {bonusLevel} goal · {fmt(bonusGoal)} shakes
           </p>
-        ) : goalReached ? (
-          <Pill className="mt-2 !bg-green !text-white">🎉 Goal reached!</Pill>
-        ) : null}
+        )}
       </div>
     </div>
   )

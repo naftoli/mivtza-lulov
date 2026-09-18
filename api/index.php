@@ -313,8 +313,14 @@ function lulavSchoolRows(?int $onlyId = null): array
         $goal = $goalCustom ? (int) $row['goal_override'] : $automaticGoal;
         // A zero goal must not read as "reached": 0 >= 0 is true, which would
         // badge every empty school as goal-complete and bonus-active.
-        $bonusActive = $goal > 0 && $total >= $goal;
-        $bonusGoal = $goal + $kidCount;
+        $goalReached = $goal > 0 && $total >= $goal;
+        // Bonus rounds never run out. Reaching the goal starts round 1; each
+        // round's target is one more shake per child than the last, and the next
+        // round starts the moment a target is reached, so bonusGoal is always
+        // still ahead of total. Must match decorateSchool() in src/services/api.js.
+        $step = max(1, $kidCount);
+        $bonusLevel = $goalReached ? intdiv($total - $goal, $step) + 1 : 0;
+        $bonusGoal = $goal + max(1, $bonusLevel) * $step;
         $rows[] = [
             'id' => (string) $schoolId,
             'name' => $row['school_name'],
@@ -325,11 +331,11 @@ function lulavSchoolRows(?int $onlyId = null): array
             'goalCustom' => $goalCustom,
             'goalOverride' => $goalCustom ? $goal : null,
             'goal' => $goal,
+            'bonusLevel' => $bonusLevel,
             'bonusGoal' => $bonusGoal,
-            'bonusActive' => $bonusActive,
-            'bonusComplete' => $bonusActive && $total >= $bonusGoal,
+            'bonusActive' => $goalReached,
             'total' => $total,
-            'goalReached' => $goal > 0 && $total >= $goal,
+            'goalReached' => $goalReached,
             'percent' => lulavPercent($total, $goal),
             'percentOfBase' => lulavPercent($total, $goal),
             'motto' => $row['motto'] ?: '',
