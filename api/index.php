@@ -255,10 +255,16 @@ function lulavSchoolRows(?int $onlyId = null): array
     // Headcount comes from a grouped derived table driven by user_registration
     // (selective on `year`) rather than a correlated EXISTS evaluated once per
     // row of `users`. The correlated form never returned on production.
+    // Children checked off for Lulav (users.lulav)
+    // count too, registered or not; the UNION keeps anyone who is both from
+    // being counted twice.
     $rosterFilter = '';
+    $flaggedFilter = '';
     if ($onlyId !== null) {
         $rosterFilter = ' AND u.school_id = :roster_school';
+        $flaggedFilter = ' AND flagged.school_id = :flagged_school';
         $params[':roster_school'] = $onlyId;
+        $params[':flagged_school'] = $onlyId;
     }
     $sql = "SELECT s.school_id, s.school_name, s.school_city,
                    s.logo, s.school_logo_id, s.school_logo_kiosk_id,
@@ -266,18 +272,26 @@ function lulavSchoolRows(?int $onlyId = null): array
                    settings.motto, settings.color, settings.goal_override
             FROM schools s
             LEFT JOIN (
-                SELECT u.school_id, COUNT(DISTINCT u.user_id) AS soldier_count
-                FROM user_registration reg
-                JOIN users u ON u.user_id = reg.user_id
-                WHERE (
-                        reg.year = :current_year
-                        OR (
-                            reg.year = :previous_year
-                            AND u.school_id IN ($australian)
-                        )
-                      )
-                      $rosterFilter
-                GROUP BY u.school_id
+                SELECT roster_users.school_id, COUNT(*) AS soldier_count
+                FROM (
+                    SELECT u.user_id, u.school_id
+                    FROM user_registration reg
+                    JOIN users u ON u.user_id = reg.user_id
+                    WHERE (
+                            reg.year = :current_year
+                            OR (
+                                reg.year = :previous_year
+                                AND u.school_id IN ($australian)
+                            )
+                          )
+                          $rosterFilter
+                    UNION
+                    SELECT flagged.user_id, flagged.school_id
+                    FROM users flagged
+                    WHERE flagged.lulav = 1
+                          $flaggedFilter
+                ) roster_users
+                GROUP BY roster_users.school_id
             ) roster ON roster.school_id = s.school_id
             LEFT JOIN lulav_school_settings settings
               ON settings.school_id = s.school_id
@@ -285,17 +299,25 @@ function lulavSchoolRows(?int $onlyId = null): array
              AND settings.school_year = :current_year
             WHERE s.school_era IS NULL
               AND s.test_school = 0
-              AND EXISTS (
-                  SELECT 1
-                  FROM school_registrations registration
-                  WHERE registration.school_id = s.school_id
-                    AND (
-                        registration.year = :current_year
-                        OR (
-                            registration.year = :previous_year
-                            AND s.school_id IN ($australian)
+              AND (
+                  EXISTS (
+                      SELECT 1
+                      FROM school_registrations registration
+                      WHERE registration.school_id = s.school_id
+                        AND (
+                            registration.year = :current_year
+                            OR (
+                                registration.year = :previous_year
+                                AND s.school_id IN ($australian)
+                            )
                         )
-                    )
+                  )
+                  -- a school with a child checked off for Lulav (users.lulav)
+                  OR EXISTS (
+                      SELECT 1 FROM users flagged_member
+                      WHERE flagged_member.school_id = s.school_id
+                        AND flagged_member.lulav = 1
+                  )
               )";
     if ($onlyId !== null) {
         $sql .= ' AND s.school_id = :school';

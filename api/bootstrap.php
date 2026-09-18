@@ -326,7 +326,9 @@ function lulavEligibleUserCondition(string $userAlias): string
         throw new InvalidArgumentException('Invalid user table alias.');
     }
     $year = lulavCurrentSchoolYear();
-    return "EXISTS (
+    // Children checked off for Lulav on their Settings tab
+    // (users.lulav) take part without being registered.
+    return "({$userAlias}.lulav = 1 OR EXISTS (
         SELECT 1
         FROM user_registration lulav_registration
         WHERE lulav_registration.user_id = {$userAlias}.user_id
@@ -337,7 +339,7 @@ function lulavEligibleUserCondition(string $userAlias): string
               AND {$userAlias}.school_id IN (" . lulavAustralianSchoolSql() . ")
             )
           )
-    )";
+    ))";
 }
 
 /**
@@ -353,6 +355,8 @@ function lulavEligibleUserCondition(string $userAlias): string
  * table is materialized on its own, so the query starts from the campaign's
  * marks on the date_task_id index instead: 0.08 s and 0.1 s, same results.
  * DISTINCT also keeps a child registered in both years from being counted twice.
+ * The UNION (which also de-duplicates) adds children flagged through the Lulav
+ * Mivtza setting (users.lulav), registered or not.
  */
 function lulavRegisteredUsersJoin(string $userAlias): string
 {
@@ -369,6 +373,10 @@ function lulavRegisteredUsersJoin(string $userAlias): string
              lulav_reg.year = " . ($year - 1) . "
              AND lulav_reg_user.school_id IN (" . lulavAustralianSchoolSql() . ")
            )
+        UNION
+        SELECT lulav_flagged.user_id
+        FROM users lulav_flagged
+        WHERE lulav_flagged.lulav = 1
     ) lulav_registered ON lulav_registered.user_id = {$userAlias}.user_id";
 }
 
@@ -385,18 +393,30 @@ function lulavSchoolIsEligible(int $schoolId): bool
     // test_school checks, a closed or test school was rejected from /schools but
     // still passed the gate on /schools/:id/leaderboard, /shakes and
     // /report-rows.
+    // A school with a child checked off for Lulav takes part
+    // even when it is not registered itself.
     $stmt = $MASHPIA_DB->prepare(
         'SELECT 1
-         FROM school_registrations registration
-         JOIN schools s ON s.school_id = registration.school_id
-         WHERE registration.school_id = :school
+         FROM schools s
+         WHERE s.school_id = :school
            AND s.school_era IS NULL
            AND s.test_school = 0
            AND (
-             registration.year = :year
-             OR (
-               registration.year = :previous_year
-               AND registration.school_id IN (' . lulavAustralianSchoolSql() . ')
+             EXISTS (
+               SELECT 1
+               FROM school_registrations registration
+               WHERE registration.school_id = s.school_id
+                 AND (
+                   registration.year = :year
+                   OR (
+                     registration.year = :previous_year
+                     AND registration.school_id IN (' . lulavAustralianSchoolSql() . ')
+                   )
+                 )
+             )
+             OR EXISTS (
+               SELECT 1 FROM users flagged
+               WHERE flagged.school_id = s.school_id AND flagged.lulav = 1
              )
            )
          LIMIT 1'
