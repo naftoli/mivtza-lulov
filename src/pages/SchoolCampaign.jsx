@@ -64,7 +64,7 @@ export default function SchoolCampaign() {
             </div>
             {/* Soldier CTA — prominent pill on the green hero band, above the meter */}
             <div className="mt-5">
-              <Button to={isMySchool ? '/me' : '/login'} variant="gold" className="w-full sm:w-auto sm:min-w-[240px]">
+              <Button to={kid ? '/me' : '/login'} variant="gold" className="w-full sm:w-auto sm:min-w-[240px]">
                 I'm a Soldier — Log Shakes
               </Button>
             </div>
@@ -101,7 +101,7 @@ export default function SchoolCampaign() {
         <div className="space-y-6">
           <RecentShakes shakes={(shakes || []).slice(0, 8)} />
           <Leaderboard rows={board || []} highlightKidKey={kid?.kidKey} />
-          <ClassLeaderboard rows={classBoard || []} highlightGrade={kid?.grade} />
+          <ClassLeaderboard rows={classBoard || []} highlightGrade={isMySchool ? kid?.grade : undefined} />
         </div>
       </div>
 

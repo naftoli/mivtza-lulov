@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Button, Card, Field, Input, Band } from '../components/ui.jsx'
 import { asset } from '../lib/asset.js'
@@ -7,7 +7,7 @@ import { asset } from '../lib/asset.js'
 const SERIAL_TIP = 'You can find your serial number on your account at mashpia.com.'
 
 export default function KidLogin() {
-  const { loginKid } = useAuth()
+  const { loginKid, kid } = useAuth()
   const navigate = useNavigate()
   const [id, setId] = useState('')
   const [dob, setDob] = useState('')
@@ -32,6 +32,10 @@ export default function KidLogin() {
       setBusy(false)
     }
   }
+
+  // Already signed in (e.g. via a school page's "I'm a Soldier" button): go
+  // straight to the report instead of showing the login form again.
+  if (kid) return <Navigate to="/me" replace />
 
   return (
     <div className="mx-auto max-w-md px-4 py-10 sm:py-14">
