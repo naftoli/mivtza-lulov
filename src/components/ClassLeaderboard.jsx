@@ -39,7 +39,7 @@ export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--
           {ranked.map((r, i) => (
             <li key={r.grade} className={`rounded-2xl px-2 py-1.5 ${r.grade === highlightGrade ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
               <div className="flex items-center gap-3">
-                <RankBadge index={i} />
+                <RankBadge index={i} score={r.count} />
                 <span className="flex-1 truncate text-[15px] font-semibold text-navy">Grade {r.grade}</span>
                 <span className="text-xs font-semibold tabular-nums text-navy/60">{fmt(r.count)} / {fmt(r.goal)}</span>
                 <span className="w-10 text-right font-display text-sm font-bold tabular-nums" style={{ color }}>{r.percent}%</span>

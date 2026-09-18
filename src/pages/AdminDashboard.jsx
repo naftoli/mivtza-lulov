@@ -76,7 +76,7 @@ export default function AdminDashboard() {
                 <button key={s.id} onClick={() => setSelectedId(s.id)}
                   className={`flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition hover:bg-white/45 sm:gap-3 ${selectedId === s.id ? 'bg-white/55 ring-1 ring-green-mid/50' : ''}`}>
                   <span className="grid w-5 flex-none place-items-center sm:w-8">
-                    {MEDALS[i]
+                    {MEDALS[i] && s.total > 0
                       ? <img src={asset(`design/${MEDALS[i]}`)} alt={`Rank ${i + 1}`} className="h-5 w-5 object-contain sm:h-8 sm:w-8" />
                       : <span className="font-display text-base font-bold italic text-blue-accent sm:text-lg">{i + 1}</span>}
                   </span>

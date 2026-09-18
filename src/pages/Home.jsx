@@ -82,7 +82,7 @@ function SchoolsRace({ schools }) {
           >
             {/* the slot keeps the medal's 60px height from 2xl so numeral rows (ranks 4+) hold the same pitch */}
             <span className="grid w-9 flex-none place-items-center sm:w-12 lg:w-14 2xl:h-[60px] 2xl:w-[52px]">
-              {i < 3
+              {i < 3 && s.total > 0
                 ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} draggable="false" className="h-9 w-auto sm:h-[46px] lg:h-[52px] 2xl:h-[60px]" />
                 : <span className="font-display text-[20px] font-bold italic leading-none text-blue-accent sm:text-[24px]">{i + 1}</span>}
             </span>

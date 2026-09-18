@@ -3,6 +3,8 @@ import { asset } from '../lib/asset.js'
 import { Card, SectionHeader } from './ui.jsx'
 
 // Rank marker shared by the standings lists: the 3D medal renders for the top
+// three that have actually scored — before anything is logged every row is tied
+// on zero, so they all show numerals rather than an unearned gold/silver/bronze —
 // three (displayed at ~0.5x of the 52x60 source — never upscaled), then italic
 // blue-accent numerals, exactly like the comp's race card.
 const MEDALS = [
@@ -10,8 +12,8 @@ const MEDALS = [
   ['medal-silver', '2nd place'],
   ['medal-bronze', '3rd place'],
 ]
-export function RankBadge({ index }) {
-  const medal = MEDALS[index]
+export function RankBadge({ index, score = 1 }) {
+  const medal = Number(score) > 0 ? MEDALS[index] : null
   return (
     <span className="grid w-8 shrink-0 place-items-center">
       {medal ? (
@@ -48,7 +50,7 @@ export default function Leaderboard({ rows, highlightKidKey }) {
                   <span className="text-center font-cond text-[11px] font-semibold uppercase leading-[1.05] tracking-[0.01em] text-green">{r.rank}</span>
                 </span>
               ) : (
-                <RankBadge index={i} />
+                <RankBadge index={i} score={r.count} />
               )}
               <span className="flex-1 truncate text-[15px] font-semibold text-navy">{r.name}</span>
               <span className="font-display text-base font-bold tabular-nums text-green">{fmt(r.count)}</span>
