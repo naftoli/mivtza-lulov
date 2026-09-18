@@ -899,12 +899,29 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
     if (!is_numeric($minutes) || (int) $minutes < 0 || (int) $minutes > 65535) {
         lulavError('Minutes must be between 0 and 65,535.', 422);
     }
-    $note = trim((string) ($input['note'] ?? ''));
-    if (strlen($note) > 10000) {
-        lulavError('The story must be 10,000 characters or fewer.', 422);
+    // An ABSENT field leaves the stored value alone; an explicitly empty one
+    // clears it. Previously both read as "clear", so any caller that omitted
+    // these keys -- the documented POST /shakes alias among them -- erased the
+    // child's story and rejected every photo on that day, while count and
+    // minutes were protected by max(). A stale form could not lower a
+    // teacher-entered number but could still wipe a teacher-entered story.
+    // The UI always sends both keys, so its per-photo delete button and an
+    // emptied story still work exactly as before.
+    $note = null;
+    if (array_key_exists('note', $input)) {
+        $note = trim((string) $input['note']);
+        if (strlen($note) > 10000) {
+            lulavError('The story must be 10,000 characters or fewer.', 422);
+        }
     }
-    $photos = is_array($input['photos'] ?? null) ? $input['photos'] : [];
-    lulavValidatePhotos($photos, 8);
+    $photos = null;
+    if (array_key_exists('photos', $input)) {
+        if (!is_array($input['photos'])) {
+            lulavError('Photos must be supplied as an array.', 422);
+        }
+        $photos = $input['photos'];
+        lulavValidatePhotos($photos, 8);
+    }
 
     return lulavWithUserLock((int) $kid['user_id'], static function () use (
         $kid,
@@ -924,13 +941,17 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         $currentMinutes = (int) lulavMappedDayMark((int) $kid['user_id'], 'minutes', $day)['value'];
         lulavMarkMapValue($kid, $countMap, max($currentCount, (int) $count));
         lulavMarkMapValue($kid, $minuteMap, max($currentMinutes, (int) $minutes));
-        lulavUpdateDayDescription($kid, $day, $note);
-        foreach ($photos as $photo) {
-            if (strpos($photo, 'data:image/') === 0) {
-                lulavStoreDayPhoto($photo, $kid, $day);
-            }
+        if ($note !== null) {
+            lulavUpdateDayDescription($kid, $day, $note);
         }
-        lulavReconcileDayPhotos($kid, $day, $photos);
+        if ($photos !== null) {
+            foreach ($photos as $photo) {
+                if (strpos($photo, 'data:image/') === 0) {
+                    lulavStoreDayPhoto($photo, $kid, $day);
+                }
+            }
+            lulavReconcileDayPhotos($kid, $day, $photos);
+        }
         // The marks and photos just changed — drop the per-request read caches
         // so the response body reflects what was written.
         lulavForgetUserMarks((int) $kid['user_id']);

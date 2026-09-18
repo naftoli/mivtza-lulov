@@ -91,6 +91,22 @@ Participating schools are those with a `school_registrations` row for
 `GlobalSettings::getAustralian()` also qualify through a registration from the
 previous year.
 
+**Every year in this API comes from `getCurrentYear()`, never
+`getRegistrationYear()`** — deliberately, and `lulavCurrentSchoolYear()` is the
+single source. Most of Mashpia gates `user_registration` and
+`school_registrations` on `getRegistrationYear()`, because those flows ask
+"which year are we selling". This one asks "which cohort is enrolled right
+now", and `user_registration.year` records the school year a child enrolled
+for. Do not align it with the registration flow: the two `global_settings`
+rows can legitimately differ at a rollover, and following `registration_year`
+would swap the campaign's roster for next year's sign-ups.
+
+The Australian offset is handled differently here on purpose too.
+`getRegistrationYear()` picks one year by calendar month; this API accepts
+either the current or the previous year for those schools, which is
+month-independent and is what a one-week Succos campaign wants. Both read the
+same school list from `getAustralian()`.
+
 The roster and all child counts use the matching rule in `user_registration`:
 current-year registrations, plus previous-year registrations for Australian
 schools. This rule is centralized in `lulavEligibleUserCondition()` so it can
@@ -116,6 +132,21 @@ state, and exact timestamp live in mapped `date_tasks_marks` rows. The API
 prefills these values and saves the larger of the submitted and current value,
 so a stale child form cannot reduce a larger teacher-entered number. Recent
 Shakes shows the current daily total ordered by `date_tasks_marks.updated`.
+
+`count` and `minutes` are always max-wins. `note` and `photos` are
+last-write-wins, because the child's form has a per-photo delete button and an
+emptied story has to be savable — but **only when the field is actually sent**:
+
+| field in the request body | effect |
+| --- | --- |
+| absent | left exactly as stored |
+| `"note": ""` / `"photos": []` | cleared |
+| present with a value | replaces the stored value |
+
+So `POST /shakes` with just `{ day, count }` now records the count and leaves
+that day's story and photos untouched. Sending `photos` as anything other than
+an array is a 422 rather than a silent clear. The web app always sends both
+keys, so its behaviour is unchanged.
 
 ### HQ settings
 

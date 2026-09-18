@@ -256,6 +256,26 @@ function lulavDateFromJd($jd): ?string
     return sprintf('%04d-%02d-%02d', (int) $parts[2], (int) $parts[0], (int) $parts[1]);
 }
 
+/**
+ * The school year everything in this API is scoped by: the task map, campaign
+ * and school settings, photos, and child/school eligibility.
+ *
+ * getCurrentYear(), NOT getRegistrationYear() — deliberately, and it is the
+ * only year source in this API. Most of the platform gates user_registration
+ * and school_registrations on getRegistrationYear(), because those flows ask
+ * "which year are we selling". This one asks "which cohort is enrolled right
+ * now", and user_registration.year records the school year a child enrolled
+ * for, so current_year is the right question. Do not "align" this with the
+ * registration flow; the two settings can legitimately differ at a rollover
+ * and following registration_year would swap the campaign's roster for next
+ * year's sign-ups.
+ *
+ * The Australian offset is handled differently here too, on purpose:
+ * getRegistrationYear() picks a single year by calendar month, while
+ * lulavEligibleUserCondition() accepts either the current or previous year for
+ * those schools. That superset is month-independent, which is what a one-week
+ * Succos campaign wants. Both read the same school list via getAustralian().
+ */
 function lulavCurrentSchoolYear(): int
 {
     // Memoized: this is read while building almost every SQL string (see
