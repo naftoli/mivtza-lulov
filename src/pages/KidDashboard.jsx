@@ -119,11 +119,14 @@ export default function KidDashboard() {
       <Card>
         <div className="flex items-start gap-4 p-5 sm:p-6">
           <Avatar name={`${kid.firstName} ${kid.lastName}`} src={kid.photo} size={60} />
-          {school && <SchoolLogo school={school} size={44} className="hidden sm:block" />}
+          {school && <SchoolLogo school={school} size={44} className="hidden sm:grid" />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <SectionHeader>Soldier</SectionHeader>
-              {kid.rank && <Pill className="!bg-green !text-gold">🎖️ {kid.rank}</Pill>}
+              {/* The army rank logo, as Recent Shakes and the leaderboard show it;
+                  the medal emoji only stands in when there is no image (demo). */}
+              {kid.rankImageUrl && <img src={kid.rankImageUrl} alt="" className="h-10 w-10 object-contain" />}
+              {kid.rank && <Pill className="!bg-green !text-gold">{!kid.rankImageUrl && '🎖️ '}{kid.rank}</Pill>}
             </div>
             <h1 className="font-display text-2xl font-black leading-tight text-navy sm:text-[28px]">
               {kid.firstName} {kid.lastName}
