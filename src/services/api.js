@@ -193,11 +193,17 @@ function decorateSchool(school, shakes) {
 }
 
 // ---- reads ----
+// A registered school with no registered children (e.g. a summer camp) has nobody
+// who can log in and a goal of 0, so it would sit at "0 of 0" forever — it is left
+// out of every school list. Single-school lookups (getSchool) are not filtered, so
+// an admin of such a school still gets their page rather than a crash.
+const hasSoldiers = (s) => Number(s?.kidCount ?? s?.soldierCount ?? 0) > 0
+
 export async function getSchools() {
-  if (!IS_DEMO) return mashpia.getSchools()
+  if (!IS_DEMO) return ((await mashpia.getSchools()) || []).filter(hasSoldiers)
   await delay()
   const shakes = read(KEYS.shakes, [])
-  return read(KEYS.schools, []).map((s) => decorateSchool(s, shakes))
+  return read(KEYS.schools, []).map((s) => decorateSchool(s, shakes)).filter(hasSoldiers)
 }
 
 export async function getSchool(id) {

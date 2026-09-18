@@ -268,7 +268,7 @@ export default function Home() {
                 10px in the comp), not stretched across the card. */}
             <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8 2xl:-ml-2.5 2xl:mt-[26px] 2xl:grid-cols-[repeat(3,320px)] 2xl:gap-0">
               <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.activeSoldiers)} label="Soldiers" />
-              <Stat icon={asset('design/icon-school.png')} value={fmt(stats.totalSchools)} label="Schools" />
+              <Stat icon={asset('design/icon-school.png')} value={fmt(schools ? schools.length : stats.totalSchools)} label="Schools" />
               <Stat icon={asset('design/icon-camera.png')} value={fmt(stats.totalPhotos)} label="Photos" />
             </div>
           </Card>
