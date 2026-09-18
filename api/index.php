@@ -216,12 +216,13 @@ function lulavSchoolTotals(?int $onlyId = null): array
     // Driven from date_tasks_marks on the resolved date_task_id set: the old
     // shape re-joined date_tasks/date_tasks_missions for the whole country and
     // never returned. Scoped to one school when only one is being rendered.
+    // Registration is checked by JOIN, not EXISTS — see lulavRegisteredUsersJoin().
     $sql = "SELECT u.school_id, SUM(m.done_qty) AS total
             FROM date_tasks_marks m
             JOIN users u ON u.user_id = m.user_id
+            " . lulavRegisteredUsersJoin('u') . "
             WHERE m.date_task_id IN ($taskIn)
-              AND m.mark_inactive = 0
-              AND " . lulavEligibleUserCondition('u');
+              AND m.mark_inactive = 0";
     if ($onlyId !== null) {
         $sql .= ' AND u.school_id = :school';
         $params[':school'] = $onlyId;
@@ -750,8 +751,9 @@ function lulavLoadDayMarks(?int $schoolId, ?int $userId): array
         $where = ' AND m.user_id = :user';
         $params[':user'] = $userId;
     } elseif ($schoolId !== null) {
-        $join = 'JOIN users u ON u.user_id = m.user_id';
-        $where = ' AND u.school_id = :school AND ' . lulavEligibleUserCondition('u');
+        // Registration by JOIN, not EXISTS — see lulavRegisteredUsersJoin().
+        $join = 'JOIN users u ON u.user_id = m.user_id ' . lulavRegisteredUsersJoin('u');
+        $where = ' AND u.school_id = :school';
         $params[':school'] = $schoolId;
     }
     $sql = "SELECT m.user_id, m.date_task_id, m.done_qty, m.mark_inactive,
@@ -1167,10 +1169,10 @@ function lulavLeaderboard(int $schoolId): array
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
          FROM date_tasks_marks mark
          JOIN users u ON u.user_id = mark.user_id
+         " . lulavRegisteredUsersJoin('u') . "
          WHERE mark.date_task_id IN ($taskIn)
            AND mark.mark_inactive = 0
            AND u.school_id = :school
-           AND " . lulavEligibleUserCondition('u') . "
          GROUP BY u.user_id
          ORDER BY total DESC, u.last, u.first
          LIMIT 100"
@@ -1203,41 +1205,54 @@ function lulavClassLeaderboard(int $schoolId): array
     // were still summed — every prior year's Lulav marks landed in this year's
     // class standings. (Observed on production: school 40 reported 14 shakes and
     // 233% here while /leaderboard, whose joins are inner, correctly reported 0.)
-    $taskCondition = 'FALSE';
-    $params = [':school' => $schoolId];
-    if ($taskIds) {
-        [$taskIn, $taskParams] = lulavIdPlaceholders('task', $taskIds);
-        $taskCondition = "mark.date_task_id IN ($taskIn)";
-        $params += $taskParams;
-    }
+    //
+    // Headcount and shakes are two queries. Joined in one, the marks were read
+    // child by child from each one's whole mark history (66 s for Oholei Torah);
+    // on their own they start from the campaign's marks. A class with no
+    // registered children can't race (0 of 0), so it is left out, as
+    // lulavSchoolRows() leaves out schools with no children.
     $stmt = $MASHPIA_DB->prepare(
         "SELECT c.class_id, c.class_grade, c.class_sub,
-                COUNT(DISTINCT roster.user_id) AS kid_count,
-                COALESCE(SUM(mark.done_qty), 0) AS total
+                COUNT(DISTINCT roster.user_id) AS kid_count
          FROM classes c
-         LEFT JOIN users roster
-           ON roster.class_id = c.class_id
-          AND " . lulavEligibleUserCondition('roster') . "
-         LEFT JOIN date_tasks_marks mark
-           ON mark.user_id = roster.user_id
-          AND mark.mark_inactive = 0
-          AND $taskCondition
+         JOIN users roster ON roster.class_id = c.class_id
+         " . lulavRegisteredUsersJoin('roster') . "
          WHERE c.school_id = :school AND c.class_era = 0
          GROUP BY c.class_id
-         -- A class with no registered children can't race (0 of 0), so leave it
-         -- out, as lulavSchoolRows() leaves out schools with no children.
-         HAVING kid_count > 0
          ORDER BY c.class_grade, c.class_sub"
     );
-    $stmt->execute($params);
+    $stmt->execute([':school' => $schoolId]);
+    $classes = $stmt->fetchAll();
+
+    $totals = [];
+    if ($taskIds) {
+        [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
+        $params[':school'] = $schoolId;
+        $stmt = $MASHPIA_DB->prepare(
+            "SELECT roster.class_id, SUM(mark.done_qty) AS total
+             FROM date_tasks_marks mark
+             JOIN users roster ON roster.user_id = mark.user_id
+             JOIN classes c ON c.class_id = roster.class_id
+             " . lulavRegisteredUsersJoin('roster') . "
+             WHERE mark.date_task_id IN ($taskIn)
+               AND mark.mark_inactive = 0
+               AND c.school_id = :school AND c.class_era = 0
+             GROUP BY roster.class_id"
+        );
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll() as $row) {
+            $totals[(int) $row['class_id']] = (int) $row['total'];
+        }
+    }
+
     $perKidGoal = lulavPerKidGoal();
     $rows = [];
-    foreach ($stmt->fetchAll() as $row) {
+    foreach ($classes as $row) {
         $kidCount = (int) $row['kid_count'];
         // Same rule as the school goal: headcount x per-child, no floor. An
         // empty class shows 0 of 0 rather than a phantom target of 1.
         $goal = $kidCount * $perKidGoal;
-        $total = (int) $row['total'];
+        $total = $totals[(int) $row['class_id']] ?? 0;
         $grade = lulavGradeLabel($row);
         $rows[] = [
             'classId' => (string) $row['class_id'],

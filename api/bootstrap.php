@@ -336,6 +336,38 @@ function lulavEligibleUserCondition(string $userAlias): string
     )";
 }
 
+/**
+ * The same eligibility rule as lulavEligibleUserCondition(), as a JOIN against
+ * the list of registered children. Use it in any query that also reads
+ * date_tasks_marks.
+ *
+ * Next to marks, MariaDB 11.4 turns the EXISTS form into a semi-join driven by
+ * every user_registration row (~94,000), then reads each child's entire mark
+ * history (~400 rows each, in a 102-million-row table) before keeping this
+ * campaign's. Once the task map resolved, that measured 46 s for the nationwide
+ * totals and 66 s for Oholei Torah's class leaderboard. A DISTINCT derived
+ * table is materialized on its own, so the query starts from the campaign's
+ * marks on the date_task_id index instead: 0.08 s and 0.1 s, same results.
+ * DISTINCT also keeps a child registered in both years from being counted twice.
+ */
+function lulavRegisteredUsersJoin(string $userAlias): string
+{
+    if (!preg_match('/^[a-z][a-z0-9_]*$/i', $userAlias)) {
+        throw new InvalidArgumentException('Invalid user table alias.');
+    }
+    $year = lulavCurrentSchoolYear();
+    return "JOIN (
+        SELECT DISTINCT lulav_reg.user_id
+        FROM user_registration lulav_reg
+        JOIN users lulav_reg_user ON lulav_reg_user.user_id = lulav_reg.user_id
+        WHERE lulav_reg.year = {$year}
+           OR (
+             lulav_reg.year = " . ($year - 1) . "
+             AND lulav_reg_user.school_id IN (" . lulavAustralianSchoolSql() . ")
+           )
+    ) lulav_registered ON lulav_registered.user_id = {$userAlias}.user_id";
+}
+
 function lulavSchoolIsEligible(int $schoolId): bool
 {
     global $MASHPIA_DB;
