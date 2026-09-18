@@ -1,4 +1,4 @@
-import { Card, SectionHeader, Button } from '../components/ui.jsx'
+import { Card, SectionHeader, Button, LulavIcon } from '../components/ui.jsx'
 import { LULAV_DAYS, ordinal } from '../lib/succos.js'
 
 // Numbered step on a sky card: green-deep circle badge with a white Exo Black numeral
@@ -25,7 +25,7 @@ export default function HowTo() {
           <p className="font-display text-[15px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-lg">Mivtza Lulav · Soldier's Guide</p>
           <h1 className="mt-2 font-display text-3xl font-black uppercase leading-[1.15] text-white sm:text-4xl">How to shake Lulav &amp; Esrog</h1>
           <p className="mt-3 max-w-xl text-lg text-white/85">
-            A quick guide so you can do the mitzvah — and help another Yid do it too. 🌿
+            A quick guide so you can do the mitzvah — and help another Yid do it too.{' '}<LulavIcon className="h-[1.7em] align-[-0.45em]" />
           </p>
         </div>
       </section>
@@ -93,7 +93,7 @@ export default function HowTo() {
         </div>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <Button to="/login" variant="gold">I'm ready — Log my shakes 🌿</Button>
+          <Button to="/login" variant="gold">I'm ready — Log my shakes <LulavIcon className="-my-1.5 h-7" /></Button>
           <Button to="/" variant="outline">See the campaigns</Button>
         </div>
 

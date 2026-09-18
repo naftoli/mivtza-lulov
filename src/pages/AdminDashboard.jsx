@@ -16,7 +16,7 @@ import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote } from '../components/ui.jsx'
+import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote, LulavIcon } from '../components/ui.jsx'
 
 // Shared bits of the admin skin (sky cards on mint, navy / green-deep type).
 const label = 'text-[11px] font-semibold uppercase tracking-[0.1em] text-navy'   // small Exo label
@@ -412,7 +412,7 @@ function Moderation({ shakes }) {
                   <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : 'bg-white/55'}`}>
                     {imgs[0]
                       ? <img src={imgs[0]} alt="" className="h-14 w-14 flex-none rounded-xl object-cover" />
-                      : <span className="grid h-14 w-14 flex-none place-items-center rounded-xl bg-track">🌿</span>}
+                      : <span className="grid h-14 w-14 flex-none place-items-center rounded-xl bg-track"><LulavIcon className="h-10" /></span>}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
                       {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}

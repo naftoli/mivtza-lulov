@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { LulavIcon } from './ui.jsx'
 
 // A friendly Tzivos Hashem soldier (SVG), for the celebration pop-up.
 // Palette only: navy / blue-accent cap, gold badge, navy features.
@@ -35,7 +36,7 @@ export default function Mascot({ message, onDone }) {
           <p className="font-display text-lg font-bold leading-tight">{message}</p>
           <p className="font-cond text-[13px] uppercase leading-none tracking-[0.1em] text-gold">Tzivos Hashem</p>
         </div>
-        <span className="animate-shake text-3xl">🌿</span>
+        <LulavIcon className="animate-shake h-11" />
       </div>
     </div>
   )

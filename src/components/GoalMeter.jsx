@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { fmt } from '../lib/format.js'
 import { celebrate } from '../lib/celebrate.js'
-import { Pill } from './ui.jsx'
+import { Pill, LulavIcon } from './ui.jsx'
 
 // Thick angular "campaign" line that climbs with a couple of bends to a stub
 // arrowhead — with a gradient, glow, milestone markers, a pulsing progress dot,
@@ -127,7 +127,7 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
     const count = (
       <>
         <p className="flex items-baseline gap-2">
-          <span className="text-3xl">🌿</span>
+          <LulavIcon className="h-[52px]" />
           <span className="pb-2 pr-1.5 font-display text-6xl font-black leading-[1.15] tabular-nums text-green">
             {fmt(total)}
           </span>
@@ -180,7 +180,7 @@ export default function GoalMeter({ school, celebrateMilestones = true, variant 
         </p>
 
         <p className="mt-1 flex items-baseline justify-center gap-2 sm:justify-end">
-          <span className="text-3xl">🌿</span>
+          <LulavIcon className="h-[52px]" />
           <span className="pb-2 pr-1.5 font-display text-6xl font-black leading-[1.15] tabular-nums text-green">
             {fmt(total)}
           </span>

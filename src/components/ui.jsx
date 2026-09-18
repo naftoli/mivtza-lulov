@@ -160,3 +160,19 @@ export function ErrorNote({ error, onRetry, what = 'this', className = '' }) {
     </div>
   )
 }
+
+// The lulav-and-esrog mark, used wherever the brand sits beside a number, a label
+// or a sentence (in place of a plant emoji). Always drawn from the 38x150 render,
+// so at every size used on the site it is scaled down, never up. Decorative — the
+// words beside it carry the meaning. `className` sets the height.
+export function LulavIcon({ className = 'h-[1.2em]' }) {
+  return (
+    <img
+      src={asset('design/lulav-esrog.png')}
+      alt=""
+      aria-hidden="true"
+      draggable="false"
+      className={`inline-block w-auto shrink-0 select-none ${className}`}
+    />
+  )
+}

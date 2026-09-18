@@ -24,7 +24,7 @@ export default function SharePanel({ school, onClose }) {
   }, [school.id])
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 1800) }
-  const shareText = `Help ${school.name} reach their Mivtza Lulav goal! 🌿`
+  const shareText = `Help ${school.name} reach their Mivtza Lulav goal!`
 
   // Share the generated share-card PNG + the link through the native share
   // sheet where the browser supports file-sharing; otherwise share the link

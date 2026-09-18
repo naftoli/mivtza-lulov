@@ -8,7 +8,7 @@ import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
 import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
-import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar, ErrorNote } from '../components/ui.jsx'
+import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar, ErrorNote, LulavIcon } from '../components/ui.jsx'
 import Mascot from '../components/Mascot.jsx'
 
 // Small-label style (Exo semibold caps, navy) — matches the Field label; condensed
@@ -227,7 +227,7 @@ export default function KidDashboard() {
 
                 {flash && <p className={flashError ? ERROR_NOTICE : SUCCESS_NOTICE}>{flash}</p>}
                 <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-                  {busy ? 'Reporting…' : 'Report my shakes 🌿'}
+                  {busy ? 'Reporting…' : <>Report my shakes <LulavIcon className="-my-1.5 h-7" /></>}
                 </Button>
               </>
             )}
@@ -242,7 +242,7 @@ export default function KidDashboard() {
           <SectionHeader>My Mivtza Lulov Report</SectionHeader>
           {shakesError && !myShakes ? <ErrorNote error={shakesError} onRetry={reloadShakes} what="your report" />
             : loading ? <Spinner /> : (myShakes || []).length === 0 ? (
-            <p className="py-10 text-center text-sm text-navy/80">No missions logged yet. Your first one is waiting! 🌿</p>
+            <p className="py-10 text-center text-sm text-navy/80">No missions logged yet. Your first one is waiting!{' '}<LulavIcon className="h-[1.9em] align-[-0.55em]" /></p>
           ) : (
             <ul className="mt-3 space-y-3">
               {myShakes.map((s) => {
@@ -251,7 +251,7 @@ export default function KidDashboard() {
                   <li key={s.id} className="flex items-start gap-3 border-b border-line pb-3 last:border-0">
                     {imgs[0]
                       ? <img src={imgs[0]} alt="" className="h-12 w-12 flex-none rounded-xl object-cover ring-2 ring-white" />
-                      : <span className="grid h-12 w-12 flex-none place-items-center rounded-xl bg-white/70">🌿</span>}
+                      : <span className="grid h-12 w-12 flex-none place-items-center rounded-xl bg-white/70"><LulavIcon className="h-9" /></span>}
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] font-bold text-navy">
                         {fmt(s.count)} Shakes <span className="text-navy/40">|</span> {fmt(s.minutes || 0)} Minutes on Mivtzoim

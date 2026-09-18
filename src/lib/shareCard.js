@@ -257,13 +257,28 @@ export async function buildShareCard(school) {
     ctx.drawImage(marker, Math.round(cx - mw / 2), barY + barH + 4 - mh, mw, mh)
   }
 
-  // tagline — Exo Bold Italic navy, shrunk to fit the card width
-  const tag = `Help ${nameLines[0]} reach their goal! 🌿`
-  ctx.textAlign = 'center'
-  const tagPx = fitPx(ctx, tag, (s) => exo(700, s, true), 42, 26, W)
+  // tagline — Exo Bold Italic navy, shrunk to fit the card width, closed by the
+  // lulav-and-esrog mark (the bar-marker render, scaled down). An emoji here would
+  // be drawn in whatever emoji font the phone has; the brand art is drawn instead.
+  const tag = `Help ${nameLines[0]} reach their goal!`
+  const iconRoom = marker ? 36 : 0 // gap + icon width at the largest size
+  const tagPx = fitPx(ctx, tag, (s) => exo(700, s, true), 42, 26, W - iconRoom)
   ctx.font = exo(700, tagPx, true)
   ctx.fillStyle = p.navy
-  ctx.fillText(tag, SIZE / 2, 884)
+  if (marker) {
+    const ih = Math.round(tagPx * 1.3)
+    const iw = Math.round((ih * (marker.naturalWidth || 38)) / (marker.naturalHeight || 150))
+    const gap = Math.round(tagPx * 0.35)
+    const tw = ctx.measureText(tag).width
+    const x0 = Math.round(SIZE / 2 - (tw + gap + iw) / 2)
+    ctx.textAlign = 'left'
+    ctx.fillText(tag, x0, 884)
+    ctx.drawImage(marker, Math.round(x0 + tw + gap), 884 + Math.round(tagPx * 0.2) - ih, iw, ih)
+  } else {
+    ctx.textAlign = 'center'
+    ctx.fillText(tag, SIZE / 2, 884)
+  }
+  ctx.textAlign = 'center'
   ctx.font = exo(400, 28)
   ctx.fillStyle = p.muted
   ctx.fillText('Every Yid, one more mitzvah', SIZE / 2, 928)
