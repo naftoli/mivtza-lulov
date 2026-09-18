@@ -28,12 +28,6 @@ export function timeAgo(iso) {
   return `${d} day${d === 1 ? '' : 's'} ago`
 }
 
-export function daysLeft(endDate) {
-  const end = new Date(endDate + 'T23:59:59')
-  const diff = end.getTime() - Date.now()
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
-}
-
 // The Hebrew-calendar date for an ISO timestamp, e.g. "24 Tishri 5787".
 // Date only — no time/seconds. Guarded so a bad value never throws in render.
 export function hebrewDate(iso) {

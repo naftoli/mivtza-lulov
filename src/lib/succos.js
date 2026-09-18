@@ -6,7 +6,7 @@
 // (5786: day 5, 5787: day 1). Update SUKKOS_START each year; the Shabbos day,
 // the six Lulav days and the copy that mentions them are all derived from it.
 export const CAMPAIGN_YEAR = 5787
-export const SUKKOS_START = '2026-09-26' // 15 Tishrei 5787 (Shabbos)
+const SUKKOS_START = '2026-09-26' // 15 Tishrei 5787 (Shabbos)
 
 const SATURDAY = 6
 const [y, m, d] = SUKKOS_START.split('-').map(Number)

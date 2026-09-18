@@ -16,7 +16,7 @@ export default function ReportGrid({ rows = [] }) {
   const td = 'px-2.5 py-2'
 
   return (
-    <Card className="p-6" topColor="var(--color-cyan)">
+    <Card className="p-6">
       <div className="mb-1 flex items-center justify-between gap-2">
         <SectionHeader>Shakes each day of Sukkos</SectionHeader>
         <Pill>{rows.length} soldiers</Pill>

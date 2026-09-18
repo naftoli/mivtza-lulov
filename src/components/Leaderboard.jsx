@@ -28,7 +28,7 @@ export function RankBadge({ index }) {
 // logged-in kid's own key from the login response.
 export default function Leaderboard({ rows, highlightKidKey }) {
   return (
-    <Card className="p-5 sm:p-6" topColor="var(--color-gold)">
+    <Card className="p-5 sm:p-6">
       <SectionHeader className="mb-1">Chayol Leaderboard</SectionHeader>
       <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-navy/60">Most shakes in school</p>
       {rows.length === 0 ? (

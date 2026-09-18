@@ -522,7 +522,6 @@ function lulavSerializeKid(array $row): array
             : null,
         'schoolId' => (string) $row['school_id'],
         'schoolName' => $row['school_name'],
-        'photoUrl' => lulavPhotoUrl($row),
         'photo' => lulavPhotoUrl($row),
         'kidKey' => lulavPublicKidId((int) $row['user_id']),
     ];
@@ -541,21 +540,6 @@ function lulavAssertKidAccess(array $actor, array $kid): void
 function lulavPublicKidId(int $userId): string
 {
     return substr(hash_hmac('sha256', 'lulav-kid:' . $userId, lulavSigningSecret()), 0, 20);
-}
-
-function lulavMarkPublicId(int $userId): string
-{
-    $signature = substr(hash_hmac('sha256', 'lulav-mark:' . $userId, lulavSigningSecret()), 0, 20);
-    return 'mark-' . $userId . '-' . $signature;
-}
-
-function lulavUserIdFromMarkId(string $markId): ?int
-{
-    if (!preg_match('/^mark-(\d+)-([a-f0-9]{20})$/', $markId, $match)) {
-        return null;
-    }
-    $userId = (int) $match[1];
-    return hash_equals(lulavMarkPublicId($userId), $markId) ? $userId : null;
 }
 
 function lulavSchemaError(PDOException $error): void

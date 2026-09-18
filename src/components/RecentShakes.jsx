@@ -5,7 +5,7 @@ import { Card, SectionHeader, Avatar } from './ui.jsx'
 // Sky card: names navy, counts green-deep, small labels Exo semibold caps.
 export default function RecentShakes({ shakes }) {
   return (
-    <Card className="p-5 sm:p-6" topColor="var(--color-blue)">
+    <Card className="p-5 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <SectionHeader>Recent Shakes</SectionHeader>
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-green">

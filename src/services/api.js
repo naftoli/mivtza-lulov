@@ -185,10 +185,8 @@ function decorateSchool(school, shakes) {
     bonusGoal,
     bonusActive,
     bonusComplete: bonusActive && total >= bonusGoal,
-    bonusLevel: bonusActive ? 1 : 0,
     total,
     goalReached,
-    activeGoal: bonusActive ? bonusGoal : goal,
     percent: goalPercent(total, goal),
     percentOfBase: goalPercent(total, goal),
   }

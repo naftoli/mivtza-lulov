@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { getSchools, getGlobalStats, goalPercent } from '../services/api.js'
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, shortSchoolName } from '../lib/format.js'
+import { CAMPAIGN_YEAR } from '../lib/succos.js'
 import { asset } from '../lib/asset.js'
 import { Button, Card, Spinner, Pill, SchoolLogo, Input, ErrorNote } from '../components/ui.jsx'
 import GoalBar from '../components/GoalBar.jsx'
@@ -112,7 +113,7 @@ function SchoolsRace({ schools }) {
 function SchoolCard({ s }) {
   return (
     <Link to={`/s/${s.id}`} className="group block">
-      <Card className="h-full transition group-hover:-translate-y-[3px] group-hover:shadow-hover" topColor={s.color}>
+      <Card className="h-full transition group-hover:-translate-y-[3px] group-hover:shadow-hover">
         <div className="flex items-start gap-3 px-5 pt-5">
           <SchoolLogo school={s} size={48} />
           <div className="min-w-0 flex-1">
@@ -174,7 +175,7 @@ export default function Home() {
               29px pitch from y 500, pills at y 603-641, panel bottom at 666. */}
           <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[28px] p-6 sm:rounded-[36px] sm:p-9 md:max-w-[560px] lg:max-w-[520px] lg:p-10 xl:max-w-[640px] 2xl:max-w-[650px] 2xl:rounded-[40px] 2xl:px-10 2xl:pb-[25px] 2xl:pt-8">
             <p className="font-display text-[14px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[18px]">
-              Sukkos 5787 · Worldwide Mivtza
+              Sukkos {CAMPAIGN_YEAR} · Worldwide Mivtza
             </p>
             <h1 className="mt-4 font-display text-[26px] font-black uppercase leading-[1.15] text-white sm:text-[34px] lg:text-[38px] 2xl:mt-[30px] 2xl:text-[36px] 2xl:leading-[1.2]">
               Every soldier.<br />Every <span className="text-gold">Shake.</span>
@@ -232,7 +233,7 @@ export default function Home() {
           <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12 2xl:px-[63px] 2xl:pb-[53px] 2xl:pt-10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* lulav-icon.png is a mis-export (traffic light); the 12x45 small render is the correct subject and never upscaled here */}
-              <Eyebrow icon={asset('design/lulav-esrog-small.png')} iconClass="h-6 sm:h-7">Mivtza Lulov 5787</Eyebrow>
+              <Eyebrow icon={asset('design/lulav-esrog-small.png')} iconClass="h-6 sm:h-7">Mivtza Lulov {CAMPAIGN_YEAR}</Eyebrow>
               {goalReached && <Pill className="!bg-green !text-white">🎉 Goal reached!</Pill>}
             </div>
 

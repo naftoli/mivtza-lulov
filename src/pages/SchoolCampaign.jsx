@@ -13,18 +13,6 @@ import ClassLeaderboard from '../components/ClassLeaderboard.jsx'
 import SharePanel from '../components/SharePanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
-function Stat({ value, label, icon, color }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="grid h-12 w-12 flex-none place-items-center rounded-xl text-2xl" style={{ background: `${color}18` }}>{icon}</span>
-      <div className="min-w-0">
-        <div className="font-display text-2xl font-black leading-tight tabular-nums text-navy">{value}</div>
-        <div className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-navy">{label}</div>
-      </div>
-    </div>
-  )
-}
-
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
   const { kid } = useAuth()
@@ -47,8 +35,6 @@ export default function SchoolCampaign() {
   }
 
   const isMySchool = kid?.schoolId === school.id
-  const photoCount = (shakes || []).reduce((n, s) => n + (s.photos?.length || (s.photo ? 1 : 0)), 0)
-  const avgPerSoldier = school.soldierCount ? Math.round(school.total / school.soldierCount) : 0
 
   return (
     <div>
@@ -89,7 +75,7 @@ export default function SchoolCampaign() {
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[1.6fr_1fr] lg:gap-8 lg:py-10">
         {/* Left column */}
         <div className="space-y-6">
-          <Card className="p-6" topColor={school.color}>
+          <Card className="p-6">
             <GoalMeter school={school} variant="wide" />
           </Card>
 

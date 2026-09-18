@@ -19,7 +19,7 @@ export default function PhotoWall({ shakes }) {
   const shown = photos.slice(0, visible)
 
   return (
-    <Card className="p-5 sm:p-6" topColor="var(--color-cyan)">
+    <Card className="p-5 sm:p-6">
       <SectionHeader className="mb-4">Mivtzoim Pictures</SectionHeader>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
         {shown.map((s) => (

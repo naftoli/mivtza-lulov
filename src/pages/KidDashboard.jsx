@@ -116,7 +116,7 @@ export default function KidDashboard() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       {/* Soldier ID card: First / Last / Serial — sky card with the avatar and school logo */}
-      <Card topColor={school?.color || 'var(--color-blue)'}>
+      <Card>
         <div className="flex items-start gap-4 p-5 sm:p-6">
           <Avatar name={`${kid.firstName} ${kid.lastName}`} src={kid.photo} size={60} />
           {school && <SchoolLogo school={school} size={44} className="hidden sm:block" />}
@@ -158,7 +158,7 @@ export default function KidDashboard() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {/* Log form — DAY FIRST: pick a day, then the rest of the form appears */}
-        <Card className="p-6" topColor="var(--color-gold)">
+        <Card className="p-6">
           <div className="flex items-center justify-between">
             <SectionHeader>Log your shakes</SectionHeader>
             <button type="button" title={muted ? 'Sound off' : 'Sound on'}
@@ -238,7 +238,7 @@ export default function KidDashboard() {
         </Card>
 
         {/* History */}
-        <Card className="p-6" topColor="var(--color-blue)">
+        <Card className="p-6">
           <SectionHeader>My Mivtza Lulov Report</SectionHeader>
           {shakesError && !myShakes ? <ErrorNote error={shakesError} onRetry={reloadShakes} what="your report" />
             : loading ? <Spinner /> : (myShakes || []).length === 0 ? (

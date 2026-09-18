@@ -33,19 +33,12 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
   )
 }
 
-// School logo — uses an uploaded logo if present, else an initials monogram.
+// School badge: an initials monogram in the school's colour.
+// There is no uploaded-logo path — neither the API nor the demo seed carries a
+// `logo` field, so the branch that used to render one was unreachable. To add
+// real logos, return one from lulavSchoolRows() and branch on it here again.
 export function SchoolLogo({ school, size = 56, className = '' }) {
-  const initials = school.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
-  if (school.logo) {
-    return (
-      <span
-        style={{ height: size, width: size }}
-        className={`grid shrink-0 place-items-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-line ${className}`}
-      >
-        <img src={school.logo} alt={school.name} className="max-h-full max-w-full object-contain" />
-      </span>
-    )
-  }
+  const initials = school.name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   return (
     <span
       style={{ height: size, width: size, background: school.color || 'var(--color-navy)' }}
@@ -56,8 +49,6 @@ export function SchoolLogo({ school, size = 56, className = '' }) {
   )
 }
 
-// `topColor` is accepted for call-site compatibility but intentionally not
-// rendered in this theme — the design uses clean sky cards with no top bar.
 // Profile picture: the kid's photo if we have one, else a colored initials
 // circle. (Real photos arrive from Mashpia; initials are the stand-in.)
 const AVATAR_BG = ['#094b26', '#2f8a4d', '#1a4896', '#0e7f74', '#4873b3', '#001c4c']
@@ -75,8 +66,7 @@ export function Avatar({ name = '', src, size = 40, className = '' }) {
 }
 
 // Sky card on the mint page: big radius, no border, only a whisper of shadow.
-export function Card({ className = '', topColor, children }) {
-  void topColor
+export function Card({ className = '', children }) {
   return (
     <div className={`overflow-hidden rounded-[28px] bg-card shadow-card ${className}`}>
       {children}

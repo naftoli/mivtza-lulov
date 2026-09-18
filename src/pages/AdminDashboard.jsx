@@ -28,9 +28,9 @@ const dangerBtn = `${smallBtn} !bg-race-red !text-white`
 const RACE = ['var(--color-race-green)', 'var(--color-race-yellow)', 'var(--color-race-blue)', 'var(--color-race-red)', 'var(--color-race-teal)']
 const MEDALS = ['medal-gold.png', 'medal-silver.png', 'medal-bronze.png']
 
-function Section({ title, children, right, topColor }) {
+function Section({ title, children, right }) {
   return (
-    <Card className="p-6" topColor={topColor}>
+    <Card className="p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <SectionHeader>{title}</SectionHeader>
         {right}
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
 
       {admin.role === 'hq' && schools && (
         <div className="mt-6">
-          <Section title="All Schools — the Race" topColor="var(--color-gold)">
+          <Section title="All Schools — the Race">
             <div className="space-y-2">
               {[...schools].sort((a, b) => b.percent - a.percent).map((s, i) => (
                 <button key={s.id} onClick={() => setSelectedId(s.id)}
@@ -161,7 +161,7 @@ function GlobalGoalSettings() {
   }
 
   return (
-    <Section title="Automatic Goal" topColor="var(--color-green)">
+    <Section title="Automatic Goal">
       <p className="text-sm text-muted">
         Every automatic goal is this many shakes per soldier — each school, every class, and the nationwide goal.
         Change it and they all update at once. (Set a different number for one school under that school below.)
@@ -193,7 +193,7 @@ function CampaignSettings({ school, isHQ }) {
   }
 
   return (
-    <Section title="Campaign Settings" topColor={school.color} right={<Pill>{school.percent}% of goal</Pill>}>
+    <Section title="Campaign Settings" right={<Pill>{school.percent}% of goal</Pill>}>
       {/* Goal: automatic (soldiers × per-kid) unless HQ sets a custom number. Schools can't. */}
       {isHQ ? (
         <form onSubmit={save}>
@@ -265,7 +265,7 @@ function Roster({ kids }) {
   const grades = Object.keys(byGrade).sort()
 
   return (
-    <Section title="Soldier Roster" topColor="var(--color-blue)" right={<Pill>{kids.length} soldiers</Pill>}>
+    <Section title="Soldier Roster" right={<Pill>{kids.length} soldiers</Pill>}>
       <Field label="Search by name">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search soldiers…" />
       </Field>
@@ -308,7 +308,7 @@ function PhotoApprovals({ schoolId, shakes }) {
   }
 
   return (
-    <Section title="Photo Approvals" topColor="var(--color-gold)"
+    <Section title="Photo Approvals"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Pill>{shakes.length} pending</Pill>
@@ -385,7 +385,7 @@ function Moderation({ shakes }) {
   const remaining = filtered.length - shown.length
 
   return (
-    <Section title="Remove Mivtza Lulov Entry" topColor="var(--color-red)"
+    <Section title="Remove Mivtza Lulov Entry"
       right={<span className="text-xs text-muted">Hidden entries don’t count toward the goal or show publicly</span>}>
       {shakes.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">No entries yet.</p>

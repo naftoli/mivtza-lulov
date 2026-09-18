@@ -111,7 +111,7 @@ export const getKidsForSchool = (schoolId) => req(`/schools/${schoolId}/soldiers
 // A school's whole campaign can be thousands of child/day reports, so the public
 // feed asks the API for a bounded slice (the newest first). Admin moderation
 // still pulls the full set, hidden rows included.
-export const PUBLIC_SHAKE_LIMIT = 200
+const PUBLIC_SHAKE_LIMIT = 200
 export const getShakes = (schoolId, { includeHidden = false, limit } = {}) => {
   const params = new URLSearchParams()
   if (includeHidden) params.set('includeHidden', '1')

@@ -24,7 +24,7 @@ export default function ClassLeaderboard({ rows, highlightGrade, color = 'var(--
     `rounded-full px-3.5 py-2 text-green transition ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
   const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6e0f6 0%, #6db58d 45%, #549182 100%)' } : undefined)
   return (
-    <Card className="p-5 sm:p-6" topColor="var(--color-green)">
+    <Card className="p-5 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SectionHeader>Platoon Leaderboard</SectionHeader>
         <div className="inline-flex rounded-full bg-[#69c07c] p-1 font-cond text-[13px] uppercase leading-none tracking-[0.04em] sm:text-[15px]">

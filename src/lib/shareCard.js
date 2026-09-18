@@ -1,5 +1,6 @@
 import { fmt, shortSchoolName } from './format.js'
 import { asset } from './asset.js'
+import { CAMPAIGN_YEAR } from './succos.js'
 
 // Shareable 1080×1080 campaign card in the redesign palette: a green-deep
 // header panel (school logo, name, gold eyebrow) over a sky card on mint with
@@ -103,16 +104,6 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-function drawContain(ctx, img, x, y, w, h) {
-  const iw = img.naturalWidth || img.width
-  const ih = img.naturalHeight || img.height
-  if (!iw || !ih) return
-  const s = Math.min(w / iw, h / ih)
-  const dw = iw * s
-  const dh = ih * s
-  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh)
-}
-
 // Word-wrap by measured width (uses the font currently set on ctx). When
 // `maxLines` is given the overflow is cut and the last line gets an ellipsis.
 function wrap(ctx, text, maxWidth, maxLines = Infinity) {
@@ -162,9 +153,9 @@ function setSpacing(ctx, value) {
 
 // Build the share card and resolve with a PNG Blob (for preview / share / save).
 export async function buildShareCard(school) {
-  const { name, city, logo, total, goal, percent, bonusActive } = school
+  const { name, city, total, goal, percent, bonusActive } = school
   const p = palette()
-  const [, shield, marker, logoImg] = await Promise.all([ensureFonts(), loadShield(), loadMarker(), loadImage(logo)])
+  const [, shield, marker] = await Promise.all([ensureFonts(), loadShield(), loadMarker()])
 
   const canvas = document.createElement('canvas')
   canvas.width = SIZE
@@ -186,18 +177,15 @@ export async function buildShareCard(school) {
   roundRect(ctx, 80, 90, 150, 150, 22)
   ctx.fillStyle = '#ffffff'
   ctx.fill()
-  if (logoImg) {
-    drawContain(ctx, logoImg, 92, 102, 126, 126)
-  } else {
-    const initials = String(name || '').split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
-    ctx.font = exo(900, 60)
-    ctx.fillStyle = p.navy
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(initials, 155, 167)
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-  }
+  // Initials monogram — schools carry no logo image (see SchoolLogo).
+  const initials = String(name || '').split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+  ctx.font = exo(900, 60)
+  ctx.fillStyle = p.navy
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(initials, 155, 167)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 
   // eyebrow — gold on green-deep
   ctx.font = exo(600, 26)
@@ -294,7 +282,7 @@ export async function buildShareCard(school) {
   ctx.font = cond(30)
   ctx.fillStyle = p.gold
   setSpacing(ctx, '1.8px')
-  const label = 'TZIVOS HASHEM · SUKKOS 5787'
+  const label = `TZIVOS HASHEM · SUKKOS ${CAMPAIGN_YEAR}`
   const labelW = ctx.measureText(label).width
   const shieldH = 46
   const shieldW = shield ? Math.round(shieldH * ((shield.naturalWidth || 999) / (shield.naturalHeight || 899))) : 0

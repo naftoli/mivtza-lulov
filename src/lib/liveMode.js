@@ -8,7 +8,7 @@ function currentSearch() {
   }
 }
 
-export function readLiveMode() {
+function readLiveMode() {
   if (typeof window === 'undefined') return false
   const params = currentSearch()
   if (params.get('real') === '1') {
