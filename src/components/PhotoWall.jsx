@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useDialog } from '../lib/useDialog.js'
 import { timeAgo } from '../lib/format.js'
 import { Card, SectionHeader, Button } from './ui.jsx'
 
@@ -49,10 +50,15 @@ export default function PhotoWall({ shakes }) {
 // Full-size viewer for one photo. `photo` is a shake entry with a single `photo`
 // URL picked out (see the flatMap above); shared with the admin approval card.
 export function PhotoLightbox({ photo: active, onClose }) {
+  const ref = useRef(null)
+  useDialog(ref, onClose, !!active)
   if (!active) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/90 p-4" onClick={onClose}>
-      <div className="max-w-lg overflow-hidden rounded-[28px] bg-white shadow-hover" onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={`Photo from ${active.kidName}`} tabIndex={-1}
+        className="relative max-w-lg overflow-hidden rounded-[28px] bg-white shadow-hover outline-none" onClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={onClose} aria-label="Close photo"
+          className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-green shadow transition hover:bg-white">✕</button>
         <img src={active.photo} alt="" className="max-h-[70vh] w-full bg-navy object-contain" />
         <div className="p-4 sm:p-5">
           <p className="font-semibold text-navy">{active.kidName} · <span className="text-green">{active.count} shakes</span></p>

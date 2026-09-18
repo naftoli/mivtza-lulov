@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildShareCard, shareCardFile, canShareFiles } from '../lib/shareCard.js'
 import { asset } from '../lib/asset.js'
+import { useDialog } from '../lib/useDialog.js'
 import { Button, SectionHeader } from './ui.jsx'
 
 // Modal: a shareable campaign card (image) + share actions.
@@ -9,6 +10,8 @@ export default function SharePanel({ school, onClose }) {
   const [png, setPng] = useState(null) // { blob, dataUrl }
   const [toast, setToast] = useState('')
   const blobRef = useRef(null)
+  const dialogRef = useRef(null)
+  useDialog(dialogRef, onClose)
 
   useEffect(() => {
     let alive = true
@@ -23,7 +26,14 @@ export default function SharePanel({ school, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [school.id])
 
-  const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 1800) }
+  const flash = (m, ms = 1800) => { setToast(m); setTimeout(() => setToast(''), ms) }
+  const COPY_FAILED = 'Couldn’t copy automatically — copy the link from your address bar.'
+
+  // navigator.clipboard is missing on plain-http pages and in some in-app
+  // browsers, and writeText rejects where the browser blocks it — never throw.
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true } catch { return false }
+  }
   const shareText = `Help ${school.name} reach their Mivtza Lulav goal!`
 
   // Share the generated share-card PNG + the link through the native share
@@ -35,9 +45,10 @@ export default function SharePanel({ school, onClose }) {
       try { await navigator.share({ files: [file], title: school.name, text: shareText, url }) } catch { /* cancelled */ }
     } else if (navigator.share) {
       try { await navigator.share({ title: school.name, text: shareText, url }) } catch { /* cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(`${shareText} ${url}`)
+    } else if (await copyText(`${shareText} ${url}`)) {
       flash('Link copied — paste it anywhere!')
+    } else {
+      flash(COPY_FAILED, 4000)
     }
   }
 
@@ -69,13 +80,14 @@ export default function SharePanel({ school, onClose }) {
   }
 
   async function copyLink() {
-    await navigator.clipboard.writeText(url)
-    flash('Link copied!')
+    if (await copyText(url)) flash('Link copied!')
+    else flash(COPY_FAILED, 4000)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,28,76,0.55)] p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-5 shadow-card sm:p-6" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Share this campaign" tabIndex={-1}
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-5 shadow-card outline-none sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <SectionHeader className="flex items-center gap-2">
             <img src={asset('design/lulav-esrog-small.png')} alt="" className="h-5 w-auto" />
