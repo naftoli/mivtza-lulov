@@ -21,7 +21,9 @@ export default function KidLogin() {
     try {
       const kid = await loginKid(id, dob)
       if (kid) navigate('/me')
-      else setError('We could not find a soldier with that serial number and date of birth. Double-check and try again.')
+      // The API only lets in children registered for this school year, so this
+      // covers an unregistered child as well as a mistyped serial or birthday.
+      else setError('We could not find a registered soldier with that serial number and date of birth. Double-check and try again.')
     } catch (err) {
       // verifyKid() only swallows a wrong serial/DOB; everything else reaches
       // here. Without this the promise rejected unhandled, `busy` stayed true
