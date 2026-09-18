@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { asset } from '../lib/asset.js'
 
@@ -38,17 +39,17 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
 export function SchoolLogo({ school, size = 56, className = '' }) {
   const initials = school.name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   // Show the school's own logo when we have one — the demo roster carries them,
-  // and a live Mashpia /schools payload can too (a `logo` URL). Falls back to a
-  // colored initials tile. Live currently sends no logo, so it shows initials;
-  // that path is why an earlier cleanup dropped this, which also lost the demo
-  // logos, so keep the guard rather than removing it.
-  if (school.logo) {
+  // and live /schools sends a `logo` URL for every school with one uploaded in
+  // Mashpia. Falls back to a colored initials tile for schools without one, and
+  // for a logo whose file fails to load (remembered per URL, so a new one retries).
+  const [failedLogo, setFailedLogo] = useState(null)
+  if (school.logo && school.logo !== failedLogo) {
     return (
       <span
         style={{ height: size, width: size }}
         className={`grid shrink-0 place-items-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-line ${className}`}
       >
-        <img src={school.logo} alt="" className="max-h-full max-w-full object-contain" />
+        <img src={school.logo} alt="" onError={() => setFailedLogo(school.logo)} className="max-h-full max-w-full object-contain" />
       </span>
     )
   }

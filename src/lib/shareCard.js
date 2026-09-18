@@ -155,7 +155,10 @@ function setSpacing(ctx, value) {
 export async function buildShareCard(school) {
   const { name, city, total, goal, percent, bonusActive, bonusLevel } = school
   const p = palette()
-  const [, shield, marker] = await Promise.all([ensureFonts(), loadShield(), loadMarker()])
+  const [, shield, marker, logo] = await Promise.all([
+    ensureFonts(), loadShield(), loadMarker(),
+    school.logo ? cached(`logo:${school.logo}`, () => loadImage(school.logo)) : null,
+  ])
 
   const canvas = document.createElement('canvas')
   canvas.width = SIZE
@@ -177,15 +180,24 @@ export async function buildShareCard(school) {
   roundRect(ctx, 80, 90, 150, 150, 22)
   ctx.fillStyle = '#ffffff'
   ctx.fill()
-  // Initials monogram — schools carry no logo image (see SchoolLogo).
-  const initials = String(name || '').split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
-  ctx.font = exo(900, 60)
-  ctx.fillStyle = p.navy
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(initials, 155, 167)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
+  if (logo?.naturalWidth && logo.naturalHeight) {
+    // The school's own logo, contained within the tile's 12px padding (see SchoolLogo).
+    const box = 126
+    const scale = Math.min(box / logo.naturalWidth, box / logo.naturalHeight)
+    const w = logo.naturalWidth * scale
+    const h = logo.naturalHeight * scale
+    ctx.drawImage(logo, 155 - w / 2, 165 - h / 2, w, h)
+  } else {
+    // Initials monogram for a school with no logo, or one that failed to load (see SchoolLogo).
+    const initials = String(name || '').split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+    ctx.font = exo(900, 60)
+    ctx.fillStyle = p.navy
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(initials, 155, 167)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+  }
 
   // eyebrow — gold on green-deep
   ctx.font = exo(600, 26)

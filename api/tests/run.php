@@ -171,7 +171,7 @@ if ($schemaMissing) {
     );
 
     $schoolRowKeys = [
-        'id', 'name', 'city', 'kidCount', 'goal', 'bonusLevel', 'bonusGoal', 'total', 'percent', 'motto', 'endDate', 'color',
+        'id', 'name', 'city', 'logo', 'kidCount', 'goal', 'bonusLevel', 'bonusGoal', 'total', 'percent', 'motto', 'endDate', 'color',
     ];
     if (!empty($schools['json'])) {
         $first = $schools['json'][0];

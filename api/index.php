@@ -251,6 +251,7 @@ function lulavSchoolRows(?int $onlyId = null): array
         $params[':roster_school'] = $onlyId;
     }
     $sql = "SELECT s.school_id, s.school_name, s.school_city,
+                   s.logo, s.school_logo_id, s.school_logo_kiosk_id,
                    COALESCE(roster.soldier_count, 0) AS soldier_count,
                    settings.motto, settings.color, settings.goal_override
             FROM schools s
@@ -321,10 +322,23 @@ function lulavSchoolRows(?int $onlyId = null): array
         $step = max(1, $kidCount);
         $bonusLevel = $goalReached ? intdiv($total - $goal, $step) + 1 : 0;
         $bonusGoal = $goal + max(1, $bonusLevel) * $step;
+        // The school's own logo, from the same /schoolLogos/ file Base Commander
+        // shows and uploads to. logo.png there is its generic placeholder
+        // (DEFAULT_LOGO), so skip it and try the older files-table logo, which a
+        // few schools only have. Null keeps the front end's initials tile.
+        $logoFile = trim((string) $row['logo']);
+        $logoId = (int) ($row['school_logo_id'] ?: $row['school_logo_kiosk_id']);
+        $logo = null;
+        if ($logoFile !== '' && $logoFile !== 'logo.png') {
+            $logo = '/schoolLogos/' . rawurlencode($logoFile);
+        } elseif ($logoId > 0) {
+            $logo = '/file_view.php?id=' . $logoId;
+        }
         $rows[] = [
             'id' => (string) $schoolId,
             'name' => $row['school_name'],
             'city' => $row['school_city'],
+            'logo' => $logo,
             'kidCount' => $kidCount,
             'soldierCount' => $kidCount,
             'perKidGoal' => $perKidGoal,
