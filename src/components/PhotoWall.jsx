@@ -1,24 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import AutoScroll from 'embla-carousel-auto-scroll'
 import { useDialog } from '../lib/useDialog.js'
 import { timeAgo } from '../lib/format.js'
 import { approvedPhotos } from '../lib/photos.js'
 import { Card, SectionHeader } from './ui.jsx'
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
 
-// Someone who has asked their system to cut animation gets the carousel
-// standing still; the arrows and the swipe still work.
-const wantsStillness = () => {
-  try {
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  } catch {
-    return false
-  }
-}
-
 // Gallery of photos kids uploaded from the field ("Mivtzoim Pictures"): three
-// across, drifting on its own, with arrows either side and a swipe on a phone —
-// the way the rank carousel works on the parent site. It loops, so it never runs
+// across, moved by the arrows or a swipe on a phone. It loops, so it never runs
 // out and the arrows never dead-end. shadcn/ui's Carousel over Embla.
 export default function PhotoWall({ shakes }) {
   // one slide per photo (an entry can carry several) — only APPROVED photos show,
@@ -32,15 +20,6 @@ export default function PhotoWall({ shakes }) {
   // A newly approved photo lengthens the list under the carousel.
   useEffect(() => { api?.reInit() }, [api, count])
 
-  // Nothing drifts behind the lightbox: the carousel holds still while a photo
-  // is open and picks up again once it closes.
-  useEffect(() => {
-    const autoScroll = api?.plugins()?.autoScroll
-    if (!autoScroll) return
-    if (active) autoScroll.stop()
-    else if (!wantsStillness()) autoScroll.play()
-  }, [active, api])
-
   if (count === 0) return null
 
   return (
@@ -49,22 +28,7 @@ export default function PhotoWall({ shakes }) {
 
       {/* The arrows sit inside the frame rather than shadcn's default -left-12 /
           -right-12, which would hang them off the card. */}
-      <Carousel
-        setApi={setApi}
-        opts={{ loop: true, align: 'start' }}
-        // A slow, continuous drift rather than a slideshow's jump. It pauses
-        // while someone hovers or tabs in to look, and picks up again a moment
-        // after an arrow press or a swipe.
-        plugins={[AutoScroll({
-          speed: 0.7,
-          startDelay: 1500,
-          playOnInit: !wantsStillness(),
-          stopOnMouseEnter: true,
-          stopOnFocusIn: true,
-          stopOnInteraction: false,
-        })]}
-        className="w-full"
-      >
+      <Carousel setApi={setApi} opts={{ loop: true, align: 'start' }} className="w-full">
         <CarouselContent className="-ml-2 md:-ml-4">
           {photos.map((s, i) => (
             <CarouselItem key={s.id} className="basis-1/3 pl-2 md:pl-4">
