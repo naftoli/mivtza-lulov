@@ -8,7 +8,7 @@ import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
 import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
-import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Pill, Avatar, ErrorNote, LulavIcon } from '../components/ui.jsx'
+import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Avatar, ErrorNote, LulavIcon } from '../components/ui.jsx'
 import Mascot from '../components/Mascot.jsx'
 
 // Small-label style (Exo semibold caps, navy) — matches the Field label; condensed
@@ -84,10 +84,14 @@ export default function KidDashboard() {
     const n = Number(count)
     if (!n || n < 1) return
     if (n > 500) { notify('That’s a lot at once! Please split very large counts into separate entries.', true); return }
+    // Shakes and minutes are reported together: a count with no time on
+    // Mivtzoim leaves the day's report half-answered.
+    const mins = Number(minutes)
+    if (!mins || mins < 1) { notify('Please also enter how many minutes you were on Mivtzoim.', true); return }
     setBusy(true)
     const before = school
     try {
-      await addShake({ kid, day, count: n, minutes: Number(minutes) || 0, note: story, photos })
+      await addShake({ kid, day, count: n, minutes: mins, note: story, photos })
     } catch (err) {
       // Nothing was saved — keep the form (and photos) so the kid can retry.
       notify(err?.message || 'Could not save your shakes — please try again.', true)
@@ -119,14 +123,17 @@ export default function KidDashboard() {
       <Card>
         <div className="flex items-start gap-4 p-5 sm:p-6">
           <Avatar name={`${kid.firstName} ${kid.lastName}`} src={kid.photo} size={60} />
-          {school && <SchoolLogo school={school} size={44} className="hidden sm:grid" />}
+          {school && <SchoolLogo school={school} size={44} className="hidden sm:grid" fallback={false} />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <SectionHeader>Soldier</SectionHeader>
-              {/* The army rank logo, as Recent Shakes and the leaderboard show it;
-                  the medal emoji only stands in when there is no image (demo). */}
-              {kid.rankImageUrl && <img src={kid.rankImageUrl} alt="" className="h-10 w-10 object-contain" />}
-              {kid.rank && <Pill className="!bg-green !text-gold">{!kid.rankImageUrl && '🎖️ '}{kid.rank}</Pill>}
+              {/* The rank reads as a title — "Colonel Soldier" — with the army rank
+                  logo beside it, as Recent Shakes and the leaderboard show it. The
+                  medal emoji only stands in when there is no image (demo), and a
+                  child with no rank on record is simply "Soldier". */}
+              <SectionHeader>{kid.rank ? `${kid.rank} Soldier` : 'Soldier'}</SectionHeader>
+              {kid.rankImageUrl
+                ? <img src={kid.rankImageUrl} alt="" className="h-10 w-10 object-contain" />
+                : kid.rank && <span aria-hidden="true" className="text-xl leading-none">🎖️</span>}
             </div>
             <h1 className="font-display text-2xl font-black leading-tight text-navy sm:text-[28px]">
               {kid.firstName} {kid.lastName}
@@ -199,8 +206,8 @@ export default function KidDashboard() {
                   <Input type="number" min="1" max="500" value={count} onChange={(e) => { setCount(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 12" required className="text-lg" />
                 </Field>
 
-                <Field label="Minutes on Mivtzoim">
-                  <Input type="number" min="0" value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="e.g. 90" />
+                <Field label="Minutes on Mivtzoim" hint="Required — report the time along with the shakes">
+                  <Input type="number" min="1" value={minutes} onChange={(e) => { setMinutes(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 90" required className="text-lg" />
                 </Field>
 
                 {/* Big, phone-friendly photo button */}

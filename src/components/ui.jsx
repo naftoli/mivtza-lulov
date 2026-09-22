@@ -36,14 +36,19 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
 
 // School badge: the school's own logo when it has one, else an initials monogram
 // in the school's colour (see the guard below).
-export function SchoolLogo({ school, size = 56, className = '' }) {
+export function SchoolLogo({ school, size = 56, className = '', fallback = true }) {
   const initials = school.name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   // Show the school's own logo when we have one — the demo roster carries them,
   // and live /schools sends a `logo` URL for every school with one uploaded in
   // Mashpia. Falls back to a colored initials tile for schools without one, and
   // for a logo whose file fails to load (remembered per URL, so a new one retries).
   const [failedLogo, setFailedLogo] = useState(null)
-  if (school.logo && school.logo !== failedLogo) {
+  const hasLogo = school.logo && school.logo !== failedLogo
+  // `fallback={false}` means show the real logo or nothing: the soldier's ID
+  // card wants the child's own photo carrying it, not a tile of school
+  // initials beside it.
+  if (!hasLogo && !fallback) return null
+  if (hasLogo) {
     return (
       <span
         style={{ height: size, width: size }}
