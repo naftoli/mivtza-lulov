@@ -1325,6 +1325,94 @@ function lulavHandleKidLogin(): void
     lulavJson(['token' => $token, 'expiresIn' => (int) (lulavEnv('LULAV_TOKEN_TTL') ?: 43200), 'soldier' => lulavSerializeKid($kid)]);
 }
 
+/**
+ * Parent site → SPA handoff, step one: the parent site (which holds the
+ * family's mobile session, not the child's serial + date of birth) asks for a
+ * code that signs one of its own children in.
+ *
+ * The parent token arrives in the body rather than as a cookie on purpose: the
+ * app's webview does not reliably carry cookies into a fresh page load, which
+ * is why the parent pages post it by hand everywhere else too.
+ */
+function lulavHandleParentHandoff(): void
+{
+    lulavRateLimit('parent-handoff', 60, 900);
+    $input = lulavInput();
+    $parentToken = trim((string) ($input['parent'] ?? ''));
+    $childId = (string) ($input['child'] ?? '');
+    if (!$parentToken || !preg_match('/^\d+$/', $childId)) {
+        lulavError('A parent session and a child are required.', 422);
+    }
+
+    $adminId = lulavParentAdminId($parentToken);
+    $serials = lulavParentChildSerials($adminId, (int) $childId);
+    if (!$serials) {
+        lulavError('That child is not taking part in Mivtza Lulav.', 404);
+    }
+
+    $kid = lulavKidBySerial(reset($serials));
+    lulavRequireEligibleSchool((int) $kid['school_id']);
+    lulavJson([
+        'code' => lulavIssueHandoffCode((int) $kid['user_id']),
+        'expiresIn' => LULAV_HANDOFF_TTL,
+    ]);
+}
+
+/**
+ * Which of a parent's children the campaign knows, so the parent site can show
+ * the sign-in button only where it leads somewhere.
+ */
+function lulavHandleParentChildren(): void
+{
+    lulavRateLimit('parent-children', 60, 900);
+    $input = lulavInput();
+    $parentToken = trim((string) ($input['parent'] ?? ''));
+    if (!$parentToken) {
+        lulavError('A parent session is required.', 422);
+    }
+
+    $children = [];
+    foreach (lulavParentChildSerials(lulavParentAdminId($parentToken)) as $userId => $serial) {
+        $kid = lulavKidBySerial($serial, false);
+        if (!$kid || !lulavSchoolIsEligible((int) $kid['school_id'])) {
+            continue;
+        }
+        // Only what the button needs: the parent site has the rest, and a
+        // roster response should never carry a child's date of birth.
+        $children[] = [
+            'userId' => $userId,
+            'serial' => (string) $kid['user_serial'],
+            'firstName' => $kid['first'],
+            'lastName' => $kid['last'],
+        ];
+    }
+    lulavJson($children);
+}
+
+/**
+ * Parent site → SPA handoff, step two: the SPA trades the code from its URL
+ * for the same kid session POST /soldier/login issues.
+ */
+function lulavHandleKidHandoff(): void
+{
+    lulavRateLimit('kid-handoff', 30, 900);
+    $input = lulavInput();
+    $code = trim((string) ($input['code'] ?? ''));
+    $payload = $code ? lulavVerifySignedPayload($code) : null;
+    if (!$payload || $payload['type'] !== 'handoff') {
+        lulavError('This sign-in link has expired. Please tap the button again.', 401);
+    }
+
+    $kid = lulavKidByUserId((int) $payload['id']);
+    lulavRequireEligibleSchool((int) $kid['school_id']);
+    $token = lulavIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
+    lulavJson([
+        'token' => $token,
+        'expiresIn' => (int) (lulavEnv('LULAV_TOKEN_TTL') ?: 43200),
+        'soldier' => lulavSerializeKid($kid),
+    ]);
+}
+
 function lulavHandleAdminLogin(): void
 {
     lulavRateLimit('admin-login', 12, 900);
@@ -1394,6 +1482,15 @@ try {
     }
     if ($method === 'POST' && $path === '/admin/login') {
         lulavHandleAdminLogin();
+    }
+    if ($method === 'POST' && $path === '/soldier/handoff') {
+        lulavHandleKidHandoff();
+    }
+    if ($method === 'POST' && $path === '/parent/handoff') {
+        lulavHandleParentHandoff();
+    }
+    if ($method === 'POST' && $path === '/parent/soldiers') {
+        lulavHandleParentChildren();
     }
     if ($method === 'GET' && $path === '/schools') {
         lulavJson(lulavSchoolRows());

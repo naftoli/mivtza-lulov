@@ -19,7 +19,8 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
    Set `school_year` to `GlobalSettings::getCurrentYear()`. Task mappings,
    campaign goals, school overrides, and photos are all isolated by this value
    because the same `mivtzoim_id` is reused in later years.
-4. The built app defaults to demo data. Open `?real=1` to use this API.
+4. The built app uses this API by default; `?demo=1` opens the sample
+   roster instead.
 
 5. For local UI testing without a VM, start the PHP API and Vite together:
 
@@ -29,8 +30,8 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
    ```
 
    Vite proxies `/mivtzoim/lulav/api` to `http://localhost:8080`. Open
-   `http://localhost:5173/mivtzoim/lulav/?real=1` and log in with a real serial
-   and DOB.
+   `http://localhost:5173/mivtzoim/lulav/` and log in with a real serial and
+   DOB.
 
 6. Set `LULAV_TOKEN_SECRET` in `mashpia.com/includes/globals.php` (gitignored)
    to a random secret of at least 32 characters. Do not reuse Mashpia's
@@ -74,6 +75,26 @@ ORDER BY m.start DESC, dt.short_name, mission.start_date;
 
 Both return `{ token, expiresIn, soldier|admin }`. Send the token as
 `Authorization: Bearer <token>`.
+
+### Parent handoff
+
+The parent site (`mobile/reg/parent_detail.html`) signs a child in without
+knowing their serial + date of birth, in two steps:
+
+- `POST /parent/soldiers` — `{ "parent": "<mobile session token>" }` → the
+  parent's children who take part in the campaign, so the parent site only
+  shows the button where it leads somewhere.
+- `POST /parent/handoff` — `{ "parent": "...", "child": <user_id> }` →
+  `{ code, expiresIn }`, a code valid for two minutes that names one child.
+- `POST /soldier/handoff` — `{ "code": "..." }` → the same
+  `{ token, expiresIn, soldier }` `/soldier/login` returns.
+
+`parent` is the `admin` cookie the mobile parent pages already post to
+`mobile/reg/ajax/*.php` (verified through `Auth::authenticate(..., 'mobile')`);
+ownership is the `admin_auths` family link. It is posted rather than read from
+the cookie header because the app's webview does not reliably carry cookies
+into a fresh page load. The code is what travels in the SPA's URL — it carries
+no parent session and can only be traded for that one child's token.
 
 ### Roster and campaign
 

@@ -64,6 +64,17 @@ export function AuthProvider({ children }) {
     return found
   }
 
+  // Same session as loginKid(), from the parent site's code instead of the
+  // child's serial + date of birth.
+  async function loginKidWithHandoff(code) {
+    const found = await api.verifyKidHandoff(code)
+    if (found) {
+      setKid(found)
+      save(KID_KEY, found)
+    }
+    return found
+  }
+
   async function loginAdmin(username, password) {
     const found = await api.verifyAdmin(username, password)
     if (found) {
@@ -78,7 +89,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ kid, admin, loginKid, loginAdmin, logoutKid, logoutAdmin }}
+      value={{ kid, admin, loginKid, loginKidWithHandoff, loginAdmin, logoutKid, logoutAdmin }}
     >
       {children}
     </AuthContext.Provider>

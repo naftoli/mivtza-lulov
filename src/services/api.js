@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // API facade with a local demo implementation.
 //
-// Demo localStorage is the default. Add ?real=1 to the URL to use Mashpia.
+// Mashpia is the default. Add ?demo=1 to the URL for the localStorage demo.
 // ---------------------------------------------------------------------------
 
 import { SEED } from '../data/seed.js'
@@ -58,6 +58,9 @@ function emit() {
 // (private mode, disabled site data) or a full quota must not crash the app
 // before React mounts — reads simply fall back to empty.
 function ensureSeed() {
+  // Live is the default, and a live visitor has no use for the sample roster:
+  // seeding it would write the whole demo dataset into every browser.
+  if (!IS_DEMO) return
   try {
     if (!localStorage.getItem(KEYS.schools)) {
       localStorage.setItem(KEYS.schools, JSON.stringify(SEED.schools))
@@ -407,6 +410,14 @@ export async function verifyKid(id, dob) {
   const { dob: _dob, gender: _g, ...safe } = kid
   // kidKey is what public rows carry instead of the serial (see publicShake).
   return { ...clone(safe), kidKey: kidKey(kid.id) }
+}
+
+// Parent-site handoff. Demo data has no parents, so there is nothing to honour
+// here when the live API is off.
+export async function verifyKidHandoff(code) {
+  if (!IS_DEMO) return mashpia.verifyKidHandoff(code)
+  await delay()
+  return null
 }
 
 export async function verifyAdmin(username, password) {

@@ -8,6 +8,11 @@ const LULAV_MIVTZOIM_ID = 10;
 // Mashpia teacher grid does not pass it.
 const LULAV_FALLBACK_LANG_ID = 1;
 
+// How long a parent's handoff code stays valid, in seconds. Long enough for
+// the SPA to load in the app's webview, short enough that a code left in a
+// browser history is dead by the time anyone reads it.
+const LULAV_HANDOFF_TTL = 120;
+
 define('LULAV_PUBLIC_ROOT', dirname(__DIR__, 3));
 define('LULAV_STORAGE_ROOT', dirname(LULAV_PUBLIC_ROOT) . '/storage/lulav');
 define('LULAV_PHOTO_ROOT', LULAV_STORAGE_ROOT . '/photos');
@@ -172,19 +177,65 @@ function lulavSigningSecret(): string
     return $secret;
 }
 
+function lulavSignPayload(array $payload): string
+{
+    $encoded = lulavBase64UrlEncode((string) json_encode($payload));
+    $signature = hash_hmac('sha256', $encoded, lulavSigningSecret(), true);
+    return $encoded . '.' . lulavBase64UrlEncode($signature);
+}
+
+/**
+ * Verifies an HMAC token issued by lulavSignPayload() and returns its payload,
+ * or null when the token is malformed, tampered with or expired.
+ */
+function lulavVerifySignedPayload(string $token): ?array
+{
+    $parts = explode('.', $token);
+    if (count($parts) !== 2) {
+        return null;
+    }
+    [$encoded, $providedSignature] = $parts;
+    $expected = lulavBase64UrlEncode(hash_hmac('sha256', $encoded, lulavSigningSecret(), true));
+    if (!hash_equals($expected, $providedSignature)) {
+        return null;
+    }
+    $payload = json_decode(lulavBase64UrlDecode($encoded), true);
+    if (!is_array($payload) || empty($payload['id']) || empty($payload['type']) || empty($payload['exp'])) {
+        return null;
+    }
+    if ((int) $payload['exp'] < time()) {
+        return null;
+    }
+    return $payload;
+}
+
 function lulavIssueToken(string $type, int $id, array $extra = []): string
 {
     $ttl = (int) (lulavEnv('LULAV_TOKEN_TTL') ?: 43200);
-    $payload = array_merge([
+    return lulavSignPayload(array_merge([
         'v' => 1,
         'type' => $type,
         'id' => $id,
         'iat' => time(),
         'exp' => time() + max(300, $ttl),
-    ], $extra);
-    $encoded = lulavBase64UrlEncode((string) json_encode($payload));
-    $signature = hash_hmac('sha256', $encoded, lulavSigningSecret(), true);
-    return $encoded . '.' . lulavBase64UrlEncode($signature);
+    ], $extra));
+}
+
+/**
+ * A single-child, single-use-window code the parent site hands to the SPA in a
+ * URL (see /parent/handoff). It only names a child: it carries no parent
+ * session and cannot call anything, so the two-minute window it is valid for
+ * is the whole of its power. The SPA trades it for a real kid token.
+ */
+function lulavIssueHandoffCode(int $userId): string
+{
+    return lulavSignPayload([
+        'v' => 1,
+        'type' => 'handoff',
+        'id' => $userId,
+        'iat' => time(),
+        'exp' => time() + LULAV_HANDOFF_TTL,
+    ]);
 }
 
 function lulavActor(bool $required = true): ?array
@@ -197,22 +248,14 @@ function lulavActor(bool $required = true): ?array
         return null;
     }
 
-    $parts = explode('.', $token);
-    if (count($parts) !== 2) {
+    $payload = lulavVerifySignedPayload($token);
+    if (!$payload) {
         lulavError('Invalid authentication token.', 401);
     }
-    [$encoded, $providedSignature] = $parts;
-    $expected = lulavBase64UrlEncode(hash_hmac('sha256', $encoded, lulavSigningSecret(), true));
-    if (!hash_equals($expected, $providedSignature)) {
+    // Handoff codes are signed with the same secret but are not sessions: they
+    // buy a kid token at /soldier/handoff and nothing else.
+    if ($payload['type'] === 'handoff') {
         lulavError('Invalid authentication token.', 401);
-    }
-
-    $payload = json_decode(lulavBase64UrlDecode($encoded), true);
-    if (!is_array($payload) || empty($payload['id']) || empty($payload['type']) || empty($payload['exp'])) {
-        lulavError('Invalid authentication token.', 401);
-    }
-    if ((int) $payload['exp'] < time()) {
-        lulavError('Authentication token expired.', 401);
     }
     return $payload;
 }
@@ -506,14 +549,88 @@ function lulavRequireSchoolAccess(array $actor, int $schoolId): array
     return $scope;
 }
 
-function lulavKidBySerial(string $serial): array
+/**
+ * The parent behind a mobile session token (the `admin` cookie the parent site
+ * posts to mobile/reg/ajax/*.php), or a 401.
+ *
+ * Deliberately not lulavAdminScope(): that answers "which schools may this
+ * staff account moderate", and a parent is an ordinary admins row with no
+ * school scope at all. A parent token buys exactly one thing here — a handoff
+ * code for a child of their own.
+ */
+function lulavParentAdminId(string $mobileToken): int
+{
+    $adminId = \mashpia\api\auth\Auth::authenticate(['key' => $mobileToken], 'mobile');
+    if (!$adminId || !ctype_digit((string) $adminId)) {
+        lulavError('Please sign in again on the parent site.', 401);
+    }
+    return (int) $adminId;
+}
+
+/**
+ * The serials of that parent's children who take part in this campaign, keyed
+ * by user_id. admin_auths is the family link the parent site itself reads (see
+ * mobile/reg/ajax/getChildren.php): role_id 1 + auth 'user' rows whose id is
+ * the child's user_id.
+ *
+ * Pass $userId to ask about one child — an empty result then means "not this
+ * parent's child, or not in the campaign", which is the ownership check.
+ */
+function lulavParentChildSerials(int $adminId, ?int $userId = null): array
 {
     global $MASHPIA_DB;
+    $sql = "SELECT u.user_id, u.user_serial
+              FROM admin_auths aa
+              JOIN users u ON u.user_id = aa.id
+             WHERE aa.admin_id = :admin
+               AND aa.role_id = 1
+               AND aa.auth = 'user'
+               AND " . lulavEligibleUserCondition('u');
+    $params = [':admin' => $adminId];
+    if ($userId !== null) {
+        $sql .= ' AND u.user_id = :user';
+        $params[':user'] = $userId;
+    }
+    $stmt = $MASHPIA_DB->prepare($sql . ' ORDER BY u.user_id');
+    $stmt->execute($params);
+
+    $serials = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $serials[(int) $row['user_id']] = (string) $row['user_serial'];
+    }
+    return $serials;
+}
+
+function lulavKidBySerial(string $serial, bool $required = true): ?array
+{
+    return lulavKidRow('user_serial', $serial, $required);
+}
+
+/**
+ * The same campaign-eligible soldier row, by user_id — what a handoff code
+ * names, since the parent site knows its children by user_id and never sees
+ * the serial.
+ */
+function lulavKidByUserId(int $userId, bool $required = true): ?array
+{
+    return lulavKidRow('user_id', (string) $userId, $required);
+}
+
+/**
+ * @param string $column user_serial or user_id — never request input.
+ */
+function lulavKidRow(string $column, string $value, bool $required): ?array
+{
+    global $MASHPIA_DB;
+    if (!in_array($column, ['user_serial', 'user_id'], true)) {
+        throw new InvalidArgumentException('Invalid soldier lookup column.');
+    }
     // Memoized: feed and moderation endpoints look the same child up once per
     // Sukkos day, and this query carries two correlated rank subqueries.
     static $cache = [];
-    if (isset($cache[$serial])) {
-        return $cache[$serial];
+    $key = $column . '|' . $value;
+    if (isset($cache[$key])) {
+        return $cache[$key];
     }
     $stmt = $MASHPIA_DB->prepare(
         "SELECT u.user_id, u.user_serial, u.first, u.last, u.first_he, u.last_he,
@@ -530,16 +647,19 @@ function lulavKidBySerial(string $serial): array
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
-         WHERE u.user_serial = :serial
+         WHERE u.{$column} = :value
            AND " . lulavEligibleUserCondition('u') . "
          LIMIT 1"
     );
-    $stmt->execute([':serial' => $serial]);
+    $stmt->execute([':value' => $value]);
     $row = $stmt->fetch();
     if (!$row) {
-        lulavError('Soldier not found.', 404);
+        if ($required) {
+            lulavError('Soldier not found.', 404);
+        }
+        return null;
     }
-    return $cache[$serial] = $row;
+    return $cache[$key] = $row;
 }
 
 function lulavPhotoUrl(array $user): string

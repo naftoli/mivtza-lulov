@@ -11,6 +11,7 @@ declare(strict_types=1);
  *   LULAV_API_BASE          default http://localhost:8080/mivtzoim/lulav/api
  *   LULAV_TEST_SERIAL       registered soldier serial for write tests
  *   LULAV_TEST_DOB          YYYY-MM-DD matching that soldier
+ *   LULAV_TEST_PARENT       a parent's `admin` cookie value, for the handoff
  *   LULAV_TEST_ADMIN_USER   admin username
  *   LULAV_TEST_ADMIN_PASS   admin password
  */
@@ -145,6 +146,21 @@ lulavAssert('POST /admin/login without credentials is 422', $adminEmpty['status'
 
 $adminBad = lulavTestRequest($base, 'POST', '/admin/login', ['username' => 'not-a-real-lulav-admin', 'password' => 'wrong']);
 lulavAssert('POST /admin/login rejects invalid credentials', $adminBad['status'] === 401 && lulavJsonBody($adminBad), lulavErrorMessage($adminBad));
+
+$handoffEmpty = lulavTestRequest($base, 'POST', '/soldier/handoff', []);
+lulavAssert('POST /soldier/handoff without a code is 401', $handoffEmpty['status'] === 401 && lulavJsonBody($handoffEmpty), lulavErrorMessage($handoffEmpty));
+
+$handoffForged = lulavTestRequest($base, 'POST', '/soldier/handoff', ['code' => 'eyJpZCI6MX0.not-a-signature']);
+lulavAssert('POST /soldier/handoff rejects an unsigned code', $handoffForged['status'] === 401 && lulavJsonBody($handoffForged), lulavErrorMessage($handoffForged));
+
+$parentEmpty = lulavTestRequest($base, 'POST', '/parent/handoff', []);
+lulavAssert('POST /parent/handoff without a parent session is 422', $parentEmpty['status'] === 422 && lulavJsonBody($parentEmpty), lulavErrorMessage($parentEmpty));
+
+$parentForged = lulavTestRequest($base, 'POST', '/parent/handoff', ['parent' => 'not-a-mobile-token', 'child' => '1']);
+lulavAssert('POST /parent/handoff rejects a forged parent session', $parentForged['status'] === 401 && lulavJsonBody($parentForged), lulavErrorMessage($parentForged));
+
+$parentChildrenEmpty = lulavTestRequest($base, 'POST', '/parent/soldiers', []);
+lulavAssert('POST /parent/soldiers without a parent session is 422', $parentChildrenEmpty['status'] === 422 && lulavJsonBody($parentChildrenEmpty), lulavErrorMessage($parentChildrenEmpty));
 
 $schools = lulavTestRequest($base, 'GET', '/schools');
 lulavAssert('GET /schools returns a JSON body', lulavJsonBody($schools), lulavErrorMessage($schools));
@@ -283,6 +299,40 @@ lulavAssert(
 
 $bogusBearer = lulavTestRequest($base, 'GET', '/settings', null, ['Authorization' => 'Bearer not-a-token']);
 lulavAssert('invalid bearer token is 401 JSON', $bogusBearer['status'] === 401 && lulavJsonBody($bogusBearer), lulavErrorMessage($bogusBearer));
+
+$parentToken = trim((string) getenv('LULAV_TEST_PARENT'));
+if ($parentToken === '') {
+    lulavSkip('parent handoff flow', "set LULAV_TEST_PARENT to a parent's `admin` cookie value to exercise the handoff");
+} else {
+    $parentChildren = lulavTestRequest($base, 'POST', '/parent/soldiers', ['parent' => $parentToken]);
+    lulavAssert('POST /parent/soldiers returns an array', $parentChildren['status'] === 200 && is_array($parentChildren['json']), lulavErrorMessage($parentChildren));
+    $firstChild = is_array($parentChildren['json']) ? ($parentChildren['json'][0] ?? null) : null;
+    if (!$firstChild) {
+        lulavSkip('parent handoff exchange', 'that parent has no children in this campaign');
+    } else {
+        lulavAssert('parent child rows carry no date of birth', !array_key_exists('dob', $firstChild));
+        $handoff = lulavTestRequest($base, 'POST', '/parent/handoff', ['parent' => $parentToken, 'child' => $firstChild['userId']]);
+        lulavAssert('POST /parent/handoff issues a code', $handoff['status'] === 200 && !empty($handoff['json']['code']), lulavErrorMessage($handoff));
+
+        if (!empty($handoff['json']['code'])) {
+            $code = (string) $handoff['json']['code'];
+            $exchanged = lulavTestRequest($base, 'POST', '/soldier/handoff', ['code' => $code]);
+            lulavAssert(
+                'POST /soldier/handoff signs that child in',
+                $exchanged['status'] === 200
+                    && !empty($exchanged['json']['token'])
+                    && (string) ($exchanged['json']['soldier']['serial'] ?? '') === (string) $firstChild['serial'],
+                lulavErrorMessage($exchanged)
+            );
+            // A handoff code is not a session: it must not open anything itself.
+            $asSession = lulavTestRequest($base, 'GET', '/me/shakes', null, ['Authorization' => 'Bearer ' . $code]);
+            lulavAssert('a handoff code is rejected as a bearer token', $asSession['status'] === 401, lulavErrorMessage($asSession));
+        }
+
+        $otherChild = lulavTestRequest($base, 'POST', '/parent/handoff', ['parent' => $parentToken, 'child' => '0']);
+        lulavAssert("POST /parent/handoff refuses a child that is not the parent's", $otherChild['status'] === 404, lulavErrorMessage($otherChild));
+    }
+}
 
 $serial = trim((string) getenv('LULAV_TEST_SERIAL'));
 $dob = trim((string) getenv('LULAV_TEST_DOB'));
