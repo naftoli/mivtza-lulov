@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { asset } from '../lib/asset.js'
+import { useDialog } from '../lib/useDialog.js'
 
 // The signature five-colour Tzivos Hashem brand band.
 export function Band({ className = '' }) {
@@ -81,6 +82,44 @@ export function Avatar({ name = '', src, size = 40, className = '' }) {
     <span style={{ height: size, width: size, background: bg }} className={`grid shrink-0 place-items-center rounded-full font-semibold text-white ring-1 ring-black/5 ${className}`}>
       <span style={{ fontSize: size * 0.4 }}>{initials || '🎖️'}</span>
     </span>
+  )
+}
+
+// An in-page confirmation, for an action worth stopping someone over. The
+// browser's confirm() would do the job, but its buttons read "OK"/"Cancel" and
+// carry the site name — this one says what the action is on the button itself,
+// which matters when the answer is irreversible.
+//
+// Cancel comes first in the DOM so it takes focus (useDialog focuses the first
+// control) and Enter cannot confirm by reflex; Escape and a click outside
+// cancel too.
+export function ConfirmDialog({
+  open,
+  title,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  variant = 'red',
+  busy = false,
+  onConfirm,
+  onCancel,
+  children,
+}) {
+  const ref = useRef(null)
+  useDialog(ref, onCancel, open)
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-4" onClick={onCancel}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
+        className="w-full max-w-md overflow-hidden rounded-[28px] bg-white p-5 shadow-hover outline-none sm:p-6"
+        onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-display text-xl font-black leading-tight text-navy">{title}</h2>
+        <div className="mt-2 space-y-2 text-sm text-navy/80">{children}</div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
+          <Button variant={variant} onClick={onConfirm} disabled={busy}>{busy ? 'Working…' : confirmLabel}</Button>
+        </div>
+      </div>
+    </div>
   )
 }
 

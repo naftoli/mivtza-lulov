@@ -596,7 +596,12 @@ function lulavLoadDayPhotos(?int $schoolId, ?int $userId, bool $allowPending): a
     foreach ($stmt->fetchAll() as $photo) {
         $value = lulavPhotoValue($photo, $allowPending);
         if ($value) {
-            $photos[(int) $photo['user_id']][(int) $photo['day_number']][] = $value;
+            // The id travels with the value so a caller holding a day's photos
+            // can act on one of them (see DELETE /photos/:id).
+            $photos[(int) $photo['user_id']][(int) $photo['day_number']][] = [
+                'id' => (string) $photo['public_id'],
+                'value' => $value,
+            ];
         }
     }
     return $photos;
@@ -889,7 +894,10 @@ function lulavBuildDayReport(
     // the prefix is the per-photo status. A day can hold both once a child
     // adds a photo after an approval; photoApproved used to read only the
     // first photo, which mislabeled the whole day either way.
-    $approvedPhotos = array_values(array_filter($photos, static function (string $photo): bool {
+    $photoValues = array_values(array_map(static function (array $photo): string {
+        return $photo['value'];
+    }, $photos));
+    $approvedPhotos = array_values(array_filter($photoValues, static function (string $photo): bool {
         return strpos($photo, 'data:') !== 0;
     }));
     return [
@@ -899,6 +907,9 @@ function lulavBuildDayReport(
         'kidName' => trim($kid['first'] . ' ' . mb_substr($kid['last'], 0, 1)) . '.',
         'schoolId' => (string) $kid['school_id'],
         'classId' => $kid['class_id'] ? (string) $kid['class_id'] : null,
+        // The platoon label ("5-Boys"), so a moderator can tell two children
+        // with the same first name and initial apart.
+        'grade' => lulavGradeLabel($kid),
         'rank' => $kid['rank_name'] ?: '',
         'rankImageUrl' => !empty($kid['rank_image_id'])
             ? '/file_view.php?id=' . (int) $kid['rank_image_id']
@@ -907,12 +918,19 @@ function lulavBuildDayReport(
         'count' => (int) $countMark['value'],
         'minutes' => (int) $minuteMark['value'],
         'note' => (string) ($countMark['note'] ?? ''),
-        'photos' => $photos,
-        'photo' => $photos[0] ?? null,
+        'photos' => $photoValues,
+        'photo' => $photoValues[0] ?? null,
+        // Positional ids for the photos above, so a moderator can delete a
+        // single one. Withheld from public callers, who cannot act on them.
+        'photoIds' => $allowPending
+            ? array_values(array_map(static function (array $photo): string {
+                return $photo['id'];
+            }, $photos))
+            : null,
         // Public URLs only: what may appear on the school's photo wall.
         'approvedPhotos' => $approvedPhotos,
         // True once nothing on this day is waiting for review.
-        'photoApproved' => count($approvedPhotos) === count($photos),
+        'photoApproved' => count($approvedPhotos) === count($photoValues),
         'createdAt' => $createdAt,
         'hidden' => (bool) $countMark['hidden'],
     ];
@@ -1473,6 +1491,47 @@ function lulavHandlePhotoReview(string $publicId, string $decision): void
     lulavJson(['id' => $photo['public_id'], 'status' => $status]);
 }
 
+/**
+ * Deletes one photo outright — the row and the stored file — for a moderator
+ * who wants it gone rather than merely kept off the public page. Rejecting
+ * leaves the photo on disk and lets the child's next save restore it;
+ * this does not.
+ */
+function lulavHandlePhotoDelete(string $publicId): void
+{
+    global $MASHPIA_DB;
+    $actor = lulavRequireActor(['admin']);
+    lulavRequireTables(['lulav_photos']);
+    $campaign = lulavCampaign();
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT * FROM lulav_photos
+         WHERE public_id = :id AND mivtzoim_id = :campaign AND school_year = :school_year'
+    );
+    $stmt->execute([
+        ':id' => $publicId,
+        ':campaign' => $campaign['mivtzoim_id'],
+        ':school_year' => lulavCurrentSchoolYear(),
+    ]);
+    $photo = $stmt->fetch();
+    if (!$photo) {
+        lulavError('Photo not found.', 404);
+    }
+    lulavRequireSchoolAccess($actor, (int) $photo['school_id']);
+
+    // Row first: a file left behind is invisible, while a row pointing at a
+    // missing file would render as a broken photo.
+    $delete = $MASHPIA_DB->prepare('DELETE FROM lulav_photos WHERE photo_id = :id');
+    $delete->execute([':id' => $photo['photo_id']]);
+    // Each row owns its own file (named after its public id), so nothing else
+    // is reading this one.
+    $file = lulavPhotoFile($photo);
+    if (is_file($file)) {
+        @unlink($file);
+    }
+    lulavForgetUserPhotos((int) $photo['user_id']);
+    lulavJson(['id' => $publicId, 'deleted' => true]);
+}
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = lulavRoutePath();
 
@@ -1856,6 +1915,9 @@ try {
             ':school' => $schoolId,
         ]);
         lulavJson(['approved' => $count]);
+    }
+    if ($method === 'DELETE' && preg_match('#^/photos/([a-f0-9]{32})$#', $path, $match)) {
+        lulavHandlePhotoDelete($match[1]);
     }
     if ($method === 'POST' && preg_match('#^/photos/([a-f0-9]{32})/(approve|reject)$#', $path, $match)) {
         lulavHandlePhotoReview($match[1], $match[2]);

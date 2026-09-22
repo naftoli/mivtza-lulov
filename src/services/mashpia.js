@@ -181,6 +181,10 @@ export async function approveAllPhotos(schoolId) {
   const result = await write(`/schools/${schoolId}/photos/approve-all`, { method: 'POST', as: 'admin' })
   return result.approved
 }
+// Removes one photo outright — row and file. Rejecting only keeps a photo off
+// the public page; this cannot be undone.
+export const deletePhoto = (photoId) =>
+  write(`/photos/${photoId}`, { method: 'DELETE', as: 'admin' })
 export const setShakeHidden = (shakeId, hidden) =>
   write(`/shakes/${shakeId}`, { method: 'PATCH', body: { hidden }, as: 'admin' })
 export const updateSchool = (schoolId, patch) =>

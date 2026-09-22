@@ -76,7 +76,7 @@ function lulavEnv(string $name, string $default = ''): string
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Vary: Origin');
 

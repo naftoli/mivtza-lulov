@@ -524,6 +524,14 @@ export async function approveAllPhotos(schoolId) {
 }
 
 // Reject = remove the photos (the shake entry + its count stay).
+// Deleting a single photo is a live-API action: demo entries have no photo ids
+// for the admin screen to act on.
+export async function deletePhoto(photoId) {
+  if (!IS_DEMO) return mashpia.deletePhoto(photoId)
+  await delay()
+  return null
+}
+
 export async function rejectPhotos(shakeId) {
   if (!IS_DEMO) return mashpia.rejectPhotos(shakeId)
   await delay()

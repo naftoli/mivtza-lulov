@@ -162,6 +162,9 @@ lulavAssert('POST /parent/handoff rejects a forged parent session', $parentForge
 $parentChildrenEmpty = lulavTestRequest($base, 'POST', '/parent/soldiers', []);
 lulavAssert('POST /parent/soldiers without a parent session is 422', $parentChildrenEmpty['status'] === 422 && lulavJsonBody($parentChildrenEmpty), lulavErrorMessage($parentChildrenEmpty));
 
+$photoDelete = lulavTestRequest($base, 'DELETE', '/photos/' . str_repeat('a', 32));
+lulavAssert('DELETE /photos/:id without a token is 401', $photoDelete['status'] === 401 && lulavJsonBody($photoDelete), lulavErrorMessage($photoDelete));
+
 $schools = lulavTestRequest($base, 'GET', '/schools');
 lulavAssert('GET /schools returns a JSON body', lulavJsonBody($schools), lulavErrorMessage($schools));
 lulavAssert(

@@ -15,3 +15,13 @@ export function pendingPhotos(s) {
   const approved = approvedPhotos(s)
   return entryPhotos(s).filter((photo) => !approved.includes(photo))
 }
+
+// The pending photos with the id the API gave each one, so a moderator can act
+// on a single photo. Demo entries carry no ids, so `id` is null there and the
+// per-photo controls stay hidden.
+export function pendingPhotoItems(s) {
+  const approved = approvedPhotos(s)
+  return entryPhotos(s)
+    .map((photo, i) => ({ photo, id: s.photoIds?.[i] ?? null }))
+    .filter((item) => !approved.includes(item.photo))
+}

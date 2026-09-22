@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   setShakeHidden, resetDemoData, getSchoolReportRows,
-  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos,
+  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
@@ -14,10 +14,10 @@ const prettyDate = (iso) =>
 import ReportGrid from '../components/ReportGrid.jsx'
 import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
-import { pendingPhotos } from '../lib/photos.js'
+import { pendingPhotoItems } from '../lib/photos.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote, LulavIcon } from '../components/ui.jsx'
+import { Button, Card, ConfirmDialog, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote } from '../components/ui.jsx'
 
 // Shared bits of the admin skin (sky cards on mint, navy / green-deep type).
 const label = 'text-[11px] font-semibold uppercase tracking-[0.1em] text-navy'   // small Exo label
@@ -361,9 +361,29 @@ function PendingEntry({ entry: s, onOpen }) {
   const [busy, setBusy] = useState(null) // 'approve' | 'reject' while the request runs
   const [done, setDone] = useState(null) // what succeeded, until the list refresh drops the card
   const [error, setError] = useState(null)
+  const [confirming, setConfirming] = useState(null) // photo the dialog is asking about
+  const [deleting, setDeleting] = useState(null) // id of the photo being deleted
+  const [deleted, setDeleted] = useState([]) // gone already, until the list refreshes
   // Only the photos still waiting: a day can also hold ones approved earlier,
   // which are already public and are not what these buttons act on.
-  const imgs = pendingPhotos(s)
+  const items = pendingPhotoItems(s).filter((item) => !deleted.includes(item.id))
+  const imgs = items.map((item) => item.photo)
+
+  // Deleting throws the picture away for good, so the × only opens the dialog
+  // below; this runs once it is confirmed.
+  async function removePhoto(id) {
+    setDeleting(id)
+    setConfirming(null)
+    setError(null)
+    try {
+      await deletePhoto(id)
+      setDeleted((ids) => [...ids, id])
+    } catch (e) {
+      setError(`Could not delete the photo — ${e.message}`)
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   async function review(action) {
     setBusy(action)
@@ -382,12 +402,23 @@ function PendingEntry({ entry: s, onOpen }) {
     <div className={`${tile} p-3`}>
       {/* every pending photo in the entry — the admin must be able to see what Approve will publish */}
       <div className="flex flex-wrap gap-2">
-        {imgs.map((img, i) => (
-          <button key={i} type="button" onClick={() => onOpen({ ...s, photo: img })}
-            aria-label={`View photo ${i + 1} of ${imgs.length} full size`}
-            className="h-16 w-16 flex-none overflow-hidden rounded-xl ring-2 ring-white transition hover:ring-green-mid focus-visible:outline-none focus-visible:ring-green-mid">
-            <img src={img} alt="" className="h-full w-full object-cover" />
-          </button>
+        {items.map(({ photo: img, id }, i) => (
+          <div key={id || i} className="relative h-16 w-16 flex-none">
+            <button type="button" onClick={() => onOpen({ ...s, photo: img })}
+              aria-label={`View photo ${i + 1} of ${items.length} full size`}
+              className="h-full w-full overflow-hidden rounded-xl ring-2 ring-white transition hover:ring-green-mid focus-visible:outline-none focus-visible:ring-green-mid">
+              <img src={img} alt="" className="h-full w-full object-cover" />
+            </button>
+            {/* Delete this one photo for good. Hidden without an id (demo data). */}
+            {id && (
+              <button type="button" onClick={() => setConfirming(id)} disabled={deleting === id}
+                aria-label={`Delete photo ${i + 1} of ${items.length} permanently`}
+                title="Delete this photo permanently"
+                className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red text-[11px] font-bold leading-none text-white shadow ring-2 ring-white transition hover:bg-race-red disabled:opacity-60">
+                {deleting === id ? '…' : '×'}
+              </button>
+            )}
+          </div>
         ))}
       </div>
       <div className="mt-2 min-w-0">
@@ -408,6 +439,19 @@ function PendingEntry({ entry: s, onOpen }) {
         )}
         {error && <p role="alert" className="mt-2 rounded-xl bg-white/60 px-3 py-2 text-xs font-semibold text-red">{error}</p>}
       </div>
+      <ConfirmDialog
+        open={!!confirming}
+        title="Delete this photo?"
+        confirmLabel="Delete photo"
+        cancelLabel="Keep photo"
+        busy={!!deleting}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => removePhoto(confirming)}
+      >
+        <p>Are you sure you want to delete this photo from {s.kidName}’s entry?</p>
+        <p className="font-semibold text-red">This cannot be undone — the picture is removed permanently, not just hidden.</p>
+        <p>To keep it off the public page without deleting it, use Reject instead.</p>
+      </ConfirmDialog>
     </div>
   )
 }
@@ -467,11 +511,14 @@ function Moderation({ shakes, error, onRetry }) {
                 const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
                 return (
                   <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : 'bg-white/55'}`}>
-                    {imgs[0]
-                      ? <img src={imgs[0]} alt="" className="h-14 w-14 flex-none rounded-xl object-cover" />
-                      : <span className="grid h-14 w-14 flex-none place-items-center rounded-xl bg-track"><LulavIcon className="h-10" /></span>}
+                    {/* No thumbnail here: this list is for finding an entry by
+                        child, and the pictures are reviewed in Photo Approvals
+                        above. The count still says how many an entry carries. */}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-navy">{s.kidName} · {fmt(s.count)} shakes {imgs.length > 1 && <span className="text-xs font-normal text-muted">· {imgs.length} photos</span>}</p>
+                      <p className="text-sm font-semibold text-navy">
+                        {s.kidName}{s.grade ? ` · ${s.grade}` : ''} · {fmt(s.count)} shakes · {fmt(s.minutes || 0)} minutes{' '}
+                        {imgs.length > 0 && <span className="text-xs font-normal text-muted">· {imgs.length} photo{imgs.length === 1 ? '' : 's'}</span>}
+                      </p>
                       {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
                     </div>
