@@ -1727,9 +1727,16 @@ try {
         $includeHidden = false;
         $allowPending = false;
         if ($actor && $actor['type'] === 'admin') {
-            lulavRequireSchoolAccess($actor, $schoolId);
-            $includeHidden = !empty($_GET['includeHidden']);
-            $allowPending = true;
+            // An admin looking at a school they do not administer is a visitor
+            // there, and gets the public feed. Refusing outright (as
+            // lulavRequireSchoolAccess would) emptied Recent Shakes and the
+            // picture carousel on every other school's campaign page, because
+            // the SPA sends an admin's token to this endpoint to widen it.
+            $scope = lulavAdminScope((int) $actor['id']);
+            if ($scope['isHq'] || in_array($schoolId, $scope['schoolIds'], true)) {
+                $includeHidden = !empty($_GET['includeHidden']);
+                $allowPending = true;
+            }
         }
         // Public callers only render a short feed; cap the payload so the
         // campaign page's 30-second poll stays cheap.
