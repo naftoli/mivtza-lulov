@@ -153,7 +153,12 @@ function setSpacing(ctx, value) {
 
 // Build the share card and resolve with a PNG Blob (for preview / share / save).
 export async function buildShareCard(school) {
-  const { name, city, total, goal, percent, bonusActive, bonusLevel } = school
+  const { name, city, total, goal, percent, bonusActive, bonusLevel, bonusGoal } = school
+  // In a bonus round the school is working towards that round's target, so
+  // that is the number beside the total — the card used to print the base
+  // goal, which the school had already passed. The percent stays measured
+  // against the base goal (125% of goal, and 1,249 of the round's 1,250).
+  const target = bonusActive && Number(bonusGoal) > 0 ? bonusGoal : goal
   const p = palette()
   const [, shield, marker, logo] = await Promise.all([
     ensureFonts(), loadShield(), loadMarker(),
@@ -247,7 +252,7 @@ export async function buildShareCard(school) {
   // goal line — navy
   ctx.font = exo(600, 34)
   ctx.fillStyle = p.navy
-  ctx.fillText(`of ${fmt(goal)} shakes`, L, 652)
+  ctx.fillText(`of ${fmt(target)} shakes`, L, 652)
 
   // progress bar — track + green gradient fill + lulav-esrog marker
   const barY = 770
