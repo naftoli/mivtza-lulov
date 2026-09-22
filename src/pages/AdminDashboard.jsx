@@ -456,10 +456,14 @@ function PendingEntry({ entry: s, onOpen }) {
   )
 }
 
+// The name the moderation list shows and searches: the full one where the API
+// sends it, else the public "First L.".
+const modName = (s) => String(s.kidFullName || s.kidName || '')
+
 // Sort options for the "Remove entry" list.
 const MOD_SORTS = {
   shakes: { label: 'Most shakes', fn: (a, b) => b.count - a.count },
-  name: { label: 'Name', fn: (a, b) => String(a.kidName).localeCompare(String(b.kidName)) },
+  name: { label: 'Name', fn: (a, b) => modName(a).localeCompare(modName(b)) },
   newest: { label: 'Newest', fn: (a, b) => new Date(b.createdAt) - new Date(a.createdAt) },
   oldest: { label: 'Oldest', fn: (a, b) => new Date(a.createdAt) - new Date(b.createdAt) },
 }
@@ -472,7 +476,7 @@ function Moderation({ shakes, error, onRetry }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const all = shakes || []
-    const base = needle ? all.filter((s) => String(s.kidName).toLowerCase().includes(needle)) : all
+    const base = needle ? all.filter((s) => modName(s).toLowerCase().includes(needle)) : all
     return [...base].sort(MOD_SORTS[sort].fn)
   }, [shakes, q, sort])
 
@@ -515,9 +519,13 @@ function Moderation({ shakes, error, onRetry }) {
                         child, and the pictures are reviewed in Photo Approvals
                         above. The count still says how many an entry carries. */}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-navy">
-                        {s.kidName}{s.grade ? ` · ${s.grade}` : ''} · {fmt(s.count)} shakes · {fmt(s.minutes || 0)} minutes{' '}
-                        {imgs.length > 0 && <span className="text-xs font-normal text-muted">· {imgs.length} photo{imgs.length === 1 ? '' : 's'}</span>}
+                      {/* The child on its own line, the entry's numbers under it.
+                          kidFullName is the moderator's view of the name; public
+                          rows only ever carry the initial in kidName. */}
+                      <p className="text-sm font-semibold text-navy">{s.kidFullName || s.kidName}</p>
+                      <p className="text-xs text-muted">
+                        {s.grade ? `${s.grade} · ` : ''}{fmt(s.count)} shakes · {fmt(s.minutes || 0)} minutes
+                        {imgs.length > 0 && ` · ${imgs.length} photo${imgs.length === 1 ? '' : 's'}`}
                       </p>
                       {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>

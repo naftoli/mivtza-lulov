@@ -905,6 +905,10 @@ function lulavBuildDayReport(
         'kidId' => $allowPending ? (string) $kid['user_serial'] : null,
         'kidKey' => lulavPublicKidId((int) $kid['user_id']),
         'kidName' => trim($kid['first'] . ' ' . mb_substr($kid['last'], 0, 1)) . '.',
+        // The full name, for the screens that moderate entries. Public rows
+        // carry only the initial above — that is the name the photo wall and
+        // the feed show.
+        'kidFullName' => $allowPending ? trim($kid['first'] . ' ' . $kid['last']) : null,
         'schoolId' => (string) $kid['school_id'],
         'classId' => $kid['class_id'] ? (string) $kid['class_id'] : null,
         // The platoon label ("5-Boys"), so a moderator can tell two children
