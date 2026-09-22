@@ -126,11 +126,11 @@ export default function KidDashboard() {
           {school && <SchoolLogo school={school} size={44} className="hidden sm:grid" fallback={false} />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              {/* The rank reads as a title — "Colonel Soldier" — with the army rank
-                  logo beside it, as Recent Shakes and the leaderboard show it. The
-                  medal emoji only stands in when there is no image (demo), and a
-                  child with no rank on record is simply "Soldier". */}
-              <SectionHeader>{kid.rank ? `${kid.rank} Soldier` : 'Soldier'}</SectionHeader>
+              {/* The rank stands on its own — "Colonel" — with the army rank logo
+                  beside it, as Recent Shakes and the leaderboard show it. The medal
+                  emoji only stands in when there is no image (demo), and a child
+                  with no rank on record shows neither. */}
+              {kid.rank && <SectionHeader>{kid.rank}</SectionHeader>}
               {kid.rankImageUrl
                 ? <img src={kid.rankImageUrl} alt="" className="h-10 w-10 object-contain" />
                 : kid.rank && <span aria-hidden="true" className="text-xl leading-none">🎖️</span>}
