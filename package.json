@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
+    "embla-carousel-auto-scroll": "^8.6.0",
+    "embla-carousel-react": "^8.6.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

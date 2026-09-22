@@ -1,49 +1,133 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import useEmblaCarousel from 'embla-carousel-react'
+import AutoScroll from 'embla-carousel-auto-scroll'
 import { useDialog } from '../lib/useDialog.js'
 import { timeAgo } from '../lib/format.js'
 import { approvedPhotos } from '../lib/photos.js'
-import { Card, SectionHeader, Button } from './ui.jsx'
+import { Card, SectionHeader } from './ui.jsx'
 
-const PHOTO_BATCH = 10
+// Someone who has asked their system to cut animation gets the carousel
+// standing still; the arrows, the dots and the swipe all still work.
+const wantsStillness = () => {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return false
+  }
+}
 
-// Gallery of photos kids uploaded from the field ("Mivtzoim Pictures").
+// Gallery of photos kids uploaded from the field ("Mivtzoim Pictures"): one big
+// picture at a time, drifting on its own, with arrows either side and a swipe on
+// a phone — the way the rank carousel works on the parent site. It loops, so it
+// never runs out and the arrows never dead-end.
 export default function PhotoWall({ shakes }) {
-  // one tile per photo (an entry can carry several) — only APPROVED photos show,
+  // one slide per photo (an entry can carry several) — only APPROVED photos show,
   // picked per photo so a day's newer pending photo stays off the wall
   const photos = shakes.flatMap((s) =>
     approvedPhotos(s).map((img, i) => ({ ...s, photo: img, id: `${s.id}-${i}` })))
+  const count = photos.length
   const [active, setActive] = useState(null)
-  const [visible, setVisible] = useState(PHOTO_BATCH)
+  const [index, setIndex] = useState(0)
+  const [emblaRef, embla] = useEmblaCarousel(
+    { loop: true, align: 'center' },
+    // A slow, continuous drift rather than a slideshow's jump. It pauses while
+    // someone is looking at a picture (hover or keyboard focus) and picks up
+    // again a moment after an arrow or a swipe.
+    [AutoScroll({
+      speed: 0.7,
+      startDelay: 1500,
+      playOnInit: !wantsStillness(),
+      stopOnMouseEnter: true,
+      stopOnFocusIn: true,
+      stopOnInteraction: false,
+    })],
+  )
 
-  if (photos.length === 0) return null
+  // Embla owns the scroll position; this only mirrors it for the counter and dots.
+  useEffect(() => {
+    if (!embla) return undefined
+    const onSelect = () => setIndex(embla.selectedScrollSnap())
+    onSelect()
+    embla.on('select', onSelect).on('reInit', onSelect)
+    return () => { embla.off('select', onSelect).off('reInit', onSelect) }
+  }, [embla])
 
-  const shown = photos.slice(0, visible)
+  // A newly approved photo lengthens the list under the carousel.
+  useEffect(() => { embla?.reInit() }, [embla, count])
+
+  // Nothing drifts behind the lightbox: the carousel holds still while a photo
+  // is open and resumes once it closes.
+  useEffect(() => {
+    const autoScroll = embla?.plugins()?.autoScroll
+    if (!autoScroll) return
+    if (active) autoScroll.stop()
+    else if (!wantsStillness()) autoScroll.play()
+  }, [active, embla])
+
+  const prev = useCallback(() => embla?.scrollPrev(), [embla])
+  const next = useCallback(() => embla?.scrollNext(), [embla])
+
+  if (count === 0) return null
 
   return (
     <Card className="p-5 sm:p-6">
-      <SectionHeader className="mb-4">Mivtzoim Pictures</SectionHeader>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
-        {shown.map((s) => (
-          <button key={s.id} onClick={() => setActive(s)}
-            className="group relative aspect-square overflow-hidden rounded-2xl bg-white ring-1 ring-navy/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid">
-            <img src={s.photo} alt={s.note || 'shake photo'} className="h-full w-full object-cover transition group-hover:scale-105" />
-            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy/75 to-transparent px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-white">
-              {s.kidName}
-            </span>
-          </button>
-        ))}
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <SectionHeader>Mivtzoim Pictures</SectionHeader>
+        <span className="flex-none text-[11px] font-semibold uppercase tracking-[0.08em] tabular-nums text-navy/55">
+          {index + 1} / {count}
+        </span>
       </div>
 
-      {photos.length > visible && (
-        <div className="mt-4 text-center">
-          <Button variant="outline" onClick={() => setVisible((v) => v + PHOTO_BATCH)}>
-            Load More
-          </Button>
+      <div className="relative" role="group" aria-roledescription="carousel" aria-label="Mivtzoim pictures">
+        <div className="overflow-hidden rounded-[22px]" ref={emblaRef}>
+          <div className="flex touch-pan-y">
+            {photos.map((s, i) => (
+              <figure key={s.id} className="min-w-0 flex-[0_0_100%]">
+                <button type="button" onClick={() => setActive(s)}
+                  aria-label={`View photo ${i + 1} of ${count} from ${s.kidName} full size`}
+                  className="group relative block aspect-[4/3] w-full overflow-hidden rounded-[22px] bg-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid">
+                  <img src={s.photo} alt={s.note || 'shake photo'} loading={i < 2 ? 'eager' : 'lazy'}
+                    className="h-full w-full object-contain" />
+                  <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy/85 to-transparent px-4 pb-3 pt-10 text-left">
+                    <span className="block text-sm font-semibold text-white">{s.kidName}</span>
+                    {s.note && <span className="block truncate text-xs italic text-white/85">“{s.note}”</span>}
+                  </figcaption>
+                </button>
+              </figure>
+            ))}
+          </div>
+        </div>
+
+        {count > 1 && (
+          <>
+            <CarouselArrow side="left" onClick={prev} />
+            <CarouselArrow side="right" onClick={next} />
+          </>
+        )}
+      </div>
+
+      {count > 1 && (
+        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+          {photos.map((s, i) => (
+            <button key={s.id} type="button" onClick={() => embla?.scrollTo(i)}
+              aria-label={`Go to photo ${i + 1}`} aria-current={i === index}
+              className={`h-1.5 rounded-full transition-all ${i === index ? 'w-5 bg-green' : 'w-1.5 bg-navy/20 hover:bg-navy/40'}`} />
+          ))}
         </div>
       )}
 
       <PhotoLightbox photo={active} onClose={() => setActive(null)} />
     </Card>
+  )
+}
+
+function CarouselArrow({ side, onClick }) {
+  const left = side === 'left'
+  return (
+    <button type="button" onClick={onClick} aria-label={left ? 'Previous photo' : 'Next photo'}
+      className={`absolute top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/95 pb-1 text-3xl font-bold leading-none text-green shadow-md ring-1 ring-navy/10 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid ${left ? 'left-2' : 'right-2'}`}>
+      {left ? '‹' : '›'}
+    </button>
   )
 }
 
