@@ -272,7 +272,7 @@ export default function KidDashboard() {
                         {fmt(s.count)} Shakes <span className="text-navy/40">|</span> {fmt(s.minutes || 0)} Minutes on Mivtzoim
                       </p>
                       {s.note && <p className="text-xs italic text-navy/80">“{s.note}”</p>}
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-navy/60">{hebrewDate(s.createdAt)}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-navy/60">{hebrewDate(s.createdAt, { withTime: true })}</p>
                     </div>
                   </li>
                 )

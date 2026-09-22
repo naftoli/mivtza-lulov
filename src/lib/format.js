@@ -73,13 +73,42 @@ export function timeAgo(iso) {
   return `${d} day${d === 1 ? '' : 's'} ago`
 }
 
-// The Hebrew-calendar date for an ISO timestamp, e.g. "24 Tishri 5787".
-// Date only — no time/seconds. Guarded so a bad value never throws in render.
-export function hebrewDate(iso) {
+// Intl's Hebrew calendar comes from ICU/CLDR, which spells the months
+// "Tishri", "Heshvan", "Tevet", "Nisan" and "Tamuz". Tzivos Hashem spells them
+// the way the children read them everywhere else, so the month name is
+// translated on the way out; anything ICU adds later passes through unchanged.
+const HEBREW_MONTHS = {
+  Tishri: 'Tishrei',
+  Heshvan: 'Cheshvan',
+  Kislev: 'Kislev',
+  Tevet: 'Teves',
+  Shevat: 'Shevat',
+  Adar: 'Adar',
+  'Adar I': 'Adar I',
+  'Adar II': 'Adar II',
+  Nisan: 'Nissan',
+  Iyar: 'Iyar',
+  Sivan: 'Sivan',
+  Tamuz: 'Tammuz',
+  Av: 'Av',
+  Elul: 'Elul',
+}
+
+// The Hebrew-calendar date for an ISO timestamp, e.g. "24 Tishrei 5787", and
+// with `withTime` the clock time beside it: "24 Tishrei 5787 · 3:42 PM".
+// Guarded so a bad value never throws in render.
+export function hebrewDate(iso, { withTime = false } = {}) {
   try {
-    return new Intl.DateTimeFormat('en-u-ca-hebrew', {
+    const date = new Date(iso)
+    const parts = new Intl.DateTimeFormat('en-u-ca-hebrew', {
       day: 'numeric', month: 'long', year: 'numeric',
-    }).format(new Date(iso))
+    }).formatToParts(date)
+    const part = (type) => parts.find((p) => p.type === type)?.value ?? ''
+    const month = part('month')
+    const day = `${part('day')} ${HEBREW_MONTHS[month] || month} ${part('year')}`
+    if (!withTime) return day
+    const time = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(date)
+    return `${day} · ${time}`
   } catch {
     return ''
   }
