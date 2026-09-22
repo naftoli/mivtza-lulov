@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import AutoScroll from 'embla-carousel-auto-scroll'
 import { useDialog } from '../lib/useDialog.js'
 import { timeAgo } from '../lib/format.js'
 import { approvedPhotos } from '../lib/photos.js'
@@ -6,8 +7,9 @@ import { Card, SectionHeader } from './ui.jsx'
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
 
 // Gallery of photos kids uploaded from the field ("Mivtzoim Pictures"): three
-// across, moved by the arrows or a swipe on a phone. It loops, so it never runs
-// out and the arrows never dead-end. shadcn/ui's Carousel over Embla.
+// across, scrolling past at a fair clip, with arrows and a swipe on a phone. It
+// loops, so it never runs out and the arrows never dead-end. shadcn/ui's
+// Carousel over Embla.
 export default function PhotoWall({ shakes }) {
   // one slide per photo (an entry can carry several) — only APPROVED photos show,
   // picked per photo so a day's newer pending photo stays off the wall
@@ -20,6 +22,15 @@ export default function PhotoWall({ shakes }) {
   // A newly approved photo lengthens the list under the carousel.
   useEffect(() => { api?.reInit() }, [api, count])
 
+  // Nothing scrolls behind the lightbox: it holds still while a photo is open
+  // and picks up again once it closes.
+  useEffect(() => {
+    const autoScroll = api?.plugins()?.autoScroll
+    if (!autoScroll) return
+    if (active) autoScroll.stop()
+    else autoScroll.play()
+  }, [active, api])
+
   if (count === 0) return null
 
   return (
@@ -28,7 +39,20 @@ export default function PhotoWall({ shakes }) {
 
       {/* The arrows sit inside the frame rather than shadcn's default -left-12 /
           -right-12, which would hang them off the card. */}
-      <Carousel setApi={setApi} opts={{ loop: true, align: 'start' }} className="w-full">
+      <Carousel
+        setApi={setApi}
+        opts={{ loop: true, align: 'start' }}
+        // Keeps moving at a brisk clip (the plugin's own default is 2), pausing
+        // while someone hovers or tabs in to look and picking up again a moment
+        // after an arrow press or a swipe.
+        plugins={[AutoScroll({
+          speed: 3,
+          startDelay: 500,
+          stopOnMouseEnter: true,
+          stopOnInteraction: false,
+        })]}
+        className="w-full"
+      >
         <CarouselContent className="-ml-2 md:-ml-4">
           {photos.map((s, i) => (
             <CarouselItem key={s.id} className="basis-1/3 pl-2 md:pl-4">
