@@ -43,11 +43,19 @@ export function AuthProvider({ children }) {
   const [admin, setAdmin] = useState(() => load(ADMIN_KEY))
 
   useEffect(() => {
-    const expire = () => {
-      setKid(null)
-      setAdmin(null)
-      save(KID_KEY, null)
-      save(ADMIN_KEY, null)
+    // A token that expired under us. The event names the role whose token it
+    // was, so a soldier and an admin signed in on the same device do not log
+    // each other out; an event with no role clears both.
+    const expire = (event) => {
+      const role = event?.detail?.role
+      if (role !== 'admin') {
+        setKid(null)
+        save(KID_KEY, null)
+      }
+      if (role !== 'kid') {
+        setAdmin(null)
+        save(ADMIN_KEY, null)
+      }
     }
     window.addEventListener('ml-auth-expired', expire)
     return () => window.removeEventListener('ml-auth-expired', expire)
@@ -84,8 +92,10 @@ export function AuthProvider({ children }) {
     return found
   }
 
-  const logoutKid = () => { setKid(null); save(KID_KEY, null) }
-  const logoutAdmin = () => { setAdmin(null); save(ADMIN_KEY, null) }
+  // Logging out drops the API token too: it outlives the screen by hours
+  // otherwise, which matters most on the shared devices this runs on.
+  const logoutKid = () => { setKid(null); save(KID_KEY, null); api.endSession('kid') }
+  const logoutAdmin = () => { setAdmin(null); save(ADMIN_KEY, null); api.endSession('admin') }
 
   return (
     <AuthContext.Provider

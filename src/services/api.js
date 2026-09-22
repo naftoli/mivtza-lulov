@@ -412,6 +412,12 @@ export async function verifyKid(id, dob) {
   return { ...clone(safe), kidKey: kidKey(kid.id) }
 }
 
+// Drop one role's API session — the facade's logout. The demo store has no
+// tokens, so there is nothing to end there.
+export function endSession(role) {
+  if (!IS_DEMO) mashpia.endSession(role)
+}
+
 // Parent-site handoff. Demo data has no parents, so there is nothing to honour
 // here when the live API is off.
 export async function verifyKidHandoff(code) {
