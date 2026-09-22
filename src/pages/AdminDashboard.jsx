@@ -519,12 +519,13 @@ function Moderation({ shakes, error, onRetry }) {
                         child, and the pictures are reviewed in Photo Approvals
                         above. The count still says how many an entry carries. */}
                     <div className="min-w-0 flex-1">
-                      {/* The child on its own line, the entry's numbers under it.
-                          kidFullName is the moderator's view of the name; public
-                          rows only ever carry the initial in kidName. */}
-                      <p className="text-sm font-semibold text-navy">{s.kidFullName || s.kidName}</p>
+                      {/* Child and shakes lead the row in one weight; the rest of
+                          the entry follows a line at a time. kidFullName is the
+                          moderator's view of the name; public rows only ever
+                          carry the initial in kidName. */}
+                      <p className="text-sm font-semibold text-navy">{s.kidFullName || s.kidName} · {fmt(s.count)} shakes</p>
                       <p className="text-xs text-muted">
-                        {s.grade ? `${s.grade} · ` : ''}{fmt(s.count)} shakes · {fmt(s.minutes || 0)} minutes
+                        {s.grade ? `${s.grade} · ` : ''}{fmt(s.minutes || 0)} minutes
                         {imgs.length > 0 && ` · ${imgs.length} photo${imgs.length === 1 ? '' : 's'}`}
                       </p>
                       {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
