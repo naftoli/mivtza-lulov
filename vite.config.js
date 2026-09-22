@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -30,6 +31,10 @@ function rosterGuard() {
 export default defineConfig({
   base: '/mivtzoim/lulav/',
   plugins: [rosterGuard(), react(), tailwindcss()],
+  // `@/…` is what shadcn components import themselves by (see components.json).
+  resolve: {
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
+  },
   server: {
     proxy: {
       '/mivtzoim/lulav/api': {

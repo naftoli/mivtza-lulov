@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import useEmblaCarousel from 'embla-carousel-react'
+import { useEffect, useRef, useState } from 'react'
 import AutoScroll from 'embla-carousel-auto-scroll'
 import { useDialog } from '../lib/useDialog.js'
 import { timeAgo } from '../lib/format.js'
 import { approvedPhotos } from '../lib/photos.js'
 import { Card, SectionHeader } from './ui.jsx'
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
 
 // Someone who has asked their system to cut animation gets the carousel
-// standing still; the arrows, the dots and the swipe all still work.
+// standing still; the arrows and the swipe still work.
 const wantsStillness = () => {
   try {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -16,10 +16,10 @@ const wantsStillness = () => {
   }
 }
 
-// Gallery of photos kids uploaded from the field ("Mivtzoim Pictures"): one big
-// picture at a time, drifting on its own, with arrows either side and a swipe on
-// a phone — the way the rank carousel works on the parent site. It loops, so it
-// never runs out and the arrows never dead-end.
+// Gallery of photos kids uploaded from the field ("Mivtzoim Pictures"): three
+// across, drifting on its own, with arrows either side and a swipe on a phone —
+// the way the rank carousel works on the parent site. It loops, so it never runs
+// out and the arrows never dead-end. shadcn/ui's Carousel over Embla.
 export default function PhotoWall({ shakes }) {
   // one slide per photo (an entry can carry several) — only APPROVED photos show,
   // picked per photo so a day's newer pending photo stays off the wall
@@ -27,107 +27,71 @@ export default function PhotoWall({ shakes }) {
     approvedPhotos(s).map((img, i) => ({ ...s, photo: img, id: `${s.id}-${i}` })))
   const count = photos.length
   const [active, setActive] = useState(null)
-  const [index, setIndex] = useState(0)
-  const [emblaRef, embla] = useEmblaCarousel(
-    { loop: true, align: 'center' },
-    // A slow, continuous drift rather than a slideshow's jump. It pauses while
-    // someone is looking at a picture (hover or keyboard focus) and picks up
-    // again a moment after an arrow or a swipe.
-    [AutoScroll({
-      speed: 0.7,
-      startDelay: 1500,
-      playOnInit: !wantsStillness(),
-      stopOnMouseEnter: true,
-      stopOnFocusIn: true,
-      stopOnInteraction: false,
-    })],
-  )
-
-  // Embla owns the scroll position; this only mirrors it for the counter and dots.
-  useEffect(() => {
-    if (!embla) return undefined
-    const onSelect = () => setIndex(embla.selectedScrollSnap())
-    onSelect()
-    embla.on('select', onSelect).on('reInit', onSelect)
-    return () => { embla.off('select', onSelect).off('reInit', onSelect) }
-  }, [embla])
+  const [api, setApi] = useState(null)
 
   // A newly approved photo lengthens the list under the carousel.
-  useEffect(() => { embla?.reInit() }, [embla, count])
+  useEffect(() => { api?.reInit() }, [api, count])
 
   // Nothing drifts behind the lightbox: the carousel holds still while a photo
-  // is open and resumes once it closes.
+  // is open and picks up again once it closes.
   useEffect(() => {
-    const autoScroll = embla?.plugins()?.autoScroll
+    const autoScroll = api?.plugins()?.autoScroll
     if (!autoScroll) return
     if (active) autoScroll.stop()
     else if (!wantsStillness()) autoScroll.play()
-  }, [active, embla])
-
-  const prev = useCallback(() => embla?.scrollPrev(), [embla])
-  const next = useCallback(() => embla?.scrollNext(), [embla])
+  }, [active, api])
 
   if (count === 0) return null
 
   return (
     <Card className="p-5 sm:p-6">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <SectionHeader>Mivtzoim Pictures</SectionHeader>
-        <span className="flex-none text-[11px] font-semibold uppercase tracking-[0.08em] tabular-nums text-navy/55">
-          {index + 1} / {count}
-        </span>
-      </div>
+      <SectionHeader className="mb-4">Mivtzoim Pictures</SectionHeader>
 
-      <div className="relative" role="group" aria-roledescription="carousel" aria-label="Mivtzoim pictures">
-        <div className="overflow-hidden rounded-[22px]" ref={emblaRef}>
-          <div className="flex touch-pan-y">
-            {photos.map((s, i) => (
-              <figure key={s.id} className="min-w-0 flex-[0_0_100%]">
+      {/* The arrows sit inside the frame rather than shadcn's default -left-12 /
+          -right-12, which would hang them off the card. */}
+      <Carousel
+        setApi={setApi}
+        opts={{ loop: true, align: 'start' }}
+        // A slow, continuous drift rather than a slideshow's jump. It pauses
+        // while someone hovers or tabs in to look, and picks up again a moment
+        // after an arrow press or a swipe.
+        plugins={[AutoScroll({
+          speed: 0.7,
+          startDelay: 1500,
+          playOnInit: !wantsStillness(),
+          stopOnMouseEnter: true,
+          stopOnFocusIn: true,
+          stopOnInteraction: false,
+        })]}
+        className="w-full"
+      >
+        <CarouselContent className="-ml-2 md:-ml-4">
+          {photos.map((s, i) => (
+            <CarouselItem key={s.id} className="basis-1/3 pl-2 md:pl-4">
+              <figure>
                 <button type="button" onClick={() => setActive(s)}
                   aria-label={`View photo ${i + 1} of ${count} from ${s.kidName} full size`}
-                  className="group relative block aspect-[4/3] w-full overflow-hidden rounded-[22px] bg-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid">
-                  <img src={s.photo} alt={s.note || 'shake photo'} loading={i < 2 ? 'eager' : 'lazy'}
-                    className="h-full w-full object-contain" />
-                  <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy/85 to-transparent px-4 pb-3 pt-10 text-left">
-                    <span className="block text-sm font-semibold text-white">{s.kidName}</span>
-                    {s.note && <span className="block truncate text-xs italic text-white/85">“{s.note}”</span>}
+                  className="group relative block aspect-square w-full overflow-hidden rounded-2xl bg-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid">
+                  <img src={s.photo} alt={s.note || 'shake photo'} loading={i < 3 ? 'eager' : 'lazy'}
+                    className="h-full w-full object-cover transition group-hover:scale-105" />
+                  <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy/80 to-transparent px-2 pb-1.5 pt-6 text-left text-[10px] font-semibold uppercase tracking-wide text-white sm:text-xs">
+                    {s.kidName}
                   </figcaption>
                 </button>
               </figure>
-            ))}
-          </div>
-        </div>
-
-        {count > 1 && (
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        {count > 3 && (
           <>
-            <CarouselArrow side="left" onClick={prev} />
-            <CarouselArrow side="right" onClick={next} />
+            <CarouselPrevious className="left-1 size-9 border-0 bg-white/95 text-green shadow-md ring-1 ring-navy/10 hover:bg-white sm:-left-4" />
+            <CarouselNext className="right-1 size-9 border-0 bg-white/95 text-green shadow-md ring-1 ring-navy/10 hover:bg-white sm:-right-4" />
           </>
         )}
-      </div>
-
-      {count > 1 && (
-        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-          {photos.map((s, i) => (
-            <button key={s.id} type="button" onClick={() => embla?.scrollTo(i)}
-              aria-label={`Go to photo ${i + 1}`} aria-current={i === index}
-              className={`h-1.5 rounded-full transition-all ${i === index ? 'w-5 bg-green' : 'w-1.5 bg-navy/20 hover:bg-navy/40'}`} />
-          ))}
-        </div>
-      )}
+      </Carousel>
 
       <PhotoLightbox photo={active} onClose={() => setActive(null)} />
     </Card>
-  )
-}
-
-function CarouselArrow({ side, onClick }) {
-  const left = side === 'left'
-  return (
-    <button type="button" onClick={onClick} aria-label={left ? 'Previous photo' : 'Next photo'}
-      className={`absolute top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/95 pb-1 text-3xl font-bold leading-none text-green shadow-md ring-1 ring-navy/10 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-mid ${left ? 'left-2' : 'right-2'}`}>
-      {left ? '‹' : '›'}
-    </button>
   )
 }
 
