@@ -426,17 +426,22 @@ function lulavPhotoFile(array $photo): string
 
 function lulavPhotoValue(array $photo, bool $allowPending): ?string
 {
+    // A row whose file is gone -- deleted off the server, lost in a restore --
+    // is treated as no photo at all. The approved branch used to hand out the
+    // URL on the strength of the row alone, so a missing file reached the photo
+    // wall as a broken <img>: GET /photos/:id/file does check is_file and 404s.
+    // Nothing shown beats something broken.
+    if (!is_file(lulavPhotoFile($photo))) {
+        return null;
+    }
     if ($photo['status'] === 'approved') {
         return '/mivtzoim/lulav/api/photos/' . $photo['public_id'] . '/file';
     }
     if (!$allowPending || $photo['status'] === 'rejected') {
         return null;
     }
-    $file = lulavPhotoFile($photo);
-    if (!is_file($file)) {
-        return null;
-    }
-    return 'data:' . $photo['mime_type'] . ';base64,' . base64_encode((string) file_get_contents($file));
+    return 'data:' . $photo['mime_type'] . ';base64,'
+        . base64_encode((string) file_get_contents(lulavPhotoFile($photo)));
 }
 
 function lulavValidatePhotos(array $photos, int $limit): void
