@@ -105,17 +105,26 @@ export default function Layout({ children }) {
       <main className="flex-1">{children}</main>
 
       <footer className="mt-auto bg-green text-white/90">
-        {/* Special thanks — sponsor logos on a white panel, so each logo's own
-            backdrop blends instead of boxing against the green footer. */}
+        {/* Special thanks — label on one side, the sponsor logos on the other, on a
+            white panel so each logo's own backdrop blends instead of boxing on green. */}
         <div className="mx-auto max-w-[1400px] px-4 pt-7 sm:px-6 lg:px-10">
-          <div className="flex flex-col items-center gap-4 rounded-2xl bg-white px-6 py-5">
-            <span className="font-cond text-[17px] uppercase tracking-[0.08em] text-green sm:text-[19px]">Special Thank You to</span>
-            <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
-              <img src={asset('design/thanks-daled-minim.png')} alt="Itche's Daled Minim" className="h-14 w-auto select-none sm:h-16" draggable="false" />
-              <img src={asset('design/thanks-altein.png')} alt="Altein Esrogim — trusted source of Yanover Esrogim since 1929" className="h-14 w-auto select-none sm:h-16" draggable="false" />
+          <div className="rounded-2xl bg-white px-6 py-5">
+            <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between sm:gap-8">
+              <span className="font-cond text-[17px] uppercase tracking-[0.08em] text-green sm:text-[19px]">Special Thank You to</span>
+              <div className="flex flex-wrap items-center justify-center gap-8 sm:justify-end sm:gap-10">
+                <img src={asset('design/thanks-daled-minim.png')} alt="Itche's Daled Minim" className="h-12 w-auto select-none sm:h-14" draggable="false" />
+                <img src={asset('design/thanks-altein.png')} alt="Altein Esrogim — trusted source of Yanover Esrogim since 1929" className="h-12 w-auto select-none sm:h-14" draggable="false" />
+              </div>
             </div>
+            {/* build credit, inside the panel */}
+            <p className="mt-5 border-t border-navy/10 pt-3.5 text-center text-[12px] tracking-wide text-navy/55">
+              This site was built by{' '}
+              <span className="font-cond text-[14px] uppercase tracking-[0.08em] text-green">Sholem Chaskind</span>
+            </p>
           </div>
         </div>
+
+        {/* brand + verse */}
         <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-3 px-4 py-7 text-sm sm:flex-row sm:px-6 lg:px-10">
           <div className="flex items-center gap-3">
             <img src={asset('th-logo.png')} alt="" className="h-10 w-auto" />
