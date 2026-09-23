@@ -233,7 +233,7 @@ export default function Home() {
           <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12 2xl:px-[63px] 2xl:pb-[53px] 2xl:pt-10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* lulav-icon.png is a mis-export (traffic light); the 12x45 small render is the correct subject and never upscaled here */}
-              <Eyebrow icon={asset('design/lulav-esrog-small.png')} iconClass="h-6 sm:h-7">Mivtza Lulov {CAMPAIGN_YEAR}</Eyebrow>
+              <Eyebrow icon={asset('design/lulav-esrog.png')} iconClass="h-6 sm:h-7">Mivtza Lulov {CAMPAIGN_YEAR}</Eyebrow>
               {goalReached && <Pill className="!bg-green !text-white">🎉 Goal reached!</Pill>}
             </div>
 

@@ -117,9 +117,9 @@ export default function Layout({ children }) {
               </div>
             </div>
             {/* build credit, inside the panel */}
-            <p className="mt-5 border-t border-navy/10 pt-3.5 text-center text-[12px] tracking-wide text-navy/55">
-              This site was built by{' '}
-              <span className="font-cond text-[14px] uppercase tracking-[0.08em] text-green">Sholem Chaskind</span>
+            <p className="mt-5 flex flex-wrap items-center justify-center gap-x-2 border-t border-navy/10 pt-4 text-center text-[14px] font-medium text-navy/70">
+              This site was built by
+              <span className="font-cond text-[22px] uppercase leading-none tracking-[0.06em] text-green">Sholem Chaskind</span>
             </p>
           </div>
         </div>

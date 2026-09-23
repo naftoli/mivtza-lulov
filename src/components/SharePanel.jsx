@@ -90,7 +90,7 @@ export default function SharePanel({ school, onClose }) {
         className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-5 shadow-card outline-none sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <SectionHeader className="flex items-center gap-2">
-            <img src={asset('design/lulav-esrog-small.png')} alt="" className="h-5 w-auto" />
+            <img src={asset('design/lulav-esrog.png')} alt="" className="h-5 w-auto" />
             Share this campaign
           </SectionHeader>
           <button type="button" onClick={onClose} aria-label="Close"
