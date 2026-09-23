@@ -205,15 +205,15 @@ export default function Home() {
             draggable="false"
             className="pointer-events-none absolute bottom-0 right-0 z-20 h-[290px] w-auto max-w-none select-none sm:right-2 sm:h-[400px] lg:hidden"
           />
-          {/* Top-anchored with its height tied to the hero so the PNG's flat top crop stays under the
-              header. From 2xl the comp places the cutout at exactly the hero's height (470x636, x 1170-1640
-              on a 1920 canvas): right edge 96px in from the container's padding box (184..1736), and its
-              bottom already runs 26px under the nationwide card's top edge. */}
+          {/* Pulled up so the PNG's flat-cropped lulav top hides BEHIND the sticky
+              header (at top-0 the flat edge sat right at the header's bottom and read
+              as a cut). Height grows to match, so the feet stay tucked under the
+              nationwide card. From 2xl the comp still lands the cutout on the hero. */}
           <img
             src={asset('design/hero-boy.png')}
             alt=""
             draggable="false"
-            className="pointer-events-none absolute right-6 top-0 z-20 hidden h-[calc(100%_+_24px)] w-auto select-none lg:block xl:right-12 2xl:right-[96px] 2xl:h-full"
+            className="pointer-events-none absolute right-6 top-[-40px] z-20 hidden h-[calc(100%_+_64px)] w-auto select-none lg:block xl:right-12 2xl:right-[96px]"
           />
         </div>
       </section>
