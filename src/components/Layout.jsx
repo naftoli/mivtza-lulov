@@ -109,9 +109,9 @@ export default function Layout({ children }) {
             white panel so each logo's own backdrop blends instead of boxing on green. */}
         <div className="mx-auto max-w-[1400px] px-4 pt-7 sm:px-6 lg:px-10">
           <div className="rounded-2xl bg-white px-6 py-5">
-            <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between sm:gap-8">
+            <div className="flex flex-col items-center gap-4">
               <span className="font-cond text-[17px] uppercase tracking-[0.08em] text-green sm:text-[19px]">Special Thank You to</span>
-              <div className="flex flex-wrap items-center justify-center gap-8 sm:justify-end sm:gap-10">
+              <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
                 <img src={asset('design/thanks-daled-minim.png')} alt="Itche's Daled Minim" className="h-12 w-auto select-none sm:h-14" draggable="false" />
                 <img src={asset('design/thanks-altein.png')} alt="Altein Esrogim — trusted source of Yanover Esrogim since 1929" className="h-12 w-auto select-none sm:h-14" draggable="false" />
               </div>
