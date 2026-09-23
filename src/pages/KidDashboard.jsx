@@ -42,6 +42,7 @@ export default function KidDashboard() {
   if (!kid) return <Navigate to="/login" replace />
 
   const myTotal = (myShakes || []).reduce((s, x) => s + x.count, 0)
+  const myMinutes = (myShakes || []).reduce((n, s) => n + (s.minutes || 0), 0)
   const myPhotoCount = (myShakes || []).reduce((n, s) => n + (s.photos?.length || (s.photo ? 1 : 0)), 0)
 
   const notify = (text, isError = false) => { setFlash(text); setFlashError(isError) }
@@ -153,14 +154,18 @@ export default function KidDashboard() {
       </Card>
 
       {/* stats — 3D icon at left, Exo Black number, Exo SemiBold caps label */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { icon: asset('design/icon-soldier-hat.png'), v: fmt(myTotal), l: 'My Shakes' },
+          { icon: asset('design/lulav-esrog.png'), v: fmt(myTotal), l: 'My Shakes', tall: true },
+          { icon: asset('design/icon-clock.png'), v: fmt(myMinutes), l: 'My Minutes' },
           { icon: asset('design/icon-camera.png'), v: fmt(myPhotoCount), l: 'My Photos' },
           { icon: asset('design/icon-school.png'), v: school ? `${school.percent}%` : '—', l: 'School Goal' },
         ].map((s) => (
           <Card key={s.l} className="flex items-center gap-4 p-4 sm:p-5">
-            <img src={s.icon} alt="" className="h-14 w-auto shrink-0 sm:h-16" />
+            {/* the lulav render is tall+narrow, so give it a fixed slot so its number lines up like the others */}
+            <span className="grid h-14 w-14 shrink-0 place-items-center sm:h-16 sm:w-16">
+              <img src={s.icon} alt="" className={`w-auto ${s.tall ? 'h-14 sm:h-16' : 'max-h-full max-w-full'}`} />
+            </span>
             <div className="min-w-0">
               <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[34px]">{s.v}</div>
               <div className="mt-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-navy">{s.l}</div>
