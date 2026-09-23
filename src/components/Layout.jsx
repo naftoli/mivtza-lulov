@@ -6,10 +6,12 @@ import { useAuth } from '../context/AuthContext.jsx'
 
 // Nav text: condensed caps in green-deep; the active page gets a green-mid underline.
 // 30px from 2xl is the comp's size; lg/xl sit at ~85% of it.
-const navText = 'font-cond text-[22px] uppercase leading-none tracking-[0.04em] text-green lg:text-[24px] 2xl:text-[26px]'
-const navLink = ({ isActive }) =>
-  `hidden border-b-[3px] pb-0.5 transition sm:block ${navText} ${
-    isActive ? 'border-green-mid' : 'border-transparent opacity-85 hover:opacity-100'
+// Desktop nav item: no background by default; the page you're on gets the green
+// pill (the "you are here" — replaces the old underline), and every item shares
+// one hover, a soft green wash. Consistent across all four links.
+const navItem = ({ isActive }) =>
+  `hidden items-center rounded-full px-3.5 py-1.5 font-cond text-[20px] uppercase leading-none tracking-[0.04em] text-green transition sm:inline-flex lg:text-[22px] 2xl:text-[24px] ${
+    isActive ? '[background:var(--grad-pill-green)] shadow-sm' : 'hover:bg-green/10'
   }`
 
 // Phone menu rows: the same condensed caps, one link per row; the current page sits on a white wash.
@@ -48,27 +50,21 @@ export default function Layout({ children }) {
             1920 viewport the content spans x 200-1750 — the shield's left edge lands at x=200 and the nav ends at x=1750 as in the comp. */}
         <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center justify-between gap-2 px-4 sm:min-h-[92px] sm:gap-3 sm:px-6 lg:px-10 2xl:min-h-[100px] 2xl:max-w-[1612px] 2xl:pl-[46px] 2xl:pr-4">
           <Link to="/" className="shrink-0"><Brand size={52} phoneSize={44} wideSize={70} /></Link>
-          <nav className="flex items-center gap-1.5 sm:gap-5 lg:gap-9 2xl:gap-10">
-            <NavLink to="/" end className={navLink}>
-              Campaigns
+          <nav className="flex items-center gap-1.5 sm:gap-1 lg:gap-2 2xl:gap-3">
+            {/* Desktop: four consistent items (no background; the current page shows the green pill). */}
+            <NavLink to="/" end className={navItem}>Campaigns</NavLink>
+            <NavLink to="/how-to" className={navItem}>How-To</NavLink>
+            <NavLink to={kid ? '/me' : '/login'} className={navItem}>
+              {/* compact label below lg so a long "My Mivtza Lulov Report" doesn't crowd the bar */}
+              <span className="lg:hidden">{kid ? 'My Report' : 'Soldier Login'}</span>
+              <span className="hidden lg:inline">{kid ? 'My Mivtza Lulov Report' : 'Soldier Login'}</span>
             </NavLink>
-            <NavLink to="/how-to" className={navLink}>
-              How-To
-            </NavLink>
-            {/* px-3 + 16px caps below sm so the green pill + menu toggle fit beside the brand on 360px
-                phones; sm:px-6 / sm:text-[18px] restore .btn's defaults, so the desktop pill is unchanged.
-                From 2xl the pill is the comp's ~145x46: 24px caps (11px + 24 + 11) with 14px sides. */}
-            {kid
-              ? <Button to="/me" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">
-                  {/* Full label on desktop; a compact form below lg so the pill never
-                      overflows the phone header (the disclosure menu shows the full label). */}
-                  <span className="lg:hidden">My Report</span>
-                  <span className="hidden lg:inline">My Mivtza Lulov Report</span>
-                </Button>
-              : <Button to="/login" variant="green" className="px-3 text-[16px] sm:px-6 sm:text-[18px] 2xl:px-[14px] 2xl:py-[11px] 2xl:text-[24px]">Soldier Login</Button>}
-            <Button to={admin ? '/admin' : '/admin/login'} variant="ghost"
-              className={`hidden px-0 opacity-85 hover:opacity-100 sm:inline-flex ${navText}`}>
+            <NavLink to={admin ? '/admin' : '/admin/login'} className={navItem}>
               {admin ? 'Admin' : 'School Admin'}
+            </NavLink>
+            {/* Phone (below sm): the desktop items are hidden, so keep a prominent login pill beside the menu. */}
+            <Button to={kid ? '/me' : '/login'} variant="green" className="px-3 text-[16px] sm:hidden">
+              {kid ? 'My Report' : 'Soldier Login'}
             </Button>
             <button
               ref={menuBtn}
