@@ -65,23 +65,9 @@ function cached(key, loader) {
   return cache.get(key)
 }
 
-// th-logo.svg carries only a viewBox; give it explicit dimensions so every
-// browser rasterizes it through drawImage at the size we ask for.
+// The TH crest, drawn beside the wordmark in the share-card footer band.
 function loadShield() {
-  return cached('shield', async () => {
-    try {
-      const res = await fetch(asset('th-logo.svg'))
-      if (!res.ok) return null
-      let svg = await res.text()
-      if (!/<svg\b[^>]*\swidth=/i.test(svg)) svg = svg.replace(/<svg\b/i, '<svg width="999" height="899"')
-      const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-      const img = await loadImage(url)
-      URL.revokeObjectURL(url)
-      return img
-    } catch {
-      return null
-    }
-  })
+  return cached('shield', () => loadImage(asset('th-logo.png')))
 }
 
 const loadMarker = () => cached('marker', () => loadImage(asset('design/lulav-esrog.png')))

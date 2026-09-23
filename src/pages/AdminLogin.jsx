@@ -49,7 +49,7 @@ export default function AdminLogin() {
       <Card className="overflow-hidden">
         <Band />
         <div className="p-6 sm:p-8">
-          <img src={asset('th-logo.svg')} alt="" className="mx-auto h-16 w-auto" />
+          <img src={asset('th-logo.png')} alt="" className="mx-auto h-16 w-auto" />
           {/* MASHPIA: school login will sync with mashpia.com — schools reach this
               screen through a PRIVATE link (not surfaced in the public nav). */}
           <h1 className="mt-4 text-center font-display text-[26px] font-extrabold leading-tight text-navy">Base Login</h1>

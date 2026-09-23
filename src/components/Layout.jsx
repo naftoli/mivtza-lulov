@@ -107,7 +107,7 @@ export default function Layout({ children }) {
       <footer className="mt-auto bg-green text-white/90">
         <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-3 px-4 py-7 text-sm sm:flex-row sm:px-6 lg:px-10">
           <div className="flex items-center gap-3">
-            <img src={asset('th-logo.svg')} alt="" className="h-10 w-auto" />
+            <img src={asset('th-logo.png')} alt="" className="h-10 w-auto" />
             <span className="font-cond text-[19px] uppercase leading-none tracking-[0.06em] text-gold">Mivtza Lulav · Tzivos Hashem</span>
           </div>
           <p className="text-center text-white/75 sm:text-right">
