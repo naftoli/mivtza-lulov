@@ -24,7 +24,7 @@
   --color-purple: #5b3fa8;
 
   --color-sky: #c3ecff;            /* header bar / cards */
-  --color-mint: #deedda;           /* page background below the hero */
+  --color-mint: #d9f3d4;           /* page background below the hero */
   --color-blue-accent: #1a4896;    /* rank numerals 4, 5 */
 
   /* race bar palette — one per school, in rank order */
@@ -34,7 +34,7 @@
   --color-race-red: #eb635d;
   --color-race-teal: #11a294;
 
-  --color-paper: #deedda;          /* page background (mint) */
+  --color-paper: #d9f3d4;          /* page background (mint) */
   --color-card: #c3ecff;           /* cards (sky) */
   --color-line: #a9dcf3;           /* hairlines — a slightly deeper sky */
   --color-muted: #3a4d78;          /* muted text — navy-tinted mid */

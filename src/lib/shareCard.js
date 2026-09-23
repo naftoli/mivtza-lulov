@@ -26,7 +26,7 @@ function token(name, fallback) {
 
 function palette() {
   return {
-    mint: token('--color-mint', '#deedda'),
+    mint: token('--color-mint', '#d9f3d4'),
     sky: token('--color-sky', '#c3ecff'),
     track: token('--color-track', '#9eddf9'),
     navy: token('--color-navy', '#001c4c'),
