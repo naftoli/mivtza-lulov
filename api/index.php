@@ -404,10 +404,10 @@ function lulavKidsForSchool(int $schoolId): array
                    FROM rank_marks rm JOIN ranks r USING (rank_ord)
                   WHERE rm.user_id = u.user_id
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT r.rank_image_id
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
+                (SELECT rm.rank_ord
+                   FROM rank_marks rm
                   WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
+                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
@@ -915,9 +915,7 @@ function lulavBuildDayReport(
         // with the same first name and initial apart.
         'grade' => lulavGradeLabel($kid),
         'rank' => $kid['rank_name'] ?: '',
-        'rankImageUrl' => !empty($kid['rank_image_id'])
-            ? '/file_view.php?id=' . (int) $kid['rank_image_id']
-            : null,
+        'rankImageUrl' => lulavRankImageUrl($kid),
         'day' => $day,
         'count' => (int) $countMark['value'],
         'minutes' => (int) $minuteMark['value'],
@@ -1074,10 +1072,10 @@ function lulavKidRowsByUserId(array $userIds): array
                    FROM rank_marks rm JOIN ranks r USING (rank_ord)
                   WHERE rm.user_id = u.user_id
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT r.rank_image_id
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
+                (SELECT rm.rank_ord
+                   FROM rank_marks rm
                   WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
+                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
@@ -1213,10 +1211,10 @@ function lulavLeaderboard(int $schoolId): array
                    FROM rank_marks rm JOIN ranks r USING (rank_ord)
                   WHERE rm.user_id = u.user_id
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT r.rank_image_id
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
+                (SELECT rm.rank_ord
+                   FROM rank_marks rm
                   WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
+                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
          FROM date_tasks_marks mark
          JOIN users u ON u.user_id = mark.user_id
          " . lulavRegisteredUsersJoin('u') . "
@@ -1234,9 +1232,7 @@ function lulavLeaderboard(int $schoolId): array
             'kidKey' => lulavPublicKidId((int) $row['user_id']),
             'name' => trim($row['first'] . ' ' . mb_substr($row['last'], 0, 1)) . '.',
             'rank' => $row['rank_name'] ?: '',
-            'rankImageUrl' => !empty($row['rank_image_id'])
-                ? '/file_view.php?id=' . (int) $row['rank_image_id']
-                : null,
+            'rankImageUrl' => lulavRankImageUrl($row),
             'count' => (int) $row['total'],
             'entries' => null,
         ];

@@ -640,10 +640,10 @@ function lulavKidRow(string $column, string $value, bool $required): ?array
                    FROM rank_marks rm JOIN ranks r USING (rank_ord)
                   WHERE rm.user_id = u.user_id
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT r.rank_image_id
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
+                (SELECT rm.rank_ord
+                   FROM rank_marks rm
                   WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_image_id
+                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
@@ -660,6 +660,21 @@ function lulavKidRow(string $column, string $value, bool $required): ?array
         return null;
     }
     return $cache[$key] = $row;
+}
+
+/**
+ * The rank insignia for a row carrying rank_ord: the same SVG the parent site
+ * draws beside each child (mobile/img_new/ranks/<ord>.svg), rather than
+ * ranks.rank_image_id through file_view.php. One artwork set, one look, and a
+ * flat file instead of a database-backed image request per row.
+ */
+function lulavRankImageUrl(array $row): ?string
+{
+    $ord = (int) ($row['rank_ord'] ?? 0);
+    if ($ord < 1) {
+        return null;
+    }
+    return '/mobile/img_new/ranks/' . $ord . '.svg';
 }
 
 function lulavPhotoUrl(array $user): string
@@ -701,9 +716,7 @@ function lulavSerializeKid(array $row): array
         'class' => $grade,
         'classId' => $row['class_id'] ? (string) $row['class_id'] : null,
         'rank' => $row['rank_name'] ?: '',
-        'rankImageUrl' => !empty($row['rank_image_id'])
-            ? '/file_view.php?id=' . (int) $row['rank_image_id']
-            : null,
+        'rankImageUrl' => lulavRankImageUrl($row),
         'schoolId' => (string) $row['school_id'],
         'schoolName' => $row['school_name'],
         'photo' => lulavPhotoUrl($row),
