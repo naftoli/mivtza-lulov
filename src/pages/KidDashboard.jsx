@@ -7,6 +7,7 @@ import { fmt, hebrewDate, fileToScaledDataUrl } from '../lib/format.js'
 import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
+import { rankIcon } from '../lib/rankIcon.js'
 import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
 import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Avatar, ErrorNote, LulavIcon } from '../components/ui.jsx'
 import Mascot from '../components/Mascot.jsx'
@@ -130,11 +131,11 @@ export default function KidDashboard() {
             <div className="flex flex-wrap items-center gap-2">
               {/* The rank stands on its own — "Colonel" — with the army rank logo
                   beside it, as Recent Shakes and the leaderboard show it. The medal
-                  emoji only stands in when there is no image (demo), and a child
-                  with no rank on record shows neither. */}
+                  emoji only stands in when there is no image, and a child with no
+                  rank on record shows neither. */}
               {kid.rank && <SectionHeader>{kid.rank}</SectionHeader>}
-              {kid.rankImageUrl
-                ? <img src={kid.rankImageUrl} alt="" className="h-10 w-10 object-contain" />
+              {(rankIcon(kid.rank) || kid.rankImageUrl)
+                ? <img src={rankIcon(kid.rank) || kid.rankImageUrl} alt="" className="h-10 w-10 object-contain" />
                 : kid.rank && <span aria-hidden="true" className="text-xl leading-none">🎖️</span>}
             </div>
             <h1 className="font-display text-2xl font-black leading-tight text-navy sm:text-[28px]">

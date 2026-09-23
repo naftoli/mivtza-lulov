@@ -1,5 +1,6 @@
 import { fmt } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
+import { rankIcon } from '../lib/rankIcon.js'
 import { Card, SectionHeader } from './ui.jsx'
 
 // Rank marker shared by the standings lists: the 3D medal renders for the top
@@ -37,13 +38,15 @@ export default function Leaderboard({ rows, highlightKidKey }) {
         <p className="py-6 text-center text-sm text-navy/70">No soldiers ranked yet.</p>
       ) : (
         <ol className="space-y-1.5">
-          {rows.map((r, i) => (
+          {rows.map((r, i) => {
+            const icon = rankIcon(r.rank) || r.rankImageUrl
+            return (
             <li key={r.kidKey}
               className={`flex items-center gap-3 rounded-2xl px-2 py-1.5 ${r.kidKey === highlightKidKey ? 'bg-white/55 ring-1 ring-green-mid' : ''}`}>
               {/* The child's army rank logo (falls back to its name, then place). */}
-              {r.rankImageUrl ? (
+              {icon ? (
                 <span className="grid w-14 shrink-0 place-items-center" title={r.rank}>
-                  <img src={r.rankImageUrl} alt={r.rank || 'Rank'} className="h-10 w-10 object-contain" />
+                  <img src={icon} alt={r.rank || 'Rank'} className="h-10 w-10 object-contain" />
                 </span>
               ) : r.rank ? (
                 <span className="grid w-14 shrink-0 place-items-center" title={r.rank}>
@@ -55,7 +58,8 @@ export default function Leaderboard({ rows, highlightKidKey }) {
               <span className="flex-1 truncate text-[15px] font-semibold text-navy">{r.name}</span>
               <span className="font-display text-base font-bold tabular-nums text-green">{fmt(r.count)}</span>
             </li>
-          ))}
+            )
+          })}
         </ol>
       )}
     </Card>

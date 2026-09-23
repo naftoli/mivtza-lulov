@@ -1,4 +1,5 @@
 import { fmt, timeAgo } from '../lib/format.js'
+import { rankIcon } from '../lib/rankIcon.js'
 import { Card, SectionHeader, Avatar } from './ui.jsx'
 
 // The "recent donors" equivalent — a live feed of the latest shakes.
@@ -20,11 +21,13 @@ export default function RecentShakes({ shakes, fill = false }) {
         <p className="py-8 text-center text-sm text-navy/70">No shakes yet — be the first soldier on the board!</p>
       ) : (
         <ul className={fill ? 'flex flex-1 flex-col justify-between gap-3' : 'space-y-3'}>
-          {shakes.map((s) => (
+          {shakes.map((s) => {
+            const icon = rankIcon(s.rank) || s.rankImageUrl
+            return (
             <li key={s.id} className="flex animate-rise items-center gap-3">
-              {s.rankImageUrl ? (
+              {icon ? (
                 <span className="grid h-11 w-11 shrink-0 place-items-center" title={s.rank}>
-                  <img src={s.rankImageUrl} alt={s.rank || 'Rank'} className="h-10 w-10 object-contain" />
+                  <img src={icon} alt={s.rank || 'Rank'} className="h-10 w-10 object-contain" />
                 </span>
               ) : s.rank ? (
                 <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-green/10 ring-1 ring-green/20" title={s.rank}>
@@ -43,7 +46,8 @@ export default function RecentShakes({ shakes, fill = false }) {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-navy/55">{timeAgo(s.createdAt)}</p>
               </div>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </Card>
