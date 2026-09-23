@@ -41,9 +41,19 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
    comma-separated allowlist. Same-origin requests work without configuration.
 8. Optionally set `LULAV_TOKEN_TTL` in seconds. The default is 43,200 (12 hours).
 
-Runtime photos and login-rate-limit files are written to
+Runtime photos, login-rate-limit files and cached public reads are written to
 `mashpia.com/storage/lulav`, outside the public document root. The web-server
 user must be able to create and write that directory.
+
+- `photos/` — the only copy of every uploaded photo. Never delete; not in git,
+  not in the database, and not recreatable. Back it up separately.
+- `rate-*.json` — login-throttle counters, one per bucket and IP. Safe to
+  delete; clearing them resets any window currently in progress.
+- `cache/c-*.json` — `GET /stats`, `GET /schools` and `GET /schools/:id`, held
+  for `LULAV_CACHE_TTL` (30 s). Those reads total every school's marks out of
+  a 103-million-row `date_tasks_marks`, and they are what the whole country
+  loads at once. Safe to delete; writes flush them, so a save or a moderation
+  shows immediately rather than at the TTL.
 
 Each task-map row supplies the `grid_id`, `start_date`, and `end_date` consumed
 by `Mivtzoim::markTasks()`. Consequently, app report writes and teacher-grid
@@ -193,3 +203,27 @@ Uploads are JSON data URLs (`image/jpeg`, `image/png`, or `image/webp`), at most
 are returned inline only to their child or an authorized admin and are not
 available from the public file endpoint. Apache also caps the complete request
 body at 16 MB.
+
+## Tests
+
+Two suites, for two different jobs.
+
+```bash
+php api/tests/mock/run.php          # no server, no database, no setup
+LULAV_TEST_BASE=https://… php api/tests/run.php   # against a deployed API
+```
+
+`tests/mock` runs the real `bootstrap.php` and `index.php` inside a throwaway
+tree in the system temp directory, against a fake PDO that answers by matching
+each statement to a fixture pattern. It covers every route: the public reads,
+login, a child's day report, saving, moderation, HQ settings, the response cache
+and the 404. Because it is the fixtures that answer, a query rewritten into a
+shape no fixture recognises fails the run rather than silently returning
+nothing — that is what the suite is for.
+
+What it cannot check is whether a query means what it should in SQL: joins,
+indexes and the planner are outside the fake. Check those against a real
+database with `EXPLAIN`, and use `tests/run.php` for an end-to-end pass.
+
+The fixtures mirror production: six campaign days numbered 2–7, two schools,
+three children. `tests/mock/fixtures.php` is the place to add a case.

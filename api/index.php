@@ -205,23 +205,47 @@ function lulavPercent(int $total, int $goal): int
     return $total < $goal ? min(99, $percent) : $percent;
 }
 
+/**
+ * Per-school shakes and minutes, as ['day' => [school_id => n], 'minutes' =>
+ * [...]].
+ *
+ * Both fields come out of ONE pass over the campaign's marks, split by CASE,
+ * rather than a query each. The rows are the same either way, but a second
+ * query pays the whole index descent again: measured against ~50,000 marks on
+ * production-sized data, two queries took 1.11 s and this one 0.46 s.
+ *
+ * Driven from date_tasks_marks on the resolved date_task_id set: the old shape
+ * re-joined date_tasks/date_tasks_missions for the whole country and never
+ * returned. Scoped to one school when only one is being rendered. No
+ * registration filter: a mark on a Lulav task can only have come from a child
+ * in the campaign, so lulavRegisteredUsersJoin() here excluded nobody and cost
+ * a country-wide UNION over user_registration on every page load.
+ */
 function lulavSchoolTotals(?int $onlyId = null): array
 {
     global $MASHPIA_DB;
-    $taskIds = lulavCampaignTaskIds()['day'];
-    if (!$taskIds) {
-        return [];
+    $taskIds = lulavCampaignTaskIds();
+    $empty = ['day' => [], 'minutes' => []];
+    if (!$taskIds['all']) {
+        return $empty;
     }
-    [$taskIn, $params] = lulavIdPlaceholders('task', $taskIds);
-    // Driven from date_tasks_marks on the resolved date_task_id set: the old
-    // shape re-joined date_tasks/date_tasks_missions for the whole country and
-    // never returned. Scoped to one school when only one is being rendered.
-    // Registration is checked by JOIN, not EXISTS — see lulavRegisteredUsersJoin().
-    $sql = "SELECT u.school_id, SUM(m.done_qty) AS total
+    [$allIn, $params] = lulavIdPlaceholders('task', $taskIds['all']);
+    $sums = [];
+    foreach (['day', 'minutes'] as $field) {
+        if (!$taskIds[$field]) {
+            $sums[$field] = '0';
+            continue;
+        }
+        [$fieldIn, $fieldParams] = lulavIdPlaceholders($field . '_task', $taskIds[$field]);
+        $params += $fieldParams;
+        $sums[$field] = "SUM(CASE WHEN m.date_task_id IN ($fieldIn) THEN m.done_qty ELSE 0 END)";
+    }
+    $sql = "SELECT u.school_id,
+                   {$sums['day']} AS day_total,
+                   {$sums['minutes']} AS minute_total
             FROM date_tasks_marks m
             JOIN users u ON u.user_id = m.user_id
-            " . lulavRegisteredUsersJoin('u') . "
-            WHERE m.date_task_id IN ($taskIn)
+            WHERE m.date_task_id IN ($allIn)
               AND m.mark_inactive = 0";
     if ($onlyId !== null) {
         $sql .= ' AND u.school_id = :school';
@@ -231,11 +255,46 @@ function lulavSchoolTotals(?int $onlyId = null): array
 
     $stmt = $MASHPIA_DB->prepare($sql);
     $stmt->execute($params);
-    $totals = [];
+    $totals = $empty;
     foreach ($stmt->fetchAll() as $row) {
-        $totals[(int) $row['school_id']] = (int) $row['total'];
+        $schoolId = (int) $row['school_id'];
+        $totals['day'][$schoolId] = (int) $row['day_total'];
+        $totals['minutes'][$schoolId] = (int) $row['minute_total'];
     }
     return $totals;
+}
+
+/**
+ * Approved photos per school, keyed by school_id, for each school's Photos
+ * tile. Counted from lulav_photos' own school_id, so it needs no join.
+ */
+function lulavSchoolPhotoCounts(?int $onlyId = null): array
+{
+    global $MASHPIA_DB;
+    lulavRequireTables(['lulav_photos']);
+    $campaign = lulavCampaign();
+    $params = [
+        ':campaign' => $campaign['mivtzoim_id'],
+        ':school_year' => lulavCurrentSchoolYear(),
+    ];
+    $sql = "SELECT school_id, COUNT(*) AS total
+            FROM lulav_photos
+            WHERE mivtzoim_id = :campaign
+              AND school_year = :school_year
+              AND status = 'approved'";
+    if ($onlyId !== null) {
+        $sql .= ' AND school_id = :school';
+        $params[':school'] = $onlyId;
+    }
+    $sql .= ' GROUP BY school_id';
+
+    $stmt = $MASHPIA_DB->prepare($sql);
+    $stmt->execute($params);
+    $counts = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $counts[(int) $row['school_id']] = (int) $row['total'];
+    }
+    return $counts;
 }
 
 function lulavSchoolRows(?int $onlyId = null): array
@@ -327,7 +386,10 @@ function lulavSchoolRows(?int $onlyId = null): array
 
     $stmt = $MASHPIA_DB->prepare($sql);
     $stmt->execute($params);
-    $totals = lulavSchoolTotals($onlyId);
+    $marks = lulavSchoolTotals($onlyId);
+    $totals = $marks['day'];
+    $minutes = $marks['minutes'];
+    $photoCounts = lulavSchoolPhotoCounts($onlyId);
     $perKidGoal = lulavPerKidGoal();
     $colors = ['#1479b8', '#e4a11b', '#25845b', '#9b3f87', '#d45145', '#5867b1'];
     $rows = [];
@@ -381,6 +443,11 @@ function lulavSchoolRows(?int $onlyId = null): array
             'bonusGoal' => $bonusGoal,
             'bonusActive' => $goalReached,
             'total' => $total,
+            // The school's own Minutes and Photos tiles. Both were read off the
+            // school row by the front end before anything put them there, so
+            // each showed a flat 0 against the live API.
+            'totalMinutes' => $minutes[$schoolId] ?? 0,
+            'totalPhotos' => $photoCounts[$schoolId] ?? 0,
             'goalReached' => $goalReached,
             'percent' => lulavPercent($total, $goal),
             'percentOfBase' => lulavPercent($total, $goal),
@@ -789,8 +856,9 @@ function lulavLoadDayMarks(?int $schoolId, ?int $userId): array
         $where = ' AND m.user_id = :user';
         $params[':user'] = $userId;
     } elseif ($schoolId !== null) {
-        // Registration by JOIN, not EXISTS — see lulavRegisteredUsersJoin().
-        $join = 'JOIN users u ON u.user_id = m.user_id ' . lulavRegisteredUsersJoin('u');
+        // users is joined for school_id alone. No registration filter: the
+        // mapped task set already means a child in the campaign.
+        $join = 'JOIN users u ON u.user_id = m.user_id';
         $where = ' AND u.school_id = :school';
         $params[':school'] = $schoolId;
     }
@@ -1061,9 +1129,11 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
             lulavReconcileDayPhotos($kid, $day, $photos);
         }
         // The marks and photos just changed — drop the per-request read caches
-        // so the response body reflects what was written.
+        // so the response body reflects what was written, and the shared one so
+        // the school and nationwide totals move at once rather than at the TTL.
         lulavForgetUserMarks((int) $kid['user_id']);
         lulavForgetUserPhotos((int) $kid['user_id']);
+        lulavCacheFlush();
         return lulavDayReport($kid, $day, true);
     });
 }
@@ -1230,7 +1300,6 @@ function lulavLeaderboard(int $schoolId): array
                   ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
          FROM date_tasks_marks mark
          JOIN users u ON u.user_id = mark.user_id
-         " . lulavRegisteredUsersJoin('u') . "
          WHERE mark.date_task_id IN ($taskIn)
            AND mark.mark_inactive = 0
            AND u.school_id = :school
@@ -1292,7 +1361,6 @@ function lulavClassLeaderboard(int $schoolId): array
              FROM date_tasks_marks mark
              JOIN users roster ON roster.user_id = mark.user_id
              JOIN classes c ON c.class_id = roster.class_id
-             " . lulavRegisteredUsersJoin('roster') . "
              WHERE mark.date_task_id IN ($taskIn)
                AND mark.mark_inactive = 0
                AND c.school_id = :school AND c.class_era = 0
@@ -1501,6 +1569,7 @@ function lulavHandlePhotoReview(string $publicId, string $decision): void
     );
     $stmt->execute([':status' => $status, ':admin' => $actor['id'], ':id' => $photo['photo_id']]);
     $photo['status'] = $status;
+    lulavCacheFlush();
     lulavJson(['id' => $photo['public_id'], 'status' => $status]);
 }
 
@@ -1542,6 +1611,7 @@ function lulavHandlePhotoDelete(string $publicId): void
         @unlink($file);
     }
     lulavForgetUserPhotos((int) $photo['user_id']);
+    lulavCacheFlush();
     lulavJson(['id' => $publicId, 'deleted' => true]);
 }
 
@@ -1565,10 +1635,15 @@ try {
         lulavHandleParentChildren();
     }
     if ($method === 'GET' && $path === '/schools') {
-        lulavJson(lulavSchoolRows());
+        lulavJson(lulavCached('schools', static function (): array {
+            return lulavSchoolRows();
+        }));
     }
     if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $match)) {
-        $schools = lulavSchoolRows((int) $match[1]);
+        $schoolId = (int) $match[1];
+        $schools = lulavCached('school-' . $schoolId, static function () use ($schoolId): array {
+            return lulavSchoolRows($schoolId);
+        });
         lulavJson($schools[0] ?? null, $schools ? 200 : 404);
     }
     if ($method === 'GET' && $path === '/settings') {
@@ -1603,6 +1678,7 @@ try {
             ':school_year' => lulavCurrentSchoolYear(),
             ':goal' => (int) $input['perKidGoal'],
         ]);
+        lulavCacheFlush();
         lulavJson(['perKidGoal' => (int) $input['perKidGoal']]);
     }
     if ($method === 'PATCH' && preg_match('#^/schools/(\d+)/goal$#', $path, $match)) {
@@ -1639,6 +1715,7 @@ try {
             ':school' => $schoolId,
             ':goal' => $override,
         ]);
+        lulavCacheFlush();
         $schools = lulavSchoolRows($schoolId);
         lulavJson($schools[0] ?? null, $schools ? 200 : 404);
     }
@@ -1667,6 +1744,7 @@ try {
                 ':motto' => trim((string) $input['motto']),
             ]);
         }
+        lulavCacheFlush();
         $schools = lulavSchoolRows($schoolId);
         lulavJson($schools[0] ?? null);
     }
@@ -1805,6 +1883,7 @@ try {
             $stmt->execute($params);
         });
         lulavForgetUserMarks($userId);
+        lulavCacheFlush();
         $kid = lulavKidBySerial((string) $user['user_serial']);
         lulavJson(lulavDayReport($kid, $day, true));
     }
@@ -1934,6 +2013,7 @@ try {
             ':school_year' => lulavCurrentSchoolYear(),
             ':school' => $schoolId,
         ]);
+        lulavCacheFlush();
         lulavJson(['approved' => $count]);
     }
     if ($method === 'DELETE' && preg_match('#^/photos/([a-f0-9]{32})$#', $path, $match)) {
@@ -1959,27 +2039,30 @@ try {
         exit;
     }
     if ($method === 'GET' && $path === '/stats') {
-        $schools = lulavSchoolRows();
-        $campaign = lulavCampaign();
-        lulavRequireTables(['lulav_photos']);
-        global $MASHPIA_DB;
-        $stmt = $MASHPIA_DB->prepare(
-            "SELECT COUNT(*) FROM lulav_photos
-             WHERE mivtzoim_id = :campaign
-               AND school_year = :school_year
-               AND status = 'approved'"
-        );
-        $stmt->execute([
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
-        ]);
-        lulavJson([
-            'totalShakes' => array_sum(array_column($schools, 'total')),
-            'totalGoal' => array_sum(array_column($schools, 'goal')),
-            'totalSchools' => count($schools),
-            'activeSoldiers' => array_sum(array_column($schools, 'kidCount')),
-            'totalPhotos' => (int) $stmt->fetchColumn(),
-        ]);
+        lulavJson(lulavCached('stats', static function (): array {
+            $schools = lulavSchoolRows();
+            $campaign = lulavCampaign();
+            lulavRequireTables(['lulav_photos']);
+            global $MASHPIA_DB;
+            $stmt = $MASHPIA_DB->prepare(
+                "SELECT COUNT(*) FROM lulav_photos
+                 WHERE mivtzoim_id = :campaign
+                   AND school_year = :school_year
+                   AND status = 'approved'"
+            );
+            $stmt->execute([
+                ':campaign' => $campaign['mivtzoim_id'],
+                ':school_year' => lulavCurrentSchoolYear(),
+            ]);
+            return [
+                'totalShakes' => array_sum(array_column($schools, 'total')),
+                'totalGoal' => array_sum(array_column($schools, 'goal')),
+                'totalSchools' => count($schools),
+                'activeSoldiers' => array_sum(array_column($schools, 'kidCount')),
+                'totalPhotos' => (int) $stmt->fetchColumn(),
+                'totalMinutes' => array_sum(array_column($schools, 'totalMinutes')),
+            ];
+        }));
     }
 } catch (PDOException $error) {
     lulavSchemaError($error);

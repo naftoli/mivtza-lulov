@@ -812,6 +812,93 @@ function lulavRateLimit(string $bucket, int $limit, int $windowSeconds): void
     fclose($handle);
 }
 
+/**
+ * A short-lived cache for the public, whole-country reads.
+ *
+ * /stats and /schools recompute every school's shakes and minutes from
+ * date_tasks_marks -- around 100,000 rows at campaign volume, on a table of
+ * 103 million -- and they are the pages everyone opens at once. Nothing there
+ * is per-viewer, and nobody needs the totals to the second, so a few seconds of
+ * staleness buys back the whole query.
+ *
+ * Writes call lulavCacheFlush(), so a save or a moderation shows up at once
+ * rather than after the TTL. Anything actor-specific (a child's own report, an
+ * admin's pending queue) is never cached.
+ */
+const LULAV_CACHE_TTL = 30;
+
+function lulavCacheRoot(): string
+{
+    return LULAV_STORAGE_ROOT . '/cache';
+}
+
+function lulavCacheFile(string $key): string
+{
+    // The campaign and school year are part of the key, so a rollover cannot
+    // serve last year's numbers.
+    $scope = LULAV_MIVTZOIM_ID . '|' . lulavCurrentSchoolYear() . '|' . $key;
+    return lulavCacheRoot() . '/c-' . hash('sha256', $scope) . '.json';
+}
+
+/** The cached value for $key, or null when it is missing, stale or unreadable. */
+function lulavCacheGet(string $key, int $ttl = LULAV_CACHE_TTL)
+{
+    $file = lulavCacheFile($key);
+    $age = @filemtime($file);
+    if ($age === false || time() - $age >= $ttl) {
+        return null;
+    }
+    $raw = @file_get_contents($file);
+    if ($raw === false) {
+        return null;
+    }
+    $value = json_decode($raw, true);
+    return json_last_error() === JSON_ERROR_NONE ? $value : null;
+}
+
+function lulavCacheSet(string $key, $value): void
+{
+    $root = lulavCacheRoot();
+    if (!is_dir($root) && !mkdir($root, 0750, true) && !is_dir($root)) {
+        return;
+    }
+    $encoded = json_encode($value);
+    if ($encoded === false) {
+        return;
+    }
+    // Written to a temp file and renamed, so a reader never sees a half-written
+    // body. A cache that cannot be written is not an error: the request has its
+    // answer either way.
+    $file = lulavCacheFile($key);
+    $temp = $file . '.' . getmypid() . '.tmp';
+    if (@file_put_contents($temp, $encoded, LOCK_EX) === false) {
+        return;
+    }
+    if (!@rename($temp, $file)) {
+        @unlink($temp);
+    }
+}
+
+/** Build $key once and reuse it for LULAV_CACHE_TTL seconds. */
+function lulavCached(string $key, callable $build, int $ttl = LULAV_CACHE_TTL)
+{
+    $cached = lulavCacheGet($key, $ttl);
+    if ($cached !== null) {
+        return $cached;
+    }
+    $value = $build();
+    lulavCacheSet($key, $value);
+    return $value;
+}
+
+/** Drop every cached read. Called after anything that changes the totals. */
+function lulavCacheFlush(): void
+{
+    foreach ((array) @glob(lulavCacheRoot() . '/c-*.json') as $file) {
+        @unlink($file);
+    }
+}
+
 function lulavWithUserLock(int $userId, callable $callback)
 {
     global $MASHPIA_DB;
