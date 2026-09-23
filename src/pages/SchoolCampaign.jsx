@@ -4,14 +4,30 @@ import { getSchool, getShakes, getLeaderboard, getClassLeaderboard } from '../se
 import { useLiveData } from '../lib/useLiveData.js'
 import { fmt, shortSchoolName } from '../lib/format.js'
 import { asset } from '../lib/asset.js'
-import { Button, Card, Spinner, SchoolLogo, ErrorNote } from '../components/ui.jsx'
-import GoalMeter from '../components/GoalMeter.jsx'
+import { CAMPAIGN_YEAR } from '../lib/succos.js'
+import { Button, Card, Spinner, SchoolLogo, ErrorNote, Pill } from '../components/ui.jsx'
+import GoalBar from '../components/GoalBar.jsx'
 import RecentShakes from '../components/RecentShakes.jsx'
 import PhotoWall from '../components/PhotoWall.jsx'
 import Leaderboard from '../components/Leaderboard.jsx'
 import ClassLeaderboard from '../components/ClassLeaderboard.jsx'
 import SharePanel from '../components/SharePanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+
+// Same stat tile as the home page: 3D icon, big navy number, caps label.
+function Stat({ value, label, icon }) {
+  return (
+    <div className="flex items-center gap-3 sm:gap-4">
+      <span className="grid h-[68px] w-[84px] flex-none place-items-center lg:h-[84px] lg:w-[108px]">
+        <img src={icon} alt="" aria-hidden="true" draggable="false" className="max-h-full max-w-full object-contain" />
+      </span>
+      <div className="min-w-0">
+        <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy lg:text-[36px]">{value}</div>
+        <div className="mt-1 font-display text-[16px] font-semibold uppercase leading-tight text-navy sm:text-[17px] lg:text-[20px] xl:text-[24px]">{label}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
@@ -72,38 +88,60 @@ export default function SchoolCampaign() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl px-4 py-8 lg:py-10">
-        {/* Goal meter + photo wall on the left; Recent Shakes fills the right so
-            its feed ends level with the bottom of the photos (items-stretch, and
-            the feed spreads down its cell). The leaderboards then run the full
-            width beneath — keeping them stacked in this column would leave a big
-            empty band under the shorter left side. Phones stack in source order. */}
-        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-stretch lg:gap-8">
-          {/* Left column */}
-          <div className="space-y-6">
-            <Card className="p-6">
-              <GoalMeter school={school} variant="wide" />
-            </Card>
-
-            {school.bonusActive ? (
-              <Card className="!bg-green p-5 text-white sm:p-6">
-                <p className="sh !text-gold">⭐ Bonus Round {school.bonusLevel} is ON</p>
-                <p className="mt-1 text-sm text-white/90">
-                  {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward the
-                  round {school.bonusLevel} target of <strong className="text-gold">{fmt(school.bonusGoal)}</strong> — reach
-                  it and the next round starts. Keep going, soldiers!
-                </p>
-              </Card>
-            ) : null}
-
-            <PhotoWall shakes={shakes || []} />
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 lg:space-y-8 lg:py-10">
+        {/* Goal summary — the home page's treatment: Goal / Total Shakes / % over
+            the lulav goal-bar, then stat tiles. No "Schools" tile (one school). */}
+        <Card className="p-6 sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="flex items-center gap-2 font-display text-[15px] font-extrabold uppercase tracking-[0.02em] text-green sm:text-[18px]">
+              <img src={asset('design/lulav-esrog.png')} alt="" aria-hidden="true" draggable="false" className="h-6 w-auto sm:h-7" />
+              <span>Mivtza Lulov {CAMPAIGN_YEAR}</span>
+            </p>
+            {school.goalReached && <Pill className="!bg-green !text-white">🎉 Goal reached!</Pill>}
           </div>
 
-          {/* Right column: the feed, stretched to end with the photos */}
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12">
+            <div>
+              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Goal</p>
+              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px]">{fmt(school.goal)}</p>
+            </div>
+            <div>
+              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Total Shakes</p>
+              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px]">{fmt(school.total)}</p>
+            </div>
+            <p className="ml-auto hidden font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-card)] sm:block sm:text-[40px] lg:text-[44px]">{school.percent}%</p>
+          </div>
+
+          <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
+            <GoalBar percent={school.percent} className="min-w-0 flex-1 sm:mt-6 sm:mr-[144px] lg:mr-[156px]" />
+            <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{school.percent}%</span>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8">
+            <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(school.kidCount)} label="Soldiers" />
+            <Stat icon={asset('design/icon-clock.png')} value={fmt(school.totalMinutes || 0)} label="Minutes" />
+            <Stat icon={asset('design/icon-camera.png')} value={fmt(school.totalPhotos || 0)} label="Photos" />
+          </div>
+        </Card>
+
+        {school.bonusActive ? (
+          <Card className="!bg-green p-5 text-white sm:p-6">
+            <p className="sh !text-gold">⭐ Bonus Round {school.bonusLevel} is ON</p>
+            <p className="mt-1 text-sm text-white/90">
+              {school.name} crushed the goal of {fmt(school.goal)} shakes. Every shake now counts toward the
+              round {school.bonusLevel} target of <strong className="text-gold">{fmt(school.bonusGoal)}</strong> — reach
+              it and the next round starts. Keep going, soldiers!
+            </p>
+          </Card>
+        ) : null}
+
+        {/* Photos beside the live feed (feed stretched to end level with them) */}
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-stretch lg:gap-8">
+          <PhotoWall shakes={shakes || []} />
           <RecentShakes shakes={(shakes || []).slice(0, 8)} fill />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:mt-8 lg:grid-cols-2 lg:items-start lg:gap-8">
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start lg:gap-8">
           <Leaderboard rows={board || []} highlightKidKey={kid?.kidKey} />
           <ClassLeaderboard rows={classBoard || []} highlightGrade={isMySchool ? kid?.grade : undefined} highlightClassId={isMySchool ? kid?.classId : undefined} />
         </div>

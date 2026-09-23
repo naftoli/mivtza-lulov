@@ -198,6 +198,12 @@ function decorateSchool(school, shakes) {
   // the moment a target is reached — so bonusGoal is always still ahead of total.
   // Derived on every read (never stored), so hiding entries or changing a goal
   // moves the round at once. Must match lulavSchoolRows() in api/index.php.
+  // Per-school minutes + approved-photo counts for the goal-summary tiles (same
+  // meanings as /stats). decorateSchool is demo-only; live mode must get these
+  // from the API — see docs/mashpia-integration.md.
+  const mine = shakes.filter((x) => x.schoolId === school.id)
+  const totalMinutes = mine.filter((x) => !x.hidden).reduce((n, x) => n + (Number(x.minutes) || 0), 0)
+  const totalPhotos = mine.filter((x) => x.photoApproved).reduce((n, x) => n + (x.photos?.length || (x.photo ? 1 : 0)), 0)
   const step = Math.max(1, kids)
   const bonusLevel = goalReached ? Math.floor((total - goal) / step) + 1 : 0
   const bonusGoal = goal + Math.max(1, bonusLevel) * step // round 1's target until the goal is reached
@@ -215,6 +221,8 @@ function decorateSchool(school, shakes) {
     goalReached,
     percent: goalPercent(total, goal),
     percentOfBase: goalPercent(total, goal),
+    totalMinutes,
+    totalPhotos,
   }
 }
 
@@ -343,6 +351,7 @@ export async function getGlobalStats() {
     totalPhotos: all
       .filter((s) => s.photoApproved)
       .reduce((n, s) => n + (s.photos?.length || (s.photo ? 1 : 0)), 0),
+    totalMinutes: shakes.reduce((n, s) => n + (Number(s.minutes) || 0), 0),
   }
 }
 

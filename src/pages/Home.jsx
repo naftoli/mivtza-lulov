@@ -266,10 +266,11 @@ export default function Home() {
 
             {/* From 2xl: three 320px columns from the card's inner left (the 3D icons overhang it by
                 10px in the comp), not stretched across the card. */}
-            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8 2xl:-ml-2.5 2xl:mt-[26px] 2xl:grid-cols-[repeat(3,320px)] 2xl:gap-0">
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:grid-cols-4 lg:gap-8">
               <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.activeSoldiers)} label="Soldiers" />
               <Stat icon={asset('design/icon-school.png')} value={fmt(schools ? schools.length : stats.totalSchools)} label="Schools" />
               <Stat icon={asset('design/icon-camera.png')} value={fmt(stats.totalPhotos)} label="Photos" />
+              <Stat icon={asset('design/icon-clock.png')} value={fmt(stats.totalMinutes || 0)} label="Minutes" />
             </div>
           </Card>
         </section>
