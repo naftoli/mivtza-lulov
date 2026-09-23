@@ -88,6 +88,7 @@ export default function KidDashboard() {
     // Mivtzoim leaves the day's report half-answered.
     const mins = Number(minutes)
     if (!mins || mins < 1) { notify('Please also enter how many minutes you were on Mivtzoim.', true); return }
+    if (mins > 500) { notify('That’s more than 500 minutes — please check the time and try again.', true); return }
     setBusy(true)
     const before = school
     try {
@@ -207,7 +208,7 @@ export default function KidDashboard() {
                 </Field>
 
                 <Field label="Minutes on Mivtzoim" hint="Required — report the time along with the shakes">
-                  <Input type="number" min="1" value={minutes} onChange={(e) => { setMinutes(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 90" required className="text-lg" />
+                  <Input type="number" min="1" max="500" value={minutes} onChange={(e) => { setMinutes(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 90" required className="text-lg" />
                 </Field>
 
                 {/* Big, phone-friendly photo button */}

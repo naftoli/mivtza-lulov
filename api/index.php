@@ -987,21 +987,26 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         lulavError('Invalid Sukkos day.', 422);
     }
     $count = $input['count'] ?? null;
-    $minutes = $input['minutes'] ?? 0;
     if (!is_numeric($count) || (int) $count < 1 || (int) $count > 65535) {
         lulavError('Count must be between 1 and 65,535.', 422);
-    }
-    if (!is_numeric($minutes) || (int) $minutes < 0 || (int) $minutes > 65535) {
-        lulavError('Minutes must be between 0 and 65,535.', 422);
     }
     // An ABSENT field leaves the stored value alone; an explicitly empty one
     // clears it. Previously both read as "clear", so any caller that omitted
     // these keys -- the documented POST /shakes alias among them -- erased the
-    // child's story and rejected every photo on that day, while count and
-    // minutes were protected by max(). A stale form could not lower a
-    // teacher-entered number but could still wipe a teacher-entered story.
-    // The UI always sends both keys, so its per-photo delete button and an
-    // emptied story still work exactly as before.
+    // child's story and rejected every photo on that day. The UI always sends
+    // every key, so its per-photo delete button and an emptied story still
+    // work exactly as before.
+    //
+    // `minutes` is on the absent-leaves-it-alone side of that rule too, since
+    // POST /shakes may carry a count with no minutes; it used to default to 0
+    // there, which max() made harmless and a plain overwrite would not.
+    $minutes = null;
+    if (array_key_exists('minutes', $input)) {
+        $minutes = $input['minutes'];
+        if (!is_numeric($minutes) || (int) $minutes < 0 || (int) $minutes > 500) {
+            lulavError('Minutes must be between 0 and 500.', 422);
+        }
+    }
     $note = null;
     if (array_key_exists('note', $input)) {
         $note = trim((string) $input['note']);
@@ -1032,10 +1037,13 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         lulavValidateMarkTargets($kid, $mapping);
         $countMap = lulavMapFor('day', $day);
         $minuteMap = lulavMapFor('minutes', $day);
-        $currentCount = (int) lulavMappedDayMark((int) $kid['user_id'], 'day', $day)['value'];
-        $currentMinutes = (int) lulavMappedDayMark((int) $kid['user_id'], 'minutes', $day)['value'];
-        lulavMarkMapValue($kid, $countMap, max($currentCount, (int) $count));
-        lulavMarkMapValue($kid, $minuteMap, max($currentMinutes, (int) $minutes));
+        // What is being saved wins. These numbers used to only ever climb, via
+        // max() against the stored mark, which left no way to correct one typed
+        // too high -- a mistyped 500 stayed 500 for the rest of Sukkos.
+        lulavMarkMapValue($kid, $countMap, (int) $count);
+        if ($minutes !== null) {
+            lulavMarkMapValue($kid, $minuteMap, (int) $minutes);
+        }
         if ($note !== null) {
             lulavUpdateDayDescription($kid, $day, $note);
         }

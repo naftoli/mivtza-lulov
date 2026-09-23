@@ -153,13 +153,14 @@ current target is reached. `bonusLevel` (0 before the goal) and `bonusGoal`
 
 Each child/day is one cumulative report. Its shakes, minutes, story, inactive
 state, and exact timestamp live in mapped `date_tasks_marks` rows. The API
-prefills these values and saves the larger of the submitted and current value,
-so a stale child form cannot reduce a larger teacher-entered number. Recent
-Shakes shows the current daily total ordered by `date_tasks_marks.updated`.
+prefills these values and saves what it is given, so a number typed too high
+can be corrected by saving the right one over it. Recent Shakes shows the
+current daily total ordered by `date_tasks_marks.updated`.
 
-`count` and `minutes` are always max-wins. `note` and `photos` are
-last-write-wins, because the child's form has a per-photo delete button and an
-emptied story has to be savable — but **only when the field is actually sent**:
+Every field is last-write-wins — `note` and `photos` because the child's form
+has a per-photo delete button and an emptied story has to be savable, `count`
+and `minutes` because a wrong number has to be fixable — but **only when the
+field is actually sent**:
 
 | field in the request body | effect |
 | --- | --- |
@@ -167,10 +168,11 @@ emptied story has to be savable — but **only when the field is actually sent**
 | `"note": ""` / `"photos": []` | cleared |
 | present with a value | replaces the stored value |
 
-So `POST /shakes` with just `{ day, count }` now records the count and leaves
-that day's story and photos untouched. Sending `photos` as anything other than
-an array is a 422 rather than a silent clear. The web app always sends both
-keys, so its behaviour is unchanged.
+`count` is the one required field, so it always replaces what is stored. So
+`POST /shakes` with just `{ day, count }` records the count and leaves that
+day's minutes, story and photos untouched. Sending `photos` as anything other
+than an array is a 422 rather than a silent clear. The web app always sends
+every key, so its behaviour is unchanged.
 
 ### HQ settings
 

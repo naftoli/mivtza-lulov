@@ -57,12 +57,13 @@ the same `date_tasks_marks` rows used by the teacher checklist.
 
 | Field | Meaning (teacher-checklist column) |
 |---|---|
-| `count` | cumulative number of people helped that day |
-| `minutes` | cumulative minutes spent on mivtzoim that day |
+| `count` | cumulative number of people helped that day (1–65,535) |
+| `minutes` | cumulative minutes spent on mivtzoim that day (0–500) |
 | `note`, `photos[]` | that day's story + field photos |
 
 The server gets the child from the bearer token and the day from the URL. It
-saves the larger of the submitted and current numeric values.
+saves what it is given, replacing the stored value, so a number typed too high
+can be corrected. A field left out of the body is left exactly as stored.
 
 ### F. Photos — approval workflow
 Uploads arrive **pending** and stay hidden publicly until approved. Needed: submit-pending,

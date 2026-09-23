@@ -352,7 +352,7 @@ if ($serial === '' || $dob === '') {
         $mine = lulavTestRequest($base, 'GET', '/me/shakes', null, $auth);
         lulavAssert('GET /me/shakes with token is JSON', lulavJsonBody($mine) && in_array($mine['status'], [200, 503], true), lulavErrorMessage($mine));
         $save = lulavTestRequest($base, 'PUT', '/me/days/1', [
-            'count' => 1,
+            'count' => 2,
             'minutes' => 1,
             'note' => 'api test',
             'photos' => [],
@@ -363,9 +363,21 @@ if ($serial === '' || $dob === '') {
             lulavErrorMessage($save)
         );
         if ($save['status'] === 200) {
-            lulavAssert('saved day report keeps the larger count', (int) $save['json']['count'] >= 1);
+            lulavAssert('saved day report stores the submitted count', (int) $save['json']['count'] === 2);
             $again = lulavTestRequest($base, 'GET', '/me/days/1', null, $auth);
             lulavAssert('GET after save returns the same day', $again['status'] === 200 && (int) $again['json']['count'] === (int) $save['json']['count']);
+            // A number typed too high has to be correctable, so a lower count
+            // saved afterwards replaces the higher one rather than losing to it.
+            $lower = lulavTestRequest($base, 'PUT', '/me/days/1', [
+                'count' => 1,
+                'minutes' => 1,
+                'note' => 'api test',
+                'photos' => [],
+            ], $auth);
+            lulavAssert('a lower count overwrites a higher one', $lower['status'] === 200 && (int) $lower['json']['count'] === 1, lulavErrorMessage($lower));
+            // Omitting minutes leaves the stored value alone rather than zeroing it.
+            $partial = lulavTestRequest($base, 'POST', '/shakes', ['day' => 1, 'count' => 1], $auth);
+            lulavAssert('POST /shakes without minutes keeps the stored minutes', $partial['status'] === 200 && (int) $partial['json']['minutes'] === 1, lulavErrorMessage($partial));
         }
     }
 }
