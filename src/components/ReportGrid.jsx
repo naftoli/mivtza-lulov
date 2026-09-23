@@ -11,8 +11,10 @@ export default function ReportGrid({ rows = [] }) {
   const totalMinutes = rows.reduce((n, r) => n + (Number(r.totalMinutes) || 0), 0)
 
   const cell = (v) => (!v ? '—' : fmt(v)) // 0 / blank → em dash
-  // header: Exo semibold navy caps on the sky card; body rows zebra in a lighter sky
-  const th = 'px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-navy'
+  // header: Exo semibold navy caps on the sky card; body rows zebra in a lighter sky.
+  // sticky top-0 + opaque bg freezes the header row as the grid scrolls; the inset
+  // shadow is the divider (a real border-bottom can drop out under a sticky cell).
+  const th = 'sticky top-0 z-10 bg-card px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-navy shadow-[inset_0_-2px_0_0_rgba(0,28,76,0.15)]'
   const td = 'px-2.5 py-2'
 
   return (
@@ -28,10 +30,10 @@ export default function ReportGrid({ rows = [] }) {
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">No soldiers in this school yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl">
+        <div className="max-h-[70vh] overflow-auto rounded-2xl">
           <table className="w-full min-w-[760px] border-collapse text-sm text-navy">
             <thead>
-              <tr className="border-b-2 border-navy/15 text-left">
+              <tr className="text-left">
                 <th className={th}>Grade</th>
                 <th className={th}>Student</th>
                 {LULAV_DAYS.map((d) => (
