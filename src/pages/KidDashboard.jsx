@@ -8,6 +8,8 @@ import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
 import { rankIcon } from '../lib/rankIcon.js'
+import { soldierLocked, lockReopenText } from '../lib/campaignLock.js'
+import { isHighInput } from '../lib/highNumber.js'
 import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
 import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Avatar, ErrorNote, LulavIcon } from '../components/ui.jsx'
 import Mascot from '../components/Mascot.jsx'
@@ -41,6 +43,10 @@ export default function KidDashboard() {
   const [muted, setMutedState] = useState(isMuted())
 
   if (!kid) return <Navigate to="/login" replace />
+
+  // Read-only for soldiers until Motzei Yom Tov: the ID card, stats and report
+  // still show, but the log form is closed. (The write is guarded too — api.js.)
+  const locked = soldierLocked()
 
   const myTotal = (myShakes || []).reduce((s, x) => s + x.count, 0)
   const myMinutes = (myShakes || []).reduce((n, s) => n + (s.minutes || 0), 0)
@@ -176,16 +182,32 @@ export default function KidDashboard() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Log form — DAY FIRST: pick a day, then the rest of the form appears */}
+        {/* Log form — DAY FIRST: pick a day, then the rest of the form appears.
+            While logging is closed for Yom Tov, the whole form is replaced by a
+            read-only notice. */}
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <SectionHeader>Log your shakes</SectionHeader>
-            <button type="button" title={muted ? 'Sound off' : 'Sound on'} aria-label="Sound effects" aria-pressed={!muted}
-              onClick={() => { const v = !muted; setMuted(v); setMutedState(v); if (!v) playShake() }}
-              className="grid h-9 w-9 place-items-center rounded-full bg-white/70 text-navy transition hover:bg-white">
-              {muted ? '🔇' : '🔊'}
-            </button>
+            {!locked && (
+              <button type="button" title={muted ? 'Sound off' : 'Sound on'} aria-label="Sound effects" aria-pressed={!muted}
+                onClick={() => { const v = !muted; setMuted(v); setMutedState(v); if (!v) playShake() }}
+                className="grid h-9 w-9 place-items-center rounded-full bg-white/70 text-navy transition hover:bg-white">
+                {muted ? '🔇' : '🔊'}
+              </button>
+            )}
           </div>
+
+          {locked ? (
+            <div className="mt-3 rounded-2xl bg-white/70 p-6 text-center ring-1 ring-green-mid/30">
+              <img src={asset('design/lulav-esrog.png')} alt="" className="mx-auto h-16 w-auto" />
+              <p className="mt-3 font-display text-lg font-black text-navy">Logging is closed for Yom Tov</p>
+              <p className="mt-1.5 text-sm text-navy/80">
+                A gut Yom Tov! Reporting shakes reopens <strong className="text-green">Motzei Yom Tov</strong> ({lockReopenText()}).
+                Your report below stays up to date — come back after Yom Tov to log your shakes.
+              </p>
+            </div>
+          ) : (
+          <>
           <p className="mt-1 mb-4 text-sm text-navy/80">Report how many people you helped shake Lulav — and snap a photo from the field!</p>
           <form onSubmit={submit} className="space-y-5">
             {/* Step 1 — which day of Succos */}
@@ -216,6 +238,14 @@ export default function KidDashboard() {
                 <Field label="Minutes on Mivtzoim" hint="Required — report the time along with the shakes">
                   <Input type="number" min="1" max="500" value={minutes} onChange={(e) => { setMinutes(e.target.value); if (flash) setFlash('') }} placeholder="e.g. 90" required className="text-lg" />
                 </Field>
+
+                {/* Heads-up (not a block): an outsized number gets flagged for your
+                    school and HQ to review — give the child a chance to fix a typo. */}
+                {isHighInput({ count, minutes }) && (
+                  <p className="rounded-xl bg-gold/12 px-3 py-2 text-sm font-semibold text-gold-dark ring-1 ring-gold/40">
+                    That’s a big number — please double-check it. Large reports are sent to your school and HQ to review.
+                  </p>
+                )}
 
                 {/* Big, phone-friendly photo button */}
                 <div>
@@ -254,6 +284,8 @@ export default function KidDashboard() {
             {loadingDay && <Spinner />}
             {!day && flash && <p className={flashError ? ERROR_NOTICE : SUCCESS_NOTICE}>{flash}</p>}
           </form>
+          </>
+          )}
         </Card>
 
         {/* History */}

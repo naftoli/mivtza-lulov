@@ -7,6 +7,7 @@
 import { SEED } from '../data/seed.js'
 import { ISRU_CHAG, LULAV_DAYS } from '../lib/succos.js'
 import { IS_DEMO } from '../lib/liveMode.js'
+import { soldierLocked } from '../lib/campaignLock.js'
 import * as mashpia from './mashpia.js'
 
 export { IS_DEMO }
@@ -463,6 +464,12 @@ export async function getKidDayReport(kidId, day) {
 
 // ---- writes ----
 export async function addShake({ kid, day, count, minutes, note, photos }) {
+  // Read-only for soldiers until Motzei Yom Tov (campaignLock). The UI already
+  // hides the form, but guard the write too so a stale tab or a direct call
+  // can't slip an entry through while logging is closed.
+  if (soldierLocked()) {
+    throw new Error('Shake-logging is closed until Motzei Yom Tov. Your report is view-only for now.')
+  }
   if (!IS_DEMO) return mashpia.addShake({ kid, day, count, minutes, note, photos })
   await delay()
   const shakes = read(KEYS.shakes, [])

@@ -16,6 +16,7 @@ import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
 import { pendingPhotoItems } from '../lib/photos.js'
 import { fmt, timeAgo } from '../lib/format.js'
+import { isHighEntry, highReasons } from '../lib/highNumber.js'
 import { asset } from '../lib/asset.js'
 import { Button, Card, ConfirmDialog, Field, Input, Spinner, Pill, SectionHeader, SchoolLogo, ErrorNote } from '../components/ui.jsx'
 
@@ -144,6 +145,7 @@ function SchoolAdmin({ schoolId, isHQ }) {
 
   return (
     <div className="mt-6 space-y-6">
+      <FlaggedBanner shakes={shakes} />
       <CampaignSettings school={school} isHQ={isHQ} />
       {/* Photo Approvals above the roster; "Remove entry" moderation right under it. */}
       <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} />
@@ -151,6 +153,37 @@ function SchoolAdmin({ schoolId, isHQ }) {
       <Roster kids={kids || []} />
       <ReportGrid rows={reportRows || []} />
     </div>
+  )
+}
+
+// High-number watch: unusually large reports are surfaced here for the school
+// and HQ to review at a glance. The email/push notification is the server's job
+// (docs/mashpia-integration.md §H); this is the in-site flag. Derived from the
+// entries the page already loads, so it works in demo and live alike, and it
+// honours a server-set `flagged` / `flagReason` when the API sends one.
+function FlaggedBanner({ shakes }) {
+  const flagged = (shakes || []).filter((s) => !s.hidden && isHighEntry(s))
+  if (flagged.length === 0) return null
+  return (
+    <Card className="border-l-4 border-gold bg-gold/10 p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="sh !text-gold-dark">⚠ {flagged.length} high-number {flagged.length === 1 ? 'entry' : 'entries'} to review</p>
+        <Pill className="!bg-gold-dark !text-white">Needs a look</Pill>
+      </div>
+      <p className="mt-1 text-sm text-navy/80">
+        These reports are unusually large. Check them with the soldier, and use “Remove Mivtza Lulov Entry” below if one is a mistake.
+      </p>
+      <ul className="mt-3 space-y-1.5">
+        {flagged.slice(0, 8).map((s) => (
+          <li key={s.id} className="flex flex-wrap items-baseline gap-x-2 rounded-xl bg-white/60 px-3 py-1.5 text-sm">
+            <span className="font-semibold text-navy">{s.kidFullName || s.kidName}</span>
+            <span className="text-navy/75">— {highReasons(s).join(' · ')}</span>
+            <span className="ml-auto text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</span>
+          </li>
+        ))}
+      </ul>
+      {flagged.length > 8 && <p className="mt-2 text-xs text-muted">+{fmt(flagged.length - 8)} more — see the flagged rows below.</p>}
+    </Card>
   )
 }
 
@@ -462,6 +495,7 @@ const modName = (s) => String(s.kidFullName || s.kidName || '')
 
 // Sort options for the "Remove entry" list.
 const MOD_SORTS = {
+  flagged: { label: 'Flagged first', fn: (a, b) => (isHighEntry(b) - isHighEntry(a)) || (b.count - a.count) },
   shakes: { label: 'Most shakes', fn: (a, b) => b.count - a.count },
   name: { label: 'Name', fn: (a, b) => modName(a).localeCompare(modName(b)) },
   newest: { label: 'Newest', fn: (a, b) => new Date(b.createdAt) - new Date(a.createdAt) },
@@ -472,23 +506,33 @@ function Moderation({ shakes, error, onRetry }) {
   const [sort, setSort] = useState('shakes')
   const [q, setQ] = useState('')
   const [limit, setLimit] = useState(10)
+  const [flaggedOnly, setFlaggedOnly] = useState(false)
+
+  // Flagged (high-number) entries still on record — drives the count and toggle.
+  const flaggedCount = (shakes || []).filter((s) => !s.hidden && isHighEntry(s)).length
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const all = shakes || []
-    const base = needle ? all.filter((s) => modName(s).toLowerCase().includes(needle)) : all
+    let base = needle ? all.filter((s) => modName(s).toLowerCase().includes(needle)) : all
+    if (flaggedOnly) base = base.filter((s) => isHighEntry(s))
     return [...base].sort(MOD_SORTS[sort].fn)
-  }, [shakes, q, sort])
+  }, [shakes, q, sort, flaggedOnly])
 
-  // Reset the reveal whenever the search or sort changes.
-  useEffect(() => { setLimit(10) }, [q, sort])
+  // Reset the reveal whenever the search, sort or filter changes.
+  useEffect(() => { setLimit(10) }, [q, sort, flaggedOnly])
 
   const shown = filtered.slice(0, limit)
   const remaining = filtered.length - shown.length
 
   return (
     <Section title="Remove Mivtza Lulov Entry"
-      right={<span className="text-xs text-muted">Hidden entries don’t count toward the goal or show publicly</span>}>
+      right={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {flaggedCount > 0 && <Pill className="!bg-gold-dark !text-white">⚠ {flaggedCount} flagged</Pill>}
+          <span className="text-xs text-muted">Hidden entries don’t count toward the goal or show publicly</span>
+        </div>
+      }>
       {!shakes ? (
         // An admin's entries carry their pending photos inline too, so this can lag the rest of the page.
         error ? <ErrorNote error={error} onRetry={onRetry} what="the entries" /> : <Spinner label="Loading entries…" />
@@ -505,6 +549,12 @@ function Moderation({ shakes, error, onRetry }) {
                 {Object.entries(MOD_SORTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </label>
+            {flaggedCount > 0 && (
+              <label className="flex items-center gap-2 pb-2 text-sm font-semibold text-navy">
+                <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} className="h-4 w-4 accent-gold-dark" />
+                Flagged only
+              </label>
+            )}
           </div>
 
           {shown.length === 0 ? (
@@ -513,8 +563,9 @@ function Moderation({ shakes, error, onRetry }) {
             <div className="grid gap-3 sm:grid-cols-2">
               {shown.map((s) => {
                 const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
+                const flagged = !s.hidden && isHighEntry(s)
                 return (
-                  <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : 'bg-white/55'}`}>
+                  <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : flagged ? 'bg-gold/12 ring-1 ring-gold/45' : 'bg-white/55'}`}>
                     {/* No thumbnail here: this list is for finding an entry by
                         child, and the pictures are reviewed in Photo Approvals
                         above. The count still says how many an entry carries. */}
@@ -523,7 +574,15 @@ function Moderation({ shakes, error, onRetry }) {
                           the entry follows a line at a time. kidFullName is the
                           moderator's view of the name; public rows only ever
                           carry the initial in kidName. */}
-                      <p className="text-sm font-semibold text-navy">{s.kidFullName || s.kidName} · {fmt(s.count)} shakes</p>
+                      <p className="text-sm font-semibold text-navy">
+                        {s.kidFullName || s.kidName} · {fmt(s.count)} shakes
+                        {flagged && (
+                          <span title={highReasons(s).join(' · ')}
+                            className="ml-2 inline-flex items-center rounded-full bg-gold/30 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-[0.06em] text-gold-dark">
+                            ⚠ High
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted">
                         {s.grade ? `${s.grade} · ` : ''}{fmt(s.minutes || 0)} minutes
                         {imgs.length > 0 && ` · ${imgs.length} photo${imgs.length === 1 ? '' : 's'}`}

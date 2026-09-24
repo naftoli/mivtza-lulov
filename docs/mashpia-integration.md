@@ -77,6 +77,28 @@ Home and school pages are **unauthenticated**. `getShakes`, `getRecentShakes`, `
 `{ id, kidKey, kidName (first + last initial), rank, count, note, photos (approved only), createdAt }`
 — **never** `serial`, `dob`, or `gender`. The serial is half the login credential.
 
+### H. High-number flagging & notifications
+When a soldier reports an unusually large number, HQ wants it **flagged for review**
+and an **automatic notification** sent. The app already flags high entries in the
+admin screens on its own (derived from `count` / `minutes`, thresholds in
+[`src/lib/highNumber.js`](../src/lib/highNumber.js) — currently **≥ 50 shakes** or
+**≥ 180 minutes** for one day). The parts that need the server:
+
+1. **Email/push on write.** On `PUT /api/me/days/:day`, when the saved `count` or
+   `minutes` crosses the threshold, email **the school admin, HQ, and
+   `naftoli@tzivoshashem.org`** with the soldier, school, day, and the numbers.
+   The browser can't send mail or hold a mailing list, so this must live server-side.
+   (Fire it only when the value actually crosses — don't re-notify on an unrelated
+   edit of an already-flagged day.)
+2. **Persist the flag** so it survives and can be cleared. Return `flagged: true`
+   and a short `flagReason` on the entry from `GET /api/schools/:id/shakes`
+   (admin view). The admin UI **honours `flagged` / `flagReason` when present** and
+   falls back to its own threshold otherwise — so once the API sends these, the
+   server's rule wins and the two stay in sync.
+
+Keep the app and server thresholds the same, or (better) have the app read them
+from `/settings` so HQ can tune one number in one place.
+
 ## Security
 The site is static — it **cannot hold a secret key**. Either issue **per-user tokens at login**,
 or route secret-key calls through a **small serverless proxy**. Allow **CORS** from the app's domain.
@@ -90,6 +112,7 @@ or route secret-key calls through a **small serverless proxy**. Allow **CORS** f
 6. `POST /shakes` in the shape above, hitting the teacher-grid record; public read endpoints in the no-serial shape (G).
 7. Photo endpoints + accepted format and size.
 8. App→API auth (token vs. proxy) and CORS.
+9. High-number flag + notification (§H): email school/HQ/`naftoli@tzivoshashem.org` on an outsized report, and return `flagged` / `flagReason` on admin shake reads.
 
 ---
 
