@@ -26,11 +26,17 @@ never change.
 - `verifyAdmin(...)` → Mashpia SSO; returns role (HQ vs school) + the school(s) administered.
 
 ### B. Roster (read — admin-only wherever it includes serial / DOB)
-- `getSchools()` → `[{ id, name, city, logo? }]`
+- `getSchools()` → `[{ id, name, city, logo?, lat?, lng? }]`
   - **`logo`** is optional: a URL (or data URI) for the school's crest, shown on the
     school tile in the race, cards and hero. When it is absent the app falls back to a
     colored initials tile, so live currently shows initials everywhere. Send `logo` if
     Mashpia has per-school crests and you want them on the public pages.
+  - **`lat` / `lng`** are optional: the school's coordinates, used to reopen soldier
+    logging at that community's own **Motzei Yom Tov** (tzeis is computed client-side
+    in [`src/lib/tzeis.js`](../src/lib/tzeis.js); see [`campaignLock.js`](../src/lib/campaignLock.js)).
+    Without them the app maps the `city` string to coordinates for known communities,
+    and any it can't place stays locked until Yom Tov is over worldwide. Send `lat`/`lng`
+    so every school reopens exactly at its own nightfall.
 - Classes per school → `[{ id, name, schoolId, kidCount }]`
 - `getKidsForSchool(schoolId)` → `[{ serial, firstName, lastName, hebFirst, hebLast, dob, gender, class, rank, schoolId, photoUrl }]`
   - `rank` is a text label (e.g. "Sergeant"); `photoUrl` is the profile picture.

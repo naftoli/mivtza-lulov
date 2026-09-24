@@ -463,11 +463,12 @@ export async function getKidDayReport(kidId, day) {
 }
 
 // ---- writes ----
-export async function addShake({ kid, day, count, minutes, note, photos }) {
-  // Read-only for soldiers until Motzei Yom Tov (campaignLock). The UI already
-  // hides the form, but guard the write too so a stale tab or a direct call
-  // can't slip an entry through while logging is closed.
-  if (soldierLocked()) {
+export async function addShake({ kid, school, day, count, minutes, note, photos }) {
+  // Read-only for soldiers until their community's Motzei Yom Tov (campaignLock,
+  // per-school tzeis). The UI already hides the form, but guard the write too so
+  // a stale tab or a direct call can't slip an entry through while it's closed.
+  // Same `school` the UI checks, so the guard and the form agree.
+  if (soldierLocked(school)) {
     throw new Error('Shake-logging is closed until Motzei Yom Tov. Your report is view-only for now.')
   }
   if (!IS_DEMO) return mashpia.addShake({ kid, day, count, minutes, note, photos })

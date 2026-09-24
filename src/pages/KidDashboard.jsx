@@ -44,9 +44,10 @@ export default function KidDashboard() {
 
   if (!kid) return <Navigate to="/login" replace />
 
-  // Read-only for soldiers until Motzei Yom Tov: the ID card, stats and report
-  // still show, but the log form is closed. (The write is guarded too — api.js.)
-  const locked = soldierLocked()
+  // Read-only for soldiers until their community's Motzei Yom Tov (per-school
+  // tzeis): the ID card, stats and report still show, but the log form is closed.
+  // (The write is guarded too — api.js.)
+  const locked = soldierLocked(school)
 
   const myTotal = (myShakes || []).reduce((s, x) => s + x.count, 0)
   const myMinutes = (myShakes || []).reduce((n, s) => n + (s.minutes || 0), 0)
@@ -100,7 +101,7 @@ export default function KidDashboard() {
     setBusy(true)
     const before = school
     try {
-      await addShake({ kid, day, count: n, minutes: mins, note: story, photos })
+      await addShake({ kid, school, day, count: n, minutes: mins, note: story, photos })
     } catch (err) {
       // Nothing was saved — keep the form (and photos) so the kid can retry.
       notify(err?.message || 'Could not save your shakes — please try again.', true)
@@ -202,7 +203,8 @@ export default function KidDashboard() {
               <img src={asset('design/lulav-esrog.png')} alt="" className="mx-auto h-16 w-auto" />
               <p className="mt-3 font-display text-lg font-black text-navy">Logging is closed for Yom Tov</p>
               <p className="mt-1.5 text-sm text-navy/80">
-                A gut Yom Tov! Reporting shakes reopens <strong className="text-green">Motzei Yom Tov</strong> ({lockReopenText()}).
+                A gut Yom Tov! Reporting shakes reopens at <strong className="text-green">Motzei Yom Tov</strong> in your area
+                {school ? <> — <strong className="text-green">{lockReopenText(school)}</strong> your time</> : null}.
                 Your report below stays up to date — come back after Yom Tov to log your shakes.
               </p>
             </div>
