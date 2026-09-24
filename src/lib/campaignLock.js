@@ -1,17 +1,16 @@
 // Soldier write-lock — "read-only for soldiers."
 //
-// HQ asked to close shake-logging from now through the end of the *last* days of
-// Yom Tov (Motzei Simchas Torah, 5787). While the lock is on, soldiers can still
-// log in and view their own report, but cannot log or edit shakes — the site is
-// read-only for them. Admins (school + HQ) are unaffected.
+// HQ asked to close shake-logging from now until the FIRST days of Yom Tov end
+// (Motzei the second day, 5787) — it must be OPEN for Chol Hamoed. While the lock
+// is on, soldiers can still log in and view their own report, but cannot log or
+// edit shakes — the site is read-only for them. Admins (school + HQ) unaffected.
 //
-// The unlock moment is the evening the last Yom Tov ends (Motzei Simchas Torah),
-// after nightfall/Havdalah. Times are the visitor's local clock — the audience
-// is Eastern (Crown Heights), so 8:00 PM is safely past tzeis.
+// The unlock moment is the evening the first days of Yom Tov end, after
+// nightfall/Havdalah. Times are the visitor's local clock — the audience is
+// Eastern (Crown Heights), so 8:00 PM is safely past tzeis.
 //
-// >>> If this should instead reopen for CHOL HAMOED (Motzei the FIRST days of
-//     Yom Tov), change LOCK_UNTIL to new Date('2026-09-27T20:00:00'). <<<
-export const LOCK_UNTIL = new Date('2026-10-04T20:00:00') // Motzei Simchas Torah 5787 (local time)
+// Day 1 (15 Tishrei) is Shabbos this year, so the second day is Sun 27 Sep.
+export const LOCK_UNTIL = new Date('2026-09-27T20:00:00') // Motzei the second day of Yom Tov 5787 (local time)
 
 // True while soldiers are locked out of logging. Defaults to "now" but takes an
 // argument so it can be tested. If the date is somehow invalid, fail OPEN (don't
