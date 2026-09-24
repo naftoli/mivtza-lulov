@@ -1,22 +1,31 @@
 // Soldier write-lock — "read-only for soldiers."
 //
-// Shake-logging is closed from now until the first days of Yom Tov (Sukkos 5787)
-// end, and it reopens at EACH community's own Motzei Yom Tov (tzeis), so a soldier
-// is never unlocked while it is still Yom Tov where they are. During the lock they
-// can still log in and view their report, but not log or edit shakes. Admins are
-// unaffected. The unlock instant per school is computed with src/lib/tzeis.js.
-import { tzeisUTC } from './tzeis.js'
+// Shake-logging is closed for BOTH sets of Yom Tov days of Sukkos 5787, and it
+// reopens at EACH community's own tzeis, so a soldier is never unlocked while it
+// is still Yom Tov (or Shabbos) where they are:
+//   • First days  — locked from now → Motzei the 2nd day (Sun 27 Sep).
+//   • Chol Hamoed — OPEN (Mon 28 Sep … Fri 2 Oct daytime).
+//   • Last days   — locked from candle-lighting Erev Shmini Atzeres (Fri 2 Oct)
+//                   → Motzei Simchas Torah (Sun 4 Oct). Shmini Atzeres (Sat 3 Oct)
+//                   is also Shabbos this year, so this window covers it too.
+// During a lock they can still log in and view their report, but not log or edit
+// shakes. Admins are unaffected. Per-location times come from src/lib/tzeis.js.
+import { tzeisUTC, sunsetUTC } from './tzeis.js'
 
-// The civil date the first days of Yom Tov end: Motzei the 2nd day = Sun 27 Sep
-// 2026 (16 Tishrei). Noon UTC is just an anchor inside that date; the real
-// reopen moment is that date's tzeis at the soldier's own location.
-const YT_END_DAY = Date.UTC(2026, 8, 27, 12)
+// Civil dates (noon-UTC anchors) of each Yom Tov boundary. The real moments are
+// that date's tzeis / sunset at the soldier's own location.
+const FIRST_END = Date.UTC(2026, 8, 27, 12) // Motzei 2nd day (16 Tishrei) — reopen
+const LAST_EREV = Date.UTC(2026, 9, 2, 12)  // Erev Shmini Atzeres (21 Tishrei) — lock at candle-lighting
+const LAST_END = Date.UTC(2026, 9, 4, 12)   // Motzei Simchas Torah (23 Tishrei) — reopen
+const CANDLE_MS = 18 * 60 * 1000            // candles are lit 18 min before sunset
 
-// When a school can't be placed (no coords, unknown city), stay locked until Yom
-// Tov is over EVERYWHERE — past the latest Motzei YT among inhabited Jewish
-// communities (~Honolulu tzeis, 04:57 UTC Mon). Conservative on purpose: a late
+// Fallbacks for a school we can't place (no coords, unknown city): stay locked
+// across each whole window worldwide — before the earliest onset, past the latest
+// tzeis among inhabited Jewish communities. Conservative on purpose: a late
 // reopen costs nothing; an early one would let someone log on Yom Tov.
-const FALLBACK_UNLOCK = Date.UTC(2026, 8, 28, 6, 0) // Mon 28 Sep, 06:00 UTC
+const FB_FIRST_END = Date.UTC(2026, 8, 28, 6, 0) // Mon 28 Sep 06:00 UTC (after last 1st-days motzei worldwide)
+const FB_LAST_START = Date.UTC(2026, 9, 2, 3, 0) // Fri 2 Oct 03:00 UTC (before earliest onset worldwide)
+const FB_LAST_END = Date.UTC(2026, 9, 5, 6, 0)   // Mon 5 Oct 06:00 UTC (after last 2nd-days motzei worldwide)
 
 // Coordinates so each community unlocks at its own tzeis. Keyed by a normalized
 // city (lowercase, text before the first comma). LIVE schools should carry
@@ -61,23 +70,39 @@ function schoolCoords(school) {
   return CITY_COORDS[norm(school?.city)] || null
 }
 
-// UTC instant logging reopens for a school — its own Motzei Yom Tov, or the
-// conservative worldwide fallback when we can't place it.
-export function unlockAt(school) {
+// The three per-school boundary instants (UTC ms): when the first days end, when
+// the last days begin (candle-lighting), and when the last days end. Falls back
+// to the conservative worldwide instants when the school can't be placed.
+function bounds(school) {
   const c = schoolCoords(school)
-  if (!c) return FALLBACK_UNLOCK
-  return tzeisUTC(YT_END_DAY, c.lat, c.lng) ?? FALLBACK_UNLOCK
+  if (!c) return { firstEnd: FB_FIRST_END, lastStart: FB_LAST_START, lastEnd: FB_LAST_END }
+  const firstEnd = tzeisUTC(FIRST_END, c.lat, c.lng) ?? FB_FIRST_END
+  const sunset = sunsetUTC(LAST_EREV, c.lat, c.lng)
+  const lastStart = sunset != null ? sunset - CANDLE_MS : FB_LAST_START
+  const lastEnd = tzeisUTC(LAST_END, c.lat, c.lng) ?? FB_LAST_END
+  return { firstEnd, lastStart, lastEnd }
 }
 
-// True while this school's soldiers are locked out of logging.
+// True while this school's soldiers are locked out of logging: before the first
+// days end, or during the last days (candle-lighting → Motzei Simchas Torah).
+// Chol Hamoed in between is open, as is Isru Chag onward.
 export function soldierLocked(school, now = Date.now()) {
-  return now < unlockAt(school)
+  const b = bounds(school)
+  return now < b.firstEnd || (now >= b.lastStart && now < b.lastEnd)
+}
+
+// The UTC instant logging reopens next, given "now": Motzei the first days while
+// still in that window, otherwise Motzei Simchas Torah. (Only meaningful when
+// locked; harmless otherwise.)
+export function reopenAt(school, now = Date.now()) {
+  const b = bounds(school)
+  return now < b.firstEnd ? b.firstEnd : b.lastEnd
 }
 
 // Friendly reopen time for the notice, e.g. "Sunday, Sep 27, 7:27 PM" — shown in
 // the visitor's local clock, which at their own community is their Motzei Yom Tov.
-export function lockReopenText(school) {
-  return new Date(unlockAt(school)).toLocaleString(undefined, {
+export function lockReopenText(school, now = Date.now()) {
+  return new Date(reopenAt(school, now)).toLocaleString(undefined, {
     weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 }

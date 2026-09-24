@@ -22,10 +22,14 @@ const solarTransitJ = (ds, M, L) => J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 *
 // 8.5° below the horizon — the common "three stars" tzeis. Errs ~2 min LATE vs
 // Chabad's holiday-ends time, which is the safe direction for a reopen.
 export const TZEIS_ANGLE = 8.5
+// Geometric sunset (shkiah): the sun's upper limb on the horizon, with the
+// standard 34' refraction + 16' semidiameter → 0.833° below the horizon.
+export const SUNSET_ANGLE = 0.833
 
-// UTC epoch-ms of tzeis on the civil day containing `dateMs`, at lat/lng.
-// Returns null in the rare polar case where the sun never reaches the angle.
-export function tzeisUTC(dateMs, lat, lng, angle = TZEIS_ANGLE) {
+// UTC epoch-ms of the evening moment the sun reaches `angle` below the horizon on
+// the civil day containing `dateMs`, at lat/lng. Returns null in the rare polar
+// case where the sun never reaches that depression.
+export function sunEventUTC(dateMs, lat, lng, angle) {
   const lw = rad * -lng, phi = rad * lat, d = toDays(dateMs)
   const n = julianCycle(d, lw), ds = approxTransit(0, lw, n)
   const M = solarMeanAnomaly(ds), L = eclipticLongitude(M), dec = declination(L)
@@ -34,3 +38,8 @@ export function tzeisUTC(dateMs, lat, lng, angle = TZEIS_ANGLE) {
   const w = Math.acos(cosH), a = approxTransit(w, lw, n)
   return Math.round((solarTransitJ(a, M, L) + 0.5 - J1970) * dayMs)
 }
+
+// Tzeis hakochavim (nightfall) — Yom Tov / Shabbos ends. UTC epoch-ms, or null.
+export const tzeisUTC = (dateMs, lat, lng, angle = TZEIS_ANGLE) => sunEventUTC(dateMs, lat, lng, angle)
+// Shkiah (sunset) — Yom Tov / Shabbos begins at candle-lighting a bit before it.
+export const sunsetUTC = (dateMs, lat, lng) => sunEventUTC(dateMs, lat, lng, SUNSET_ANGLE)
