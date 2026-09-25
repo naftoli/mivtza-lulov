@@ -302,7 +302,7 @@ check('alert: nobody in both To and Cc', array_intersect($mail['to'], $mail['cc'
 check('alert: subject names the soldier and number', strpos($mail['subject'], 'Mendel Cohen reported 60 shakes on day 2') !== false, $mail['subject']);
 check('alert: subject is not tagged with a host', strpos($mail['subject'], 'Mivtza Lulav check:') === 0, $mail['subject']);
 check('alert: link is the live admin screen', strpos($mail['body'], 'https://mashpia.com/mivtzoim/lulav/admin') !== false, $mail['body']);
-foreach (['Mendel Cohen', 'serial 555001', 'Test School 61', 'Sukkos day 2', 'Shakes:   60', 'Minutes:  45', 'Whole shul', '/mivtzoim/lulav/admin'] as $needle) {
+foreach (['Mendel Cohen', 'serial 555001', "School:   Sample Day School\n", 'Sukkos day 2 -- Sunday, September 27, 2026', 'Shakes:   60', 'Minutes:  45', 'Whole shul', '/mivtzoim/lulav/admin'] as $needle) {
     check('alert: body has ' . $needle, strpos($mail['body'], $needle) !== false, $mail['body']);
 }
 

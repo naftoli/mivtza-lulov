@@ -1128,7 +1128,7 @@ function lulavSendHighNumberAlert(array $kid, int $day, int $count, int $minutes
     try {
         $schoolId = (int) $kid['school_id'];
         $name = trim($kid['first'] . ' ' . $kid['last']);
-        $school = (string) ($kid['school_name'] ?? ('School ' . $schoolId));
+        $school = trim((string) ($kid['school_name'] ?? '')) ?: '-';
         $date = '';
         $jd = (int) (lulavMapFor('day', $day)['start_date'] ?? 0);
         if ($jd > 0) {

@@ -1004,7 +1004,7 @@ function lulavSendMail(array $to, string $subject, string $body, array $cc = [])
 
     $headers = [
         'From: Mivtza Lulav <cth@mashpia.com>',
-        'Reply-To: cth@tzivoshashem.org',
+        'Reply-To: cth@mashpia.com',
     ];
     if ($cc) {
         $headers[] = 'Cc: ' . implode(', ', $cc);

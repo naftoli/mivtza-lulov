@@ -1,7 +1,8 @@
 <?php
 /**
  * Canned rows for the Lulav API tests: two schools, three children, marks on
- * Sukkos days 1 and 2, and one approved photo.
+ * Sukkos days 2 and 3, and one approved photo. Dates are production's: Sukkos
+ * day N is Julian day 2461309 + N, so day 2 is Sunday 27 September 2026.
  *
  * Day/minutes marks are modelled as date_task_id 101..107 (shakes) and 201..207
  * (minutes), one per Sukkos day, on grid ids 11 and 21.
@@ -19,12 +20,12 @@ function lulav_test_task_map(): array
         $rows[] = [
             'field_name' => 'day', 'day_number' => $day,
             'date_task_id' => 100 + $day, 'grid_id' => 11,
-            'start_date' => 2461300 + $day, 'end_date' => 2461300 + $day,
+            'start_date' => 2461309 + $day, 'end_date' => 2461309 + $day,
         ];
         $rows[] = [
             'field_name' => 'minutes', 'day_number' => $day,
             'date_task_id' => 200 + $day, 'grid_id' => 21,
-            'start_date' => 2461300 + $day, 'end_date' => 2461300 + $day,
+            'start_date' => 2461309 + $day, 'end_date' => 2461309 + $day,
         ];
     }
     return $rows;
@@ -40,7 +41,7 @@ function lulav_test_kid(int $userId, int $serial, string $first, string $last, i
         'school_id' => $schoolId, 'class_id' => 7,
         'mobile_pic' => '', 'user_photo_id' => 0,
         'class_grade' => 5, 'class_sub' => 'Boys',
-        'school_name' => 'Test School ' . $schoolId,
+        'school_name' => $schoolId === 61 ? 'Sample Day School' : 'Sample Talmud Torah',
         'rank_name' => 'Colonel', 'rank_ord' => 6,
     ];
 }
@@ -60,17 +61,17 @@ function lulav_test_marks(): array
     return [
         // LULAV_TEST_DAY2_COUNT lets a test start from an already-flagged day.
         ['user_id' => 9001, 'date_task_id' => T_SHAKE_DAY2, 'done_qty' => (int) (getenv('LULAV_TEST_DAY2_COUNT') ?: 12), 'mark_inactive' => 0,
-         'mark_description' => 'We went to the park', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461301],
+         'mark_description' => 'We went to the park', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461311],
         ['user_id' => 9001, 'date_task_id' => T_MIN_DAY2, 'done_qty' => 45, 'mark_inactive' => 0,
-         'mark_description' => '', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461301],
+         'mark_description' => '', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461311],
         ['user_id' => 9002, 'date_task_id' => T_SHAKE_DAY2, 'done_qty' => 7, 'mark_inactive' => 0,
-         'mark_description' => '', 'updated' => '2026-10-05 11:00:00', 'mark_date' => 2461301],
+         'mark_description' => '', 'updated' => '2026-10-05 11:00:00', 'mark_date' => 2461311],
         ['user_id' => 9002, 'date_task_id' => T_MIN_DAY2, 'done_qty' => 20, 'mark_inactive' => 0,
-         'mark_description' => '', 'updated' => '2026-10-05 11:00:00', 'mark_date' => 2461301],
+         'mark_description' => '', 'updated' => '2026-10-05 11:00:00', 'mark_date' => 2461311],
         ['user_id' => 9003, 'date_task_id' => T_SHAKE_DAY3, 'done_qty' => 30, 'mark_inactive' => 0,
-         'mark_description' => 'Big day', 'updated' => '2026-10-06 09:00:00', 'mark_date' => 2461302],
+         'mark_description' => 'Big day', 'updated' => '2026-10-06 09:00:00', 'mark_date' => 2461312],
         ['user_id' => 9003, 'date_task_id' => T_MIN_DAY3, 'done_qty' => 60, 'mark_inactive' => 0,
-         'mark_description' => '', 'updated' => '2026-10-06 09:00:00', 'mark_date' => 2461302],
+         'mark_description' => '', 'updated' => '2026-10-06 09:00:00', 'mark_date' => 2461312],
     ];
 }
 
@@ -102,7 +103,7 @@ function lulav_test_patterns(): array
         // --- campaign + settings -------------------------------------------
         ['/FROM mivtzoim WHERE mivtzoim_id/i', [[
             'mivtzoim_id' => 10, 'name' => 'Mivtza Lulav',
-            'start' => 2461301, 'end' => 2461307,
+            'start' => 2461311, 'end' => 2461316,
         ]]],
         ['/FROM lulav_campaign_settings/i', [['per_kid_goal' => 3]]],
         ['/INSERT INTO lulav_campaign_settings/i', []],
@@ -123,7 +124,7 @@ function lulav_test_patterns(): array
                 foreach ([2, 3, 4, 5, 6, 7] as $day) {
                     $rows[] = [
                         'grid_id' => $gridId, 'quantity' => 1,
-                        'start_date' => 2461300 + $day, 'end_date' => 2461300 + $day,
+                        'start_date' => 2461309 + $day, 'end_date' => 2461309 + $day,
                         'lang_id' => 1,
                     ];
                 }
@@ -137,10 +138,10 @@ function lulav_test_patterns(): array
 
         // --- schools --------------------------------------------------------
         ['/FROM schools s.*LEFT JOIN/is', [
-            ['school_id' => 61, 'school_name' => 'Test School 61', 'school_city' => 'Monsey',
+            ['school_id' => 61, 'school_name' => 'Sample Day School', 'school_city' => 'Monsey',
              'logo' => '', 'school_logo_id' => 0, 'school_logo_kiosk_id' => 0,
              'soldier_count' => 2, 'motto' => 'Go!', 'color' => null, 'goal_override' => null],
-            ['school_id' => 269, 'school_name' => 'Test School 269', 'school_city' => 'Brooklyn',
+            ['school_id' => 269, 'school_name' => 'Sample Talmud Torah', 'school_city' => 'Brooklyn',
              'logo' => '', 'school_logo_id' => 0, 'school_logo_kiosk_id' => 0,
              'soldier_count' => 1, 'motto' => '', 'color' => null, 'goal_override' => null],
         ]],
