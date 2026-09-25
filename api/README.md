@@ -209,6 +209,14 @@ every key, so its behaviour is unchanged.
 - `POST /shakes/:id/photos/approve` — approve every photo in a daily report
 - `POST /shakes/:id/photos/reject` — reject every photo in a daily report
 - `POST /schools/:id/photos/approve-all` — approve all pending daily reports
+- `POST /schools/:id/photos/download-link` — authorized school/HQ admin;
+  `{ url, expiresIn, count }`, a two-minute signed link to the zip below (404
+  when there are no approved photos)
+- `GET /schools/:id/photos/approved.zip?token=…` — every approved photo on the
+  school's entries still on record, named `First Last - Day N.jpg`, built with
+  `ZipArchive` from the files on disk and stored uncompressed. The token stands
+  in for the bearer header a plain download link cannot send; it works for that
+  one school only and is never accepted as a session
 - `GET /photos/:id/file` — public only after approval
 
 Uploads are JSON data URLs (`image/jpeg`, `image/png`, or `image/webp`), at most

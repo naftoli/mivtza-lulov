@@ -17,6 +17,7 @@ $env = json_decode($argv[6] ?? '{}', true) ?: [];
 $root = $sandbox . '/public';
 $_SERVER['REQUEST_METHOD'] = $method;
 $_SERVER['REQUEST_URI'] = '/mivtzoim/lulav/api' . $path;
+parse_str((string) parse_url($path, PHP_URL_QUERY), $_GET);
 $_SERVER['DOCUMENT_ROOT'] = $root;
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
@@ -46,9 +47,12 @@ register_shutdown_function(static function () {
     $mail = array_values(array_filter(array_map(static function ($line) {
         return json_decode($line, true);
     }, explode("\n", (string) @file_get_contents($GLOBALS['sandbox'] . '/mail.jsonl')))));
+    // A zip (or any binary body) is not UTF-8 and would break json_encode.
+    $binary = !mb_check_encoding((string) $out, 'UTF-8');
     fwrite(STDOUT, json_encode([
         'status' => $code === false ? 200 : $code,
-        'body' => $out,
+        'body' => $binary ? '' : $out,
+        'body_b64' => $binary ? base64_encode((string) $out) : null,
         'unmatched' => array_values(array_unique(FakeDb::$unmatched)),
         'queries' => count(FakeDb::$log),
         'marked' => $marks ? json_decode($marks, true) : null,
@@ -60,7 +64,10 @@ register_shutdown_function(static function () {
 // token can be signed with the very secret the route will verify against.
 require $root . '/mivtzoim/lulav/api/bootstrap.php';
 
-if ($actor === 'kid') {
+if (strpos($actor, 'bearer:') === 0) {
+    // A raw token, for proving a non-session token cannot pass as one.
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . substr($actor, 7);
+} elseif ($actor === 'kid') {
     $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . lulavIssueToken('kid', 9001, ['serial' => '555001']);
 } elseif ($actor === 'admin') {
     $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . lulavIssueToken('admin', 1, ['isHq' => true]);

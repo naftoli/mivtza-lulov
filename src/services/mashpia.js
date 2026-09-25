@@ -173,6 +173,10 @@ export const addShake = ({ day, count, minutes, note, photos }) =>
   write(`/me/days/${day}`, { method: 'PUT', body: { count, minutes, note, photos }, as: 'kid' })
 
 export const getPendingPhotos = (schoolId) => req(`/schools/${schoolId}/photos/pending`, { as: 'admin' })
+// A short-lived signed link to a zip of the school's approved photos. Plain req,
+// not write: asking for a link changes nothing, so nothing needs reloading.
+export const getPhotoZipLink = (schoolId) =>
+  req(`/schools/${schoolId}/photos/download-link`, { method: 'POST', as: 'admin' })
 export const approvePhotos = (shakeId) =>
   write(`/shakes/${shakeId}/photos/approve`, { method: 'POST', as: 'admin' })
 export const rejectPhotos = (shakeId) =>

@@ -336,6 +336,96 @@ check('alert: 60 -> 10 sends nothing', $lowered['mail'] === [], json_encode($low
 $blocked = req('PUT', '/me/days/2', ['count' => 60, 'minutes' => 501], 'kid');
 check('alert: a rejected save sends nothing', $blocked['status'] === 422 && $blocked['mail'] === [], json_encode($blocked['mail']));
 
+
+echo "== approved-photo zip ==\n";
+
+// Signs a token exactly as bootstrap.php does, with request.php's test secret,
+// so the suite can forge the tokens an attacker would try.
+function signTest(array $payload): string
+{
+    $b64 = static function (string $v): string { return rtrim(strtr(base64_encode($v), '+/', '-_'), '='); };
+    $encoded = $b64(json_encode($payload));
+    return $encoded . '.' . $b64(hash_hmac('sha256', $encoded, 'lulav-test-signing-secret-at-least-32-chars', true));
+}
+
+/** Unpacks a zip response: ['name' => [bytes, compression method]]. */
+function zipEntries(array $res): array
+{
+    $bytes = base64_decode((string) ($res['body_b64'] ?? ''), true);
+    if ($bytes === false || $bytes === '') {
+        return [];
+    }
+    $file = tempnam(sys_get_temp_dir(), 'lulav-zip-test-');
+    file_put_contents($file, $bytes);
+    $zip = new ZipArchive();
+    $out = [];
+    if ($zip->open($file) === true) {
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            $out[$stat['name']] = [$zip->getFromIndex($i), $stat['comp_method']];
+        }
+        $zip->close();
+    }
+    unlink($file);
+    return $out;
+}
+
+// The photos on disk. zip-missing.jpg is deliberately not written.
+$photoDir = $sandbox . '/storage/lulav/photos';
+@mkdir($photoDir, 0750, true);
+file_put_contents($photoDir . '/zip-mendel-1.jpg', "mendel photo one");
+file_put_contents($photoDir . '/zip-mendel-2.png', "mendel photo two");
+file_put_contents($photoDir . '/zip-levi-1.jpg', "levi photo");
+
+$link = req('POST', '/schools/61/photos/download-link', [], 'admin');
+check('zip: admin gets a link', $link['status'] === 200, $link['body']);
+check('zip: link points at the zip with a token', strpos((string) ($link['json']['url'] ?? ''), '/mivtzoim/lulav/api/schools/61/photos/approved.zip?token=') === 0, $link['body']);
+check('zip: link lasts two minutes', ($link['json']['expiresIn'] ?? null) === 120, $link['body']);
+check('zip: count skips the photo whose file is missing', ($link['json']['count'] ?? null) === 3, $link['body']);
+checkClean('zip link', $link);
+
+$kidLink = req('POST', '/schools/61/photos/download-link', [], 'kid');
+check('zip: a soldier cannot get a link', $kidLink['status'] === 403, $kidLink['body']);
+$anonLink = req('POST', '/schools/61/photos/download-link', []);
+check('zip: no token, no link', $anonLink['status'] === 401, $anonLink['body']);
+
+$zipPath = substr((string) ($link['json']['url'] ?? ''), strlen('/mivtzoim/lulav/api'));
+$zip = req('GET', $zipPath);
+check('zip: download 200', $zip['status'] === 200, $zip['body']);
+check('zip: body is a zip', strpos((string) base64_decode((string) ($zip['body_b64'] ?? '')), "PK\x03\x04") === 0);
+$entries = zipEntries($zip);
+check('zip: three photos, named by soldier and day, in order',
+    array_keys($entries) === ['Levi Katz - Day 2.jpg', 'Mendel Cohen - Day 2 - 1.jpg', 'Mendel Cohen - Day 2 - 2.png'],
+    json_encode(array_keys($entries)));
+check('zip: file contents intact', ($entries['Mendel Cohen - Day 2 - 2.png'][0] ?? '') === 'mendel photo two');
+check('zip: photos stored, not re-compressed', ($entries['Levi Katz - Day 2.jpg'][1] ?? -1) === ZipArchive::CM_STORE,
+    'method=' . ($entries['Levi Katz - Day 2.jpg'][1] ?? '?'));
+checkClean('zip download', $zip);
+
+$hidden = req('POST', '/schools/61/photos/download-link', [], 'admin', ['LULAV_TEST_HIDE_9002' => '1']);
+check('zip: a removed entry is left out', ($hidden['json']['count'] ?? null) === 2, $hidden['body']);
+$hiddenZip = zipEntries(req('GET', substr((string) ($hidden['json']['url'] ?? ''), strlen('/mivtzoim/lulav/api')), null, '', ['LULAV_TEST_HIDE_9002' => '1']));
+check('zip: ...and not in the zip', !isset($hiddenZip['Levi Katz - Day 2.jpg']) && count($hiddenZip) === 2, json_encode(array_keys($hiddenZip)));
+
+$none = req('POST', '/schools/61/photos/download-link', [], 'admin', ['LULAV_TEST_NO_APPROVED' => '1']);
+check('zip: no approved photos is a message, not a link', $none['status'] === 404 && strpos((string) ($none['json']['error'] ?? ''), 'no approved photos') !== false, $none['body']);
+
+$good = ['v' => 1, 'type' => 'photozip', 'id' => 61, 'admin' => 1, 'iat' => time(), 'exp' => time() + 120];
+$noToken = req('GET', '/schools/61/photos/approved.zip');
+check('zip: no token is refused', $noToken['status'] === 401, $noToken['body']);
+$forged = req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest($good) . 'x'));
+check('zip: a tampered token is refused', $forged['status'] === 401, $forged['body']);
+$expired = req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest(['exp' => time() - 1] + $good)));
+check('zip: an expired token is refused', $expired['status'] === 401, $expired['body']);
+$otherSchool = req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest(['id' => 269] + $good)));
+check("zip: another school's token is refused", $otherSchool['status'] === 401, $otherSchool['body']);
+$handoff = req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest(['type' => 'handoff'] + $good)));
+check('zip: a different kind of token is refused', $handoff['status'] === 401, $handoff['body']);
+
+// The zip token must never work as a login.
+$asSession = req('GET', '/schools/61/report-rows', null, 'bearer:' . signTest($good));
+check('zip: the download token is not a session', $asSession['status'] === 401, $asSession['body']);
+
 echo "== not found ==\n";
 $missing = req('GET', '/nope');
 check('unknown route is 404', $missing['status'] === 404, $missing['body']);

@@ -525,6 +525,13 @@ export async function approvePhotos(shakeId) {
 
 // Bulk approve: flips every pending entry in the school (same set getPendingPhotos returns).
 // Returns the number of entries approved.
+// { url, expiresIn, count } for a zip of the school's approved photos. The zip is
+// built by the server from the files on its disk, so the demo has nothing to offer.
+export async function getPhotoZipLink(schoolId) {
+  if (!IS_DEMO) return mashpia.getPhotoZipLink(schoolId)
+  throw new Error('Photo downloads are available on the live site only.')
+}
+
 export async function approveAllPhotos(schoolId) {
   if (!IS_DEMO) return mashpia.approveAllPhotos(schoolId)
   await delay()

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   setShakeHidden, resetDemoData, getSchoolReportRows,
-  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto,
+  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
@@ -14,7 +14,7 @@ const prettyDate = (iso) =>
 import ReportGrid from '../components/ReportGrid.jsx'
 import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
-import { pendingPhotoItems } from '../lib/photos.js'
+import { pendingPhotoItems, approvedPhotos } from '../lib/photos.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { isHighEntry, highReasons } from '../lib/highNumber.js'
 import { asset } from '../lib/asset.js'
@@ -148,7 +148,7 @@ function SchoolAdmin({ schoolId, isHQ }) {
       <FlaggedBanner shakes={shakes} />
       <CampaignSettings school={school} isHQ={isHQ} />
       {/* Photo Approvals above the roster; "Remove entry" moderation right under it. */}
-      <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} />
+      <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} entries={shakes} />
       <Moderation shakes={shakes} error={shakesError} onRetry={reloadShakes} />
       <Roster kids={kids || []} />
       <ReportGrid rows={reportRows || []} />
@@ -338,11 +338,36 @@ function Roster({ kids }) {
   )
 }
 
-function PhotoApprovals({ schoolId, shakes, error, onRetry }) {
+function PhotoApprovals({ schoolId, shakes, error, onRetry, entries }) {
   const [active, setActive] = useState(null) // photo open in the lightbox
   const [busy, setBusy] = useState(false)
   const [allError, setAllError] = useState(null)
+  const [zipping, setZipping] = useState(false)
   const loaded = Array.isArray(shakes)
+  // Approved photos on entries still on record: the same set the server zips
+  // (it also leaves out a photo whose file is missing, so its count can be lower).
+  const approvedCount = (entries || []).reduce((n, s) => n + (s.hidden ? 0 : approvedPhotos(s).length), 0)
+
+  // The server builds the zip from the files on its disk. The download itself is
+  // a plain link, which cannot send the admin's token, so first ask for a
+  // two-minute signed link and then open it.
+  async function downloadApproved() {
+    setZipping(true)
+    setAllError(null)
+    try {
+      const { url } = await getPhotoZipLink(schoolId)
+      const link = document.createElement('a')
+      link.href = url
+      link.rel = 'noopener'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (e) {
+      setAllError(`Could not download the photos — ${e.message}`)
+    } finally {
+      setZipping(false)
+    }
+  }
 
   async function approveAll() {
     if (!confirm(`Approve all ${shakes.length} pending entries? Every photo in them will show on the public page.`)) return
@@ -359,16 +384,21 @@ function PhotoApprovals({ schoolId, shakes, error, onRetry }) {
 
   return (
     <Section title="Photo Approvals"
-      right={loaded && (
+      right={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Pill>{shakes.length} pending</Pill>
-          {shakes.length > 0 && (
+          {approvedCount > 0 && (
+            <Button variant="outline" className={smallBtn} disabled={zipping} onClick={downloadApproved}>
+              {zipping ? 'Preparing…' : `⬇ Download approved photos (${approvedCount})`}
+            </Button>
+          )}
+          {loaded && <Pill>{shakes.length} pending</Pill>}
+          {loaded && shakes.length > 0 && (
             <Button variant="navy" className={smallBtn} disabled={busy} onClick={approveAll}>
               {busy ? 'Approving…' : `✓ Approve all (${shakes.length})`}
             </Button>
           )}
         </div>
-      )}>
+      }>
       {allError && <p role="alert" className="mb-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{allError}</p>}
       {!loaded ? (
         // Only this section waits on the photos; the rest of the page is already up.

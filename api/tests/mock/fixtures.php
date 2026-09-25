@@ -64,7 +64,7 @@ function lulav_test_marks(): array
          'mark_description' => 'We went to the park', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461311],
         ['user_id' => 9001, 'date_task_id' => T_MIN_DAY2, 'done_qty' => 45, 'mark_inactive' => 0,
          'mark_description' => '', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461311],
-        ['user_id' => 9002, 'date_task_id' => T_SHAKE_DAY2, 'done_qty' => 7, 'mark_inactive' => 0,
+        ['user_id' => 9002, 'date_task_id' => T_SHAKE_DAY2, 'done_qty' => 7, 'mark_inactive' => (int) (getenv('LULAV_TEST_HIDE_9002') === '1'),
          'mark_description' => '', 'updated' => '2026-10-05 11:00:00', 'mark_date' => 2461311],
         ['user_id' => 9002, 'date_task_id' => T_MIN_DAY2, 'done_qty' => 20, 'mark_inactive' => 0,
          'mark_description' => '', 'updated' => '2026-10-05 11:00:00', 'mark_date' => 2461311],
@@ -167,6 +167,20 @@ function lulav_test_patterns(): array
         ['/SELECT photo\.user_id, photo\.day_number, u\.user_serial FROM lulav_photos/i', [
             ['user_id' => 9001, 'day_number' => 2, 'user_serial' => 555001],
         ]],
+        // A school's approved photos, for the zip download: Mendel has two on
+        // day 2, Levi one, and one row whose file is not on disk.
+        // LULAV_TEST_NO_APPROVED=1 models a school with none.
+        ['/SELECT user_id, day_number, file_name, mime_type FROM lulav_photos/i', static function (): array {
+            if (getenv('LULAV_TEST_NO_APPROVED') === '1') {
+                return [];
+            }
+            return [
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-1.jpg', 'mime_type' => 'image/jpeg'],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-2.png', 'mime_type' => 'image/png'],
+                ['user_id' => 9002, 'day_number' => 2, 'file_name' => 'zip-levi-1.jpg', 'mime_type' => 'image/jpeg'],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-missing.jpg', 'mime_type' => 'image/jpeg'],
+            ];
+        }],
         ['/SELECT \* FROM lulav_photos/i', lulav_test_photo_rows()],
 
         // --- marks -------------------------------------------------------------

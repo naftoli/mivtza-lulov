@@ -1765,6 +1765,165 @@ function lulavHandlePhotoDelete(string $publicId): void
     lulavJson(['id' => $publicId, 'deleted' => true]);
 }
 
+// How long a photo-download link works, in seconds: long enough to start the
+// download, short enough that a copied link is dead soon after.
+const LULAV_PHOTO_ZIP_TTL = 120;
+
+/**
+ * A school's approved photos, as files to zip: [['path' => ..., 'name' => ...]].
+ *
+ * Only what the public page shows: approved photos whose file is still on disk,
+ * on entries an admin has not removed ("Remove entry" leaves the photos
+ * approved, but the entry is hidden). Named "First Last - Day N.jpg", with
+ * " - 2", " - 3" when a day has several, in soldier and day order.
+ */
+function lulavApprovedPhotoFiles(int $schoolId): array
+{
+    global $MASHPIA_DB;
+    lulavRequireTables(['lulav_photos']);
+    $campaign = lulavCampaign();
+    $stmt = $MASHPIA_DB->prepare(
+        "SELECT user_id, day_number, file_name, mime_type
+         FROM lulav_photos
+         WHERE mivtzoim_id = :campaign AND school_year = :school_year
+           AND school_id = :school AND status = 'approved'
+         ORDER BY user_id, day_number, photo_id"
+    );
+    $stmt->execute([
+        ':campaign' => $campaign['mivtzoim_id'],
+        ':school_year' => lulavCurrentSchoolYear(),
+        ':school' => $schoolId,
+    ]);
+    $photos = $stmt->fetchAll();
+    if (!$photos) {
+        return [];
+    }
+
+    // One query each for the hidden flags and the names, not one per photo.
+    $marks = lulavLoadDayMarks($schoolId, null);
+    $kids = lulavKidRowsByUserId(array_column($photos, 'user_id'));
+    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+
+    $groups = [];
+    foreach ($photos as $photo) {
+        $userId = (int) $photo['user_id'];
+        $day = (int) $photo['day_number'];
+        if (!empty($marks[$userId][$day]['day']['hidden'])) {
+            continue;
+        }
+        $path = lulavPhotoFile($photo);
+        if (!is_file($path)) {
+            continue;
+        }
+        $kid = $kids[$userId] ?? null;
+        $who = $kid ? trim($kid['first'] . ' ' . $kid['last']) : 'Soldier ' . $userId;
+        // Anything a file system refuses in a name becomes a space.
+        $who = trim(preg_replace('/\s+/', ' ', preg_replace('#[\\\\/:*?"<>|\x00-\x1f]+#', ' ', $who))) ?: 'Soldier';
+        $groups[$who . "\0" . $day][] = [
+            'path' => $path,
+            'who' => $who,
+            'day' => $day,
+            'ext' => $extensions[$photo['mime_type']] ?? 'jpg',
+        ];
+    }
+    ksort($groups, SORT_NATURAL | SORT_FLAG_CASE);
+
+    $files = [];
+    $used = [];
+    foreach ($groups as $group) {
+        foreach ($group as $index => $file) {
+            $base = $file['who'] . ' - Day ' . $file['day'] . (count($group) > 1 ? ' - ' . ($index + 1) : '');
+            // Two soldiers with the same name on the same day stay apart.
+            $name = $base . '.' . $file['ext'];
+            for ($n = 2; isset($used[strtolower($name)]); $n++) {
+                $name = $base . ' (' . $n . ').' . $file['ext'];
+            }
+            $used[strtolower($name)] = true;
+            $files[] = ['path' => $file['path'], 'name' => $name];
+        }
+    }
+    return $files;
+}
+
+/** A signed link that downloads one school's approved photos, for a couple of minutes. */
+function lulavIssuePhotoZipLink(int $schoolId, int $adminId): string
+{
+    $token = lulavSignPayload([
+        'v' => 1,
+        'type' => 'photozip',
+        'id' => $schoolId,
+        'admin' => $adminId,
+        'iat' => time(),
+        'exp' => time() + LULAV_PHOTO_ZIP_TTL,
+    ]);
+    return '/mivtzoim/lulav/api/schools/' . $schoolId . '/photos/approved.zip?token=' . rawurlencode($token);
+}
+
+/**
+ * Streams a school's approved photos as one zip.
+ *
+ * ZipArchive, as the rest of Mashpia uses (school shipping, rank ceremony,
+ * Chidon prizes): the photos are already on this server's disk, so each is
+ * added from its file, and the archive is built in a temp file rather than in
+ * memory. Photos are stored, not compressed -- they are JPEG/PNG/WebP already.
+ *
+ * The browser opens this as a plain link, which cannot carry the API's bearer
+ * header, so the link carries a short-lived signed token instead, minted by
+ * POST .../photos/download-link for an admin of this school.
+ */
+function lulavSendPhotoZip(int $schoolId): void
+{
+    $token = (string) ($_GET['token'] ?? '');
+    $payload = $token !== '' ? lulavVerifySignedPayload($token) : null;
+    if (!$payload || $payload['type'] !== 'photozip' || (int) $payload['id'] !== $schoolId) {
+        lulavError('This download link has expired. Please press Download again.', 401);
+    }
+    // Still an admin of this school -- not just two minutes ago.
+    lulavRequireSchoolAccess(['type' => 'admin', 'id' => (int) ($payload['admin'] ?? 0)], $schoolId);
+
+    if (!class_exists('ZipArchive')) {
+        lulavError('Photo downloads are not available on this server.', 503);
+    }
+    $files = lulavApprovedPhotoFiles($schoolId);
+    if (!$files) {
+        lulavError('There are no approved photos to download yet.', 404);
+    }
+
+    set_time_limit(0);
+    $temp = tempnam(sys_get_temp_dir(), 'lulav-photos-');
+    if ($temp === false) {
+        lulavError('The photo download could not be prepared.', 500);
+    }
+    register_shutdown_function(static function () use ($temp): void {
+        @unlink($temp);
+    });
+    $zip = new ZipArchive();
+    if ($zip->open($temp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        lulavError('The photo download could not be prepared.', 500);
+    }
+    foreach ($files as $file) {
+        $zip->addFile($file['path'], $file['name']);
+        if (method_exists($zip, 'setCompressionName')) {
+            $zip->setCompressionName($file['name'], ZipArchive::CM_STORE);
+        }
+    }
+    if (!$zip->close() || !is_file($temp)) {
+        lulavError('The photo download could not be prepared.', 500);
+    }
+
+    $school = lulavSchoolRows($schoolId)[0]['name'] ?? ('School ' . $schoolId);
+    $filename = trim(preg_replace('#[\\\\/:*?"<>|\x00-\x1f]+#', ' ', $school . ' - Mivtza Lulav photos')) . '.zip';
+    // An ASCII name for old browsers, the real one (Hebrew included) for the rest.
+    $ascii = preg_replace('/[^\x20-\x7e]/', '_', $filename);
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="' . str_replace('"', '', $ascii)
+        . '"; filename*=UTF-8\'\'' . rawurlencode($filename));
+    header('Content-Length: ' . filesize($temp));
+    header('Cache-Control: no-store');
+    readfile($temp);
+    exit;
+}
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = lulavRoutePath();
 
@@ -2165,6 +2324,25 @@ try {
         ]);
         lulavCacheFlush();
         lulavJson(['approved' => $count]);
+    }
+    if ($method === 'POST' && preg_match('#^/schools/(\d+)/photos/download-link$#', $path, $match)) {
+        $actor = lulavRequireActor(['admin']);
+        $schoolId = (int) $match[1];
+        lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
+        // Counted now, so an empty school gets a message rather than a link to a 404.
+        $count = count(lulavApprovedPhotoFiles($schoolId));
+        if ($count === 0) {
+            lulavError('There are no approved photos to download yet.', 404);
+        }
+        lulavJson([
+            'url' => lulavIssuePhotoZipLink($schoolId, (int) $actor['id']),
+            'expiresIn' => LULAV_PHOTO_ZIP_TTL,
+            'count' => $count,
+        ]);
+    }
+    if ($method === 'GET' && preg_match('#^/schools/(\d+)/photos/approved\.zip$#', $path, $match)) {
+        lulavSendPhotoZip((int) $match[1]);
     }
     if ($method === 'DELETE' && preg_match('#^/photos/([a-f0-9]{32})$#', $path, $match)) {
         lulavHandlePhotoDelete($match[1]);

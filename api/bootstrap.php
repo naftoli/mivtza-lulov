@@ -266,9 +266,10 @@ function lulavActor(bool $required = true): ?array
     if (!$payload) {
         lulavError('Invalid authentication token.', 401);
     }
-    // Handoff codes are signed with the same secret but are not sessions: they
-    // buy a kid token at /soldier/handoff and nothing else.
-    if ($payload['type'] === 'handoff') {
+    // Only kid and admin tokens are sessions. Handoff codes and photo-download
+    // links are signed with the same secret, but each buys one thing at one
+    // endpoint and must never pass as a login.
+    if (!in_array($payload['type'], ['kid', 'admin'], true)) {
         lulavError('Invalid authentication token.', 401);
     }
     // A soldier session from before the opening -- a tester's, say -- is
