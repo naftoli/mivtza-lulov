@@ -302,6 +302,9 @@ check('alert: nobody in both To and Cc', array_intersect($mail['to'], $mail['cc'
 check('alert: subject names the soldier and number', strpos($mail['subject'], 'Mendel Cohen reported 60 shakes on day 2') !== false, $mail['subject']);
 check('alert: subject is not tagged with a host', strpos($mail['subject'], 'Mivtza Lulav check:') === 0, $mail['subject']);
 check('alert: link is the live admin screen', strpos($mail['body'], 'https://mashpia.com/mivtzoim/lulav/admin') !== false, $mail['body']);
+foreach (['(c) ' . date('Y') . ' Tzivos Hashem', '792 Eastern Pkwy, Brooklyn, NY 11213', 'Privacy Policy: https://mashpia.com/privacy_policy.php', 'To unsubscribe from these emails, visit https://mashpia.com/unsubscribe.php'] as $needle) {
+    check('alert: footer has ' . $needle, strpos($mail['body'], $needle) !== false, substr($mail['body'], -200));
+}
 foreach (['Mendel Cohen', 'serial 555001', "School:   Sample Day School\n", 'Sukkos day 2 -- Sunday, September 27, 2026', 'Shakes:   60', 'Minutes:  45', 'Whole shul', '/mivtzoim/lulav/admin'] as $needle) {
     check('alert: body has ' . $needle, strpos($mail['body'], $needle) !== false, $mail['body']);
 }
@@ -422,9 +425,68 @@ check("zip: another school's token is refused", $otherSchool['status'] === 401, 
 $handoff = req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest(['type' => 'handoff'] + $good)));
 check('zip: a different kind of token is refused', $handoff['status'] === 401, $handoff['body']);
 
+
+// --- the upload-time window ---
+$ny = static function (string $when): int { return (int) strtotime($when . ' America/New_York'); };
+
+$times = req('GET', '/schools/61/photos/approved-times', null, 'admin');
+check('window: admin gets upload times', $times['status'] === 200, $times['body']);
+check('window: one per downloadable photo, oldest first (missing file left out)',
+    ($times['json']['times'] ?? null) === [$ny('2026-09-27 19:30'), $ny('2026-09-28 10:00'), $ny('2026-09-28 20:00')],
+    $times['body']);
+checkClean('approved-times', $times);
+check('window: a soldier cannot list them', req('GET', '/schools/61/photos/approved-times', null, 'kid')['status'] === 403);
+$hiddenTimes = req('GET', '/schools/61/photos/approved-times', null, 'admin', ['LULAV_TEST_HIDE_9002' => '1']);
+check('window: a removed entry has no time listed', count($hiddenTimes['json']['times'] ?? []) === 2, $hiddenTimes['body']);
+
+$monday = req('POST', '/schools/61/photos/download-link', ['from' => $ny('2026-09-28 00:00'), 'to' => $ny('2026-09-28 23:59:59')], 'admin');
+check('window: Monday only counts two', ($monday['json']['count'] ?? null) === 2, $monday['body']);
+$mondayZip = zipEntries(req('GET', substr((string) ($monday['json']['url'] ?? ''), strlen('/mivtzoim/lulav/api'))));
+// Numbered by what is in this zip: one of Mendel's that day, so no " - 1".
+check('window: Monday zip holds exactly those two',
+    array_keys($mondayZip) === ['Levi Katz - Day 2.jpg', 'Mendel Cohen - Day 2.png'],
+    json_encode(array_keys($mondayZip)));
+
+$edges = req('POST', '/schools/61/photos/download-link', ['from' => $ny('2026-09-27 19:30'), 'to' => $ny('2026-09-28 10:00')], 'admin');
+check('window: both ends are inclusive', ($edges['json']['count'] ?? null) === 2, $edges['body']);
+
+$openEnded = req('POST', '/schools/61/photos/download-link', ['from' => $ny('2026-09-28 12:00')], 'admin');
+check('window: an open "to" runs to the latest', ($openEnded['json']['count'] ?? null) === 1, $openEnded['body']);
+
+$empty = req('POST', '/schools/61/photos/download-link', ['from' => $ny('2026-10-01 00:00'), 'to' => $ny('2026-10-01 23:59')], 'admin');
+check('window: nothing in range is a message', $empty['status'] === 404 && strpos((string) ($empty['json']['error'] ?? ''), 'in that range') !== false, $empty['body']);
+
+$backwards = req('POST', '/schools/61/photos/download-link', ['from' => $ny('2026-09-28 00:00'), 'to' => $ny('2026-09-27 00:00')], 'admin');
+check('window: from after to is refused', $backwards['status'] === 422, $backwards['body']);
+$junk = req('POST', '/schools/61/photos/download-link', ['from' => 'yesterday'], 'admin');
+check('window: a non-number is refused', $junk['status'] === 422, $junk['body']);
+
+// The window is inside the signature: a token signed for Sunday only yields Sunday.
+$sundayToken = signTest(['from' => $ny('2026-09-27 00:00'), 'to' => $ny('2026-09-27 23:59:59')] + $good);
+$sundayZip = zipEntries(req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode($sundayToken)));
+check('window: the zip honours the signed window', array_keys($sundayZip) === ['Mendel Cohen - Day 2.jpg'], json_encode(array_keys($sundayZip)));
+
 // The zip token must never work as a login.
 $asSession = req('GET', '/schools/61/report-rows', null, 'bearer:' . signTest($good));
 check('zip: the download token is not a session', $asSession['status'] === 401, $asSession['body']);
+
+
+echo "== sample send script ==\n";
+
+// The real mail() path, into a file: headers and footer as a recipient sees them.
+// Also guards the script's copy of lulavSendMail() and the constants it needs.
+$eml = $sandbox . '/sample.eml';
+$output = (string) shell_exec(sprintf('php -d %s %s naftolir@gmail.com 2>&1',
+    escapeshellarg('sendmail_path=cat > ' . $eml), escapeshellarg(dirname(__DIR__) . '/send-sample-alert.php')));
+$sent = (string) @file_get_contents($eml);
+check('sample: runs without warnings', stripos($output, 'warning') === false && stripos($output, 'error') === false, $output);
+check('sample: addressed only to the given address', strpos($sent, "To: naftolir@gmail.com\n") !== false && strpos($sent, 'Cc:') === false, substr($sent, 0, 300));
+check('sample: List-Unsubscribe header', strpos($sent, 'List-Unsubscribe: <https://mashpia.com/unsubscribe.php>, <mailto:cth@mashpia.com?subject=unsubscribe>') !== false, substr($sent, 0, 400));
+check('sample: not the one-click form', strpos($sent, 'List-Unsubscribe-Post') === false);
+check('sample: footer address', strpos($sent, "792 Eastern Pkwy, Brooklyn, NY 11213\n") !== false, substr($sent, -250));
+check('sample: footer privacy policy', strpos($sent, "Privacy Policy: https://mashpia.com/privacy_policy.php\n") !== false, substr($sent, -250));
+check('sample: footer unsubscribe', strpos($sent, "To unsubscribe from these emails, visit https://mashpia.com/unsubscribe.php\n") !== false, substr($sent, -250));
+check('sample: no link to the pages that are broken', strpos($sent, 'unsubscribe.html') === false && strpos($sent, 'privacy.html') === false);
 
 echo "== not found ==\n";
 $missing = req('GET', '/nope');

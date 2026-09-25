@@ -47,7 +47,13 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
    session is refused. Admins and the public pages are unaffected. Set
    `LULAV_KID_LOGIN_OPENS_AT` to any zoned time (`2000-01-01 00:00 UTC` to open
    it now) to override — e.g. to try the soldier flow locally before then.
-10. **High-number alerts.** A day saved at 50+ shakes or 180+ minutes is
+10. **Every Lulav email** ends with Mashpia's standard footer -- HQ's address,
+    the privacy policy and an unsubscribe link -- and carries a
+    `List-Unsubscribe` header, as spam filters expect of mail that is not bulk
+    (`LULAV_MAIL_*` in `bootstrap.php`). Its links go to `privacy_policy.php`
+    and `unsubscribe.php`: the shared footer's own `privacy.html` is an empty
+    page and its `unsubscribe.html` is a 404.
+11. **High-number alerts.** A day saved at 50+ shakes or 180+ minutes is
     emailed to HQ and Shimmy, Cc the school's Base Commanders (see
     `LULAV_ALERT_*` and `lulavBaseCommanderEmails()` in `index.php`). Set
     `LULAV_MAIL_CAPTURE` to a file path to write alerts there as JSON lines
@@ -209,9 +215,14 @@ every key, so its behaviour is unchanged.
 - `POST /shakes/:id/photos/approve` — approve every photo in a daily report
 - `POST /shakes/:id/photos/reject` — reject every photo in a daily report
 - `POST /schools/:id/photos/approve-all` — approve all pending daily reports
+- `GET /schools/:id/photos/approved-times` — authorized school/HQ admin;
+  `{ times }`, the upload time (Unix seconds, oldest first) of each photo the
+  zip below would hold. The admin page builds its date range from these
 - `POST /schools/:id/photos/download-link` — authorized school/HQ admin;
-  `{ url, expiresIn, count }`, a two-minute signed link to the zip below (404
-  when there are no approved photos)
+  optional `{ from, to }` (Unix seconds, inclusive, either end open) →
+  `{ url, expiresIn, count }`, a two-minute signed link to the zip below with
+  the range sealed inside the signature (404 when nothing is in range, 422 for
+  a range that runs backwards)
 - `GET /schools/:id/photos/approved.zip?token=…` — every approved photo on the
   school's entries still on record, named `First Last - Day N.jpg`, built with
   `ZipArchive` from the files on disk and stored uncompressed. The token stands

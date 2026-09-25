@@ -965,6 +965,15 @@ function lulavCacheFlush(): void
     }
 }
 
+// The footer every Lulav email carries: Mashpia's standard email footer
+// (addFooterToMessage() in emails/sendEmail.php) -- HQ's address, the privacy
+// policy and an unsubscribe link. Its two links are pointed at the pages that
+// work: that footer's unsubscribe.html is a 404, and its privacy.html holds
+// only the words "Privacy Policy"; privacy_policy.php is the real policy.
+const LULAV_MAIL_ADDRESS = '792 Eastern Pkwy, Brooklyn, NY 11213';
+const LULAV_MAIL_PRIVACY = 'https://mashpia.com/privacy_policy.php';
+const LULAV_MAIL_UNSUBSCRIBE = 'https://mashpia.com/unsubscribe.php';
+
 /**
  * Sends one plain-text email through PHP's mail(), the way the rest of Mashpia
  * does (classes/email.php turns on SMTP debug output, which would land in the
@@ -996,6 +1005,13 @@ function lulavSendMail(array $to, string $subject, string $body, array $cc = [])
     }
     // Header injection: nothing user-supplied may carry a line break.
     $subject = trim(preg_replace('/[\r\n]+/', ' ', $subject));
+    // Mail with no postal address, privacy policy or unsubscribe link reads as
+    // bulk mail to spam filters.
+    $body = rtrim($body) . "\n\n--\n"
+        . '(c) ' . date('Y') . " Tzivos Hashem\n"
+        . LULAV_MAIL_ADDRESS . "\n"
+        . 'Privacy Policy: ' . LULAV_MAIL_PRIVACY . "\n"
+        . 'To unsubscribe from these emails, visit ' . LULAV_MAIL_UNSUBSCRIBE . "\n";
 
     $capture = lulavEnv('LULAV_MAIL_CAPTURE');
     if ($capture !== '') {
@@ -1006,6 +1022,10 @@ function lulavSendMail(array $to, string $subject, string $body, array $cc = [])
     $headers = [
         'From: Mivtza Lulav <cth@mashpia.com>',
         'Reply-To: cth@mashpia.com',
+        // The header Gmail and Yahoo look for, beyond the footer. Not the
+        // one-click (List-Unsubscribe-Post) form: that promises an automatic
+        // unsubscribe, and unsubscribe.php records nothing.
+        'List-Unsubscribe: <' . LULAV_MAIL_UNSUBSCRIBE . '>, <mailto:cth@mashpia.com?subject=unsubscribe>',
     ];
     if ($cc) {
         $headers[] = 'Cc: ' . implode(', ', $cc);

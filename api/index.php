@@ -1775,15 +1775,21 @@ const LULAV_PHOTO_ZIP_TTL = 120;
  * Only what the public page shows: approved photos whose file is still on disk,
  * on entries an admin has not removed ("Remove entry" leaves the photos
  * approved, but the entry is hidden). Named "First Last - Day N.jpg", with
- * " - 2", " - 3" when a day has several, in soldier and day order.
+ * " - 2", " - 3" when a day has several, in soldier and day order. Each carries
+ * 'uploaded', its upload time as a Unix timestamp.
+ *
+ * $from and $to (Unix timestamps, inclusive) keep only photos uploaded in that
+ * window. Timestamps, not dates: the admin picks times in their own timezone,
+ * the browser turns them into instants, and nothing here has to guess a zone.
  */
-function lulavApprovedPhotoFiles(int $schoolId): array
+function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = null): array
 {
     global $MASHPIA_DB;
     lulavRequireTables(['lulav_photos']);
     $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
-        "SELECT user_id, day_number, file_name, mime_type
+        "SELECT user_id, day_number, file_name, mime_type,
+                UNIX_TIMESTAMP(created_at) AS uploaded_at
          FROM lulav_photos
          WHERE mivtzoim_id = :campaign AND school_year = :school_year
            AND school_id = :school AND status = 'approved'
@@ -1808,6 +1814,10 @@ function lulavApprovedPhotoFiles(int $schoolId): array
     foreach ($photos as $photo) {
         $userId = (int) $photo['user_id'];
         $day = (int) $photo['day_number'];
+        $uploaded = (int) $photo['uploaded_at'];
+        if (($from !== null && $uploaded < $from) || ($to !== null && $uploaded > $to)) {
+            continue;
+        }
         if (!empty($marks[$userId][$day]['day']['hidden'])) {
             continue;
         }
@@ -1824,6 +1834,7 @@ function lulavApprovedPhotoFiles(int $schoolId): array
             'who' => $who,
             'day' => $day,
             'ext' => $extensions[$photo['mime_type']] ?? 'jpg',
+            'uploaded' => $uploaded,
         ];
     }
     ksort($groups, SORT_NATURAL | SORT_FLAG_CASE);
@@ -1839,20 +1850,26 @@ function lulavApprovedPhotoFiles(int $schoolId): array
                 $name = $base . ' (' . $n . ').' . $file['ext'];
             }
             $used[strtolower($name)] = true;
-            $files[] = ['path' => $file['path'], 'name' => $name];
+            $files[] = ['path' => $file['path'], 'name' => $name, 'uploaded' => $file['uploaded']];
         }
     }
     return $files;
 }
 
-/** A signed link that downloads one school's approved photos, for a couple of minutes. */
-function lulavIssuePhotoZipLink(int $schoolId, int $adminId): string
+/**
+ * A signed link that downloads one school's approved photos, for a couple of
+ * minutes. The upload window travels inside the signature, so it cannot be
+ * widened by editing the link.
+ */
+function lulavIssuePhotoZipLink(int $schoolId, int $adminId, ?int $from = null, ?int $to = null): string
 {
     $token = lulavSignPayload([
         'v' => 1,
         'type' => 'photozip',
         'id' => $schoolId,
         'admin' => $adminId,
+        'from' => $from,
+        'to' => $to,
         'iat' => time(),
         'exp' => time() + LULAV_PHOTO_ZIP_TTL,
     ]);
@@ -1884,9 +1901,11 @@ function lulavSendPhotoZip(int $schoolId): void
     if (!class_exists('ZipArchive')) {
         lulavError('Photo downloads are not available on this server.', 503);
     }
-    $files = lulavApprovedPhotoFiles($schoolId);
+    $from = isset($payload['from']) ? (int) $payload['from'] : null;
+    $to = isset($payload['to']) ? (int) $payload['to'] : null;
+    $files = lulavApprovedPhotoFiles($schoolId, $from, $to);
     if (!$files) {
-        lulavError('There are no approved photos to download yet.', 404);
+        lulavError('There are no approved photos in that range.', 404);
     }
 
     set_time_limit(0);
@@ -2325,18 +2344,47 @@ try {
         lulavCacheFlush();
         lulavJson(['approved' => $count]);
     }
+    if ($method === 'GET' && preg_match('#^/schools/(\d+)/photos/approved-times$#', $path, $match)) {
+        // When each downloadable photo was uploaded, oldest first: the page
+        // builds its date choices and live count from these, and shows the
+        // download section only when there is anything to download.
+        $actor = lulavRequireActor(['admin']);
+        $schoolId = (int) $match[1];
+        lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
+        $times = array_column(lulavApprovedPhotoFiles($schoolId), 'uploaded');
+        sort($times);
+        lulavJson(['times' => $times]);
+    }
     if ($method === 'POST' && preg_match('#^/schools/(\d+)/photos/download-link$#', $path, $match)) {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
         lulavRequireEligibleSchool($schoolId);
-        // Counted now, so an empty school gets a message rather than a link to a 404.
-        $count = count(lulavApprovedPhotoFiles($schoolId));
+        // An optional upload window, as Unix timestamps; either end may be open.
+        $input = lulavInput();
+        $window = [];
+        foreach (['from', 'to'] as $end) {
+            $value = $input[$end] ?? null;
+            if ($value === null || $value === '') {
+                $window[$end] = null;
+                continue;
+            }
+            if (!is_numeric($value) || (int) $value < 0) {
+                lulavError('The date range is not valid.', 422);
+            }
+            $window[$end] = (int) $value;
+        }
+        if ($window['from'] !== null && $window['to'] !== null && $window['from'] > $window['to']) {
+            lulavError('The "from" time must be before the "to" time.', 422);
+        }
+        // Counted now, so an empty range gets a message rather than a link to a 404.
+        $count = count(lulavApprovedPhotoFiles($schoolId, $window['from'], $window['to']));
         if ($count === 0) {
-            lulavError('There are no approved photos to download yet.', 404);
+            lulavError('There are no approved photos in that range.', 404);
         }
         lulavJson([
-            'url' => lulavIssuePhotoZipLink($schoolId, (int) $actor['id']),
+            'url' => lulavIssuePhotoZipLink($schoolId, (int) $actor['id'], $window['from'], $window['to']),
             'expiresIn' => LULAV_PHOTO_ZIP_TTL,
             'count' => $count,
         ]);

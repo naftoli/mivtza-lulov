@@ -170,15 +170,17 @@ function lulav_test_patterns(): array
         // A school's approved photos, for the zip download: Mendel has two on
         // day 2, Levi one, and one row whose file is not on disk.
         // LULAV_TEST_NO_APPROVED=1 models a school with none.
-        ['/SELECT user_id, day_number, file_name, mime_type FROM lulav_photos/i', static function (): array {
+        // Upload times: Mendel's first on Sun 27 Sep 7:30 PM, his second and
+        // Levi's on Mon 28 Sep, 10:00 AM and 8:00 PM (New York time).
+        ['/SELECT user_id, day_number, file_name, mime_type, UNIX_TIMESTAMP\(created_at\) AS uploaded_at FROM lulav_photos/i', static function (): array {
             if (getenv('LULAV_TEST_NO_APPROVED') === '1') {
                 return [];
             }
             return [
-                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-1.jpg', 'mime_type' => 'image/jpeg'],
-                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-2.png', 'mime_type' => 'image/png'],
-                ['user_id' => 9002, 'day_number' => 2, 'file_name' => 'zip-levi-1.jpg', 'mime_type' => 'image/jpeg'],
-                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-missing.jpg', 'mime_type' => 'image/jpeg'],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-1.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-27 19:30 America/New_York')],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-2.png', 'mime_type' => 'image/png', 'uploaded_at' => strtotime('2026-09-28 10:00 America/New_York')],
+                ['user_id' => 9002, 'day_number' => 2, 'file_name' => 'zip-levi-1.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-28 20:00 America/New_York')],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-missing.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-28 12:00 America/New_York')],
             ];
         }],
         ['/SELECT \* FROM lulav_photos/i', lulav_test_photo_rows()],

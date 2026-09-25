@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   setShakeHidden, resetDemoData, getSchoolReportRows,
-  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink,
+  getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink, getApprovedPhotoTimes,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
@@ -14,7 +14,7 @@ const prettyDate = (iso) =>
 import ReportGrid from '../components/ReportGrid.jsx'
 import { PhotoLightbox } from '../components/PhotoWall.jsx'
 import { useLiveData } from '../lib/useLiveData.js'
-import { pendingPhotoItems, approvedPhotos } from '../lib/photos.js'
+import { pendingPhotoItems } from '../lib/photos.js'
 import { fmt, timeAgo } from '../lib/format.js'
 import { isHighEntry, highReasons } from '../lib/highNumber.js'
 import { asset } from '../lib/asset.js'
@@ -139,6 +139,10 @@ function SchoolAdmin({ schoolId, isHQ }) {
   // Pending photos come back inline, so this is the slowest read on the page. It
   // loads on its own and only its section waits for it.
   const { data: pending, error: pendingError, reload: reloadPending } = useLiveData(() => getPendingPhotos(schoolId), [schoolId])
+  // Upload times of the approved photos: the download section shows only when
+  // there are any, and reloads with everything else after an approval.
+  const { data: photoTimes } = useLiveData(() => getApprovedPhotoTimes(schoolId), [schoolId])
+  const hasApproved = Array.isArray(photoTimes) && photoTimes.length > 0
 
   if (!school && schoolError) return <div className="mt-6"><ErrorNote error={schoolError} onRetry={reloadSchool} what="this school" /></div>
   if (!school) return <div className="mt-6"><Spinner /></div>
@@ -148,7 +152,12 @@ function SchoolAdmin({ schoolId, isHQ }) {
       <FlaggedBanner shakes={shakes} />
       <CampaignSettings school={school} isHQ={isHQ} />
       {/* Photo Approvals above the roster; "Remove entry" moderation right under it. */}
-      <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} entries={shakes} />
+      {/* Download sits to the right of Photo Approvals on wide screens, under it
+          on narrow ones -- and only when there is something to download. */}
+      <div className={hasApproved ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}>
+        <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} />
+        {hasApproved && <PhotoDownload schoolId={schoolId} times={photoTimes} />}
+      </div>
       <Moderation shakes={shakes} error={shakesError} onRetry={reloadShakes} />
       <Roster kids={kids || []} />
       <ReportGrid rows={reportRows || []} />
@@ -338,36 +347,11 @@ function Roster({ kids }) {
   )
 }
 
-function PhotoApprovals({ schoolId, shakes, error, onRetry, entries }) {
+function PhotoApprovals({ schoolId, shakes, error, onRetry }) {
   const [active, setActive] = useState(null) // photo open in the lightbox
   const [busy, setBusy] = useState(false)
   const [allError, setAllError] = useState(null)
-  const [zipping, setZipping] = useState(false)
   const loaded = Array.isArray(shakes)
-  // Approved photos on entries still on record: the same set the server zips
-  // (it also leaves out a photo whose file is missing, so its count can be lower).
-  const approvedCount = (entries || []).reduce((n, s) => n + (s.hidden ? 0 : approvedPhotos(s).length), 0)
-
-  // The server builds the zip from the files on its disk. The download itself is
-  // a plain link, which cannot send the admin's token, so first ask for a
-  // two-minute signed link and then open it.
-  async function downloadApproved() {
-    setZipping(true)
-    setAllError(null)
-    try {
-      const { url } = await getPhotoZipLink(schoolId)
-      const link = document.createElement('a')
-      link.href = url
-      link.rel = 'noopener'
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-    } catch (e) {
-      setAllError(`Could not download the photos — ${e.message}`)
-    } finally {
-      setZipping(false)
-    }
-  }
 
   async function approveAll() {
     if (!confirm(`Approve all ${shakes.length} pending entries? Every photo in them will show on the public page.`)) return
@@ -384,21 +368,16 @@ function PhotoApprovals({ schoolId, shakes, error, onRetry, entries }) {
 
   return (
     <Section title="Photo Approvals"
-      right={
+      right={loaded && (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {approvedCount > 0 && (
-            <Button variant="outline" className={smallBtn} disabled={zipping} onClick={downloadApproved}>
-              {zipping ? 'Preparing…' : `⬇ Download approved photos (${approvedCount})`}
-            </Button>
-          )}
-          {loaded && <Pill>{shakes.length} pending</Pill>}
-          {loaded && shakes.length > 0 && (
+          <Pill>{shakes.length} pending</Pill>
+          {shakes.length > 0 && (
             <Button variant="navy" className={smallBtn} disabled={busy} onClick={approveAll}>
               {busy ? 'Approving…' : `✓ Approve all (${shakes.length})`}
             </Button>
           )}
         </div>
-      }>
+      )}>
       {allError && <p role="alert" className="mb-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{allError}</p>}
       {!loaded ? (
         // Only this section waits on the photos; the rest of the page is already up.
@@ -414,6 +393,95 @@ function PhotoApprovals({ schoolId, shakes, error, onRetry, entries }) {
         </>
       )}
       <PhotoLightbox photo={active} onClose={() => setActive(null)} />
+    </Section>
+  )
+}
+
+// Hourly times for the range dropdowns, plus 11:59 PM so "to" can reach the end
+// of a day. Values are 24-hour "HH:MM", labels follow the admin's locale.
+const RANGE_TIMES = [...Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`), '23:59']
+const timeLabel = (hhmm) =>
+  new Date(`2000-01-01T${hhmm}:00`).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+// A timestamp's calendar date in the admin's own timezone, as "YYYY-MM-DD".
+const localDate = (seconds) => {
+  const d = new Date(seconds * 1000)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const dateLabel = (ymd) =>
+  new Date(`${ymd}T00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+
+// Download the approved photos uploaded between two dates and times, as one zip.
+// Only shown when the school has approved photos. The choices are the days
+// photos were actually uploaded; times are the admin's local time, turned into
+// exact instants here so the server never has to guess a timezone.
+function PhotoDownload({ schoolId, times }) {
+  const dates = useMemo(() => [...new Set(times.map(localDate))], [times])
+  const [fromDate, setFromDate] = useState(null)
+  const [fromTime, setFromTime] = useState('00:00')
+  const [toDate, setToDate] = useState(null)
+  const [toTime, setToTime] = useState('23:59')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  // Default to the whole range, and fall back to it if a chosen day drops out
+  // (its last photo removed, say).
+  const from = dates.includes(fromDate) ? fromDate : dates[0]
+  const to = dates.includes(toDate) ? toDate : dates[dates.length - 1]
+  const fromTs = Math.floor(new Date(`${from}T${fromTime}:00`).getTime() / 1000)
+  const toTs = Math.floor(new Date(`${to}T${toTime}:59`).getTime() / 1000) // through the end of that minute
+  const backwards = fromTs > toTs
+  const count = backwards ? 0 : times.filter((t) => t >= fromTs && t <= toTs).length
+
+  // The server builds the zip from the files on its disk. The download itself is
+  // a plain link, which cannot send the admin's token, so first ask for a
+  // two-minute signed link for this range and then open it.
+  async function download() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { url } = await getPhotoZipLink(schoolId, { from: fromTs, to: toTs })
+      const link = document.createElement('a')
+      link.href = url
+      link.rel = 'noopener'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (e) {
+      setError(`Could not download the photos — ${e.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const select = 'min-w-0 flex-1 rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-blue focus:ring-2 focus:ring-blue/25'
+  const row = (name, date, setDate, time, setTime) => (
+    <div>
+      <span className={label}>{name}</span>
+      <div className="mt-1 flex gap-2">
+        <select aria-label={`${name} date`} value={date} onChange={(e) => setDate(e.target.value)} className={select}>
+          {dates.map((d) => <option key={d} value={d}>{dateLabel(d)}</option>)}
+        </select>
+        <select aria-label={`${name} time`} value={time} onChange={(e) => setTime(e.target.value)} className={select}>
+          {RANGE_TIMES.map((t) => <option key={t} value={t}>{timeLabel(t)}</option>)}
+        </select>
+      </div>
+    </div>
+  )
+
+  return (
+    <Section title="Download Photos">
+      <p className="mb-4 text-xs text-muted">Approved photos, by when they were uploaded. They download as one zip, named by soldier and day.</p>
+      <div className="space-y-3">
+        {row('From', from, setFromDate, fromTime, setFromTime)}
+        {row('To', to, setToDate, toTime, setToTime)}
+      </div>
+      {backwards
+        ? <p role="alert" className="mt-3 text-sm font-semibold text-red">“From” must be before “To”.</p>
+        : <p className="mt-3 text-sm text-navy"><strong>{count}</strong> of {times.length} approved photo{times.length === 1 ? '' : 's'} in this range</p>}
+      {error && <p role="alert" className="mt-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
+      <Button variant="navy" className={`${smallBtn} mt-4 w-full`} disabled={busy || count === 0} onClick={download}>
+        {busy ? 'Preparing…' : `⬇ Download ${count} photo${count === 1 ? '' : 's'}`}
+      </Button>
     </Section>
   )
 }

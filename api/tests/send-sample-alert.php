@@ -32,10 +32,11 @@ function lulavEnv(string $name, string $default = ''): string
     return $value === false || $value === '' ? $default : (string) $value;
 }
 $source = (string) file_get_contents(dirname(__DIR__) . '/bootstrap.php');
-$start = strpos($source, 'function lulavSendMail(');
+// From the footer constants just above it, which it uses.
+$start = strpos($source, 'const LULAV_MAIL_ADDRESS');
 $end = strpos($source, 'function lulavWithUserLock(');
 if ($start === false || $end === false) {
-    fwrite(STDERR, "Could not find lulavSendMail() in bootstrap.php\n");
+    fwrite(STDERR, "Could not find lulavSendMail() and its constants in bootstrap.php\n");
     exit(1);
 }
 eval(substr($source, $start, $end - $start));
