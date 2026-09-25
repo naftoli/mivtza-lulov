@@ -40,13 +40,19 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
 7. If the app is hosted on another origin, set `LULAV_ALLOWED_ORIGINS` to a
    comma-separated allowlist. Same-origin requests work without configuration.
 8. Optionally set `LULAV_TOKEN_TTL` in seconds. The default is 43,200 (12 hours).
-9. **Soldier sign-in opens at a fixed moment.** Before sunset in Crown Heights
-   on `LULAV_KID_LOGIN_OPENS_DATE` (in `bootstrap.php`; currently Sunday
-   27 September 2026, 6:44 PM EDT), `/soldier/login`, `/soldier/handoff` and
-   `/parent/handoff` answer 403 with the opening time, and any existing soldier
-   session is refused. Admins and the public pages are unaffected. Set
+9. **Soldier sign-in opens at each school's own Motzei Yom Tov.** Until tzeis
+   (8.5°, as `src/lib/tzeis.js` computes it) at the school on
+   `LULAV_KID_LOGIN_OPENS_DATE` (in `bootstrap.php`; currently Sunday
+   27 September 2026 -- 7:27 PM EDT in Crown Heights), `/soldier/login`,
+   `/soldier/handoff` and `/parent/handoff` answer 403 with the opening time in
+   the school's own zone, and any existing soldier session is refused. The
+   coordinates come from `school-locations.php`, by school_id; a school missing
+   there waits until `LULAV_KID_LOGIN_FALLBACK_AT` (Monday 28 September, 06:00
+   UTC), after Yom Tov is over everywhere -- so add a school there when it
+   joins. Admins and the public pages are unaffected. Set
    `LULAV_KID_LOGIN_OPENS_AT` to any zoned time (`2000-01-01 00:00 UTC` to open
-   it now) to override — e.g. to try the soldier flow locally before then.
+   it now) to open every school at that one moment instead -- e.g. to try the
+   soldier flow locally before then.
 10. **Every Lulav email** ends with Mashpia's standard footer -- HQ's address,
     the privacy policy and an unsubscribe link -- and carries a
     `List-Unsubscribe` header, as spam filters expect of mail that is not bulk
@@ -238,12 +244,32 @@ body at 16 MB.
 
 ## Tests
 
-Two suites, for two different jobs.
-
 ```bash
-php api/tests/mock/run.php          # no server, no database, no setup
-LULAV_TEST_BASE=https://… php api/tests/run.php   # against a deployed API
+npm test                  # the two below: no server, no database, no setup
+npm run test:mock         # the API, against a fake database   (php api/tests/mock/run.php)
+npm run test:web          # the browser's logic                (Node 18+)
+npm run test:coverage     # the API suite, plus what it never reached
+npm run test:api          # end to end, against a deployed API (LULAV_TEST_BASE=https://…)
 ```
+
+`npm run test:coverage` marks the sandbox copy of `bootstrap.php` and
+`index.php` -- each function, route and `lulavError()` exit -- runs the mock
+suite, and lists anything not reached. There is no Xdebug or PCOV here, so this
+is how coverage is measured. Every function and route is reached; of 78 error
+exits, 71 are. The other seven cannot be reached by a test: `bootstrap.php`'s
+"School administrator access required" (every caller has already required an
+admin), the two "teacher-grid task mapping is incomplete" exits inside
+`lulavValidateMarkTargets()` and `lulavMapFor()` (the map is refused one step
+earlier), and the four in `lulavSendPhotoZip()` that need PHP's zip extension
+missing or the temp file to fail.
+
+`tests/web` covers the logic in `src/lib/` that runs in the browser: the Yom Tov
+write-lock (checked per community against an independent sunset calculation,
+and that an unplaced school is never less strict than any known one), the
+Sukkos calendar, the high-number flags, photos and formatting. It also holds
+the rules that exist in both languages to the PHP side -- the high-number
+limits, goal percent (both functions run over the same grid) and the sign-in
+gate's date -- so changing one side without the other fails the run.
 
 `tests/mock` runs the real `bootstrap.php` and `index.php` inside a throwaway
 tree in the system temp directory, against a fake PDO that answers by matching
@@ -259,3 +285,15 @@ database with `EXPLAIN`, and use `tests/run.php` for an end-to-end pass.
 
 The fixtures mirror production: six campaign days numbered 2–7, two schools,
 three children. `tests/mock/fixtures.php` is the place to add a case.
+
+For a refactor that should not change any query, set `LULAV_TEST_SQL_LOG` to a
+file and the fake PDO appends every statement it runs, with its parameter
+names. Run once before and once after, and the two `sort -u` outputs should
+be identical:
+
+```bash
+LULAV_TEST_SQL_LOG=/tmp/before.log php api/tests/mock/run.php
+# ...refactor...
+LULAV_TEST_SQL_LOG=/tmp/after.log php api/tests/mock/run.php
+diff <(sort -u /tmp/before.log) <(sort -u /tmp/after.log)
+```

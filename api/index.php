@@ -23,17 +23,13 @@ function lulavCampaignTaskMap(): array
         return $map;
     }
     lulavRequireTables(['lulav_api_task_map']);
-    $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
         'SELECT field_name, day_number, grid_id, start_date, end_date
          FROM lulav_api_task_map
          WHERE mivtzoim_id = :campaign AND school_year = :school_year
          ORDER BY field_name, day_number'
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-    ]);
+    $stmt->execute(lulavCampaignParams());
     return $map = $stmt->fetchAll();
 }
 
@@ -67,7 +63,6 @@ function lulavCampaignTaskIds(): array
         return $resolved;
     }
     lulavRequireTables(['lulav_api_task_map']);
-    $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
         'SELECT map.field_name, map.day_number, task.date_task_id
          FROM lulav_api_task_map map
@@ -79,10 +74,7 @@ function lulavCampaignTaskIds(): array
          WHERE map.mivtzoim_id = :campaign
            AND map.school_year = :school_year'
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-    ]);
+    $stmt->execute(lulavCampaignParams());
 
     $byField = [];
     $flat = ['day' => [], 'minutes' => [], 'all' => []];
@@ -177,16 +169,12 @@ function lulavPerKidGoal(): int
     if ($cached !== null) {
         return $cached;
     }
-    $campaign = lulavCampaign();
     lulavRequireTables(['lulav_campaign_settings']);
     $stmt = $MASHPIA_DB->prepare(
         'SELECT per_kid_goal FROM lulav_campaign_settings
          WHERE mivtzoim_id = :campaign AND school_year = :school_year'
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-    ]);
+    $stmt->execute(lulavCampaignParams());
     $goal = $stmt->fetchColumn();
     return $cached = ($goal === false ? 3 : max(1, (int) $goal));
 }
@@ -272,11 +260,7 @@ function lulavSchoolPhotoCounts(?int $onlyId = null): array
 {
     global $MASHPIA_DB;
     lulavRequireTables(['lulav_photos']);
-    $campaign = lulavCampaign();
-    $params = [
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-    ];
+    $params = lulavCampaignParams();
     $sql = "SELECT school_id, COUNT(*) AS total
             FROM lulav_photos
             WHERE mivtzoim_id = :campaign
@@ -428,10 +412,15 @@ function lulavSchoolRows(?int $onlyId = null): array
         } elseif ($logoId > 0) {
             $logo = '/file_view.php?id=' . $logoId;
         }
+        // campaignLock.js reopens logging at this spot's tzeis, as the API's
+        // sign-in gate does; null leaves it to the city map or the worldwide unlock.
+        $where = lulavSchoolLocation($schoolId);
         $rows[] = [
             'id' => (string) $schoolId,
             'name' => $row['school_name'],
             'city' => $row['school_city'],
+            'lat' => $where ? $where['lat'] : null,
+            'lng' => $where ? $where['lng'] : null,
             'logo' => $logo,
             'kidCount' => $kidCount,
             'soldierCount' => $kidCount,
@@ -467,14 +456,7 @@ function lulavKidsForSchool(int $schoolId): array
         "SELECT u.user_id, u.user_serial, u.first, u.last, u.first_he, u.last_he,
                 u.dob, u.gender, u.school_id, u.class_id, u.mobile_pic, u.user_photo_id,
                 c.class_grade, c.class_sub, s.school_name,
-                (SELECT r.rank_name
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
-                  WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT rm.rank_ord
-                   FROM rank_marks rm
-                  WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
+                " . lulavRankColumns('u') . "
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
@@ -642,17 +624,13 @@ function lulavDayReportIdentity(string $reportId): ?array
 function lulavLoadDayPhotos(?int $schoolId, ?int $userId, bool $allowPending): array
 {
     global $MASHPIA_DB;
-    $campaign = lulavCampaign();
     lulavRequireTables(['lulav_photos']);
     $sql = "SELECT user_id, day_number, public_id, status, mime_type, file_name
             FROM lulav_photos
             WHERE mivtzoim_id = :campaign
               AND school_year = :school_year
               AND status != 'rejected'";
-    $params = [
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
-    ];
+    $params = lulavCampaignParams();
     if ($userId !== null) {
         $sql .= ' AND user_id = :user';
         $params[':user'] = $userId;
@@ -704,7 +682,6 @@ function lulavDayPhotos(int $userId, int $day, bool $allowPending): array
 function lulavStoreDayPhoto(string $dataUrl, array $kid, int $day): void
 {
     global $MASHPIA_DB;
-    $campaign = lulavCampaign();
     if (!preg_match('#^data:(image/(?:jpeg|png|webp));base64,(.+)$#s', $dataUrl, $matches)) {
         lulavError('Photos must be JPEG, PNG, or WebP data URLs.', 422);
     }
@@ -719,9 +696,7 @@ function lulavStoreDayPhoto(string $dataUrl, array $kid, int $day): void
            AND school_year = :school_year
            AND day_number = :day AND content_hash = :hash'
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
+    $stmt->execute(lulavCampaignParams() + [
         ':user' => $kid['user_id'],
         ':day' => $day,
         ':hash' => $hash,
@@ -744,9 +719,8 @@ function lulavStoreDayPhoto(string $dataUrl, array $kid, int $day): void
         && !is_dir(LULAV_PHOTO_ROOT)) {
         lulavError('Photo storage is unavailable.', 503);
     }
-    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
     $publicId = bin2hex(random_bytes(16));
-    $fileName = $publicId . '.' . $extensions[$matches[1]];
+    $fileName = $publicId . '.' . LULAV_PHOTO_EXTENSIONS[$matches[1]];
     if (file_put_contents(LULAV_PHOTO_ROOT . '/' . $fileName, $binary, LOCK_EX) === false) {
         lulavError('The photo could not be stored.', 500);
     }
@@ -758,10 +732,8 @@ function lulavStoreDayPhoto(string $dataUrl, array $kid, int $day): void
              VALUES
                 (:public, :campaign, :school_year, :user, :school, :day, :file, :mime, :hash)'
         );
-        $stmt->execute([
+        $stmt->execute(lulavCampaignParams() + [
             ':public' => $publicId,
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
             ':user' => $kid['user_id'],
             ':school' => $kid['school_id'],
             ':day' => $day,
@@ -778,7 +750,6 @@ function lulavStoreDayPhoto(string $dataUrl, array $kid, int $day): void
 function lulavReconcileDayPhotos(array $kid, int $day, array $photos): void
 {
     global $MASHPIA_DB;
-    $campaign = lulavCampaign();
     $retainedIds = [];
     $retainedHashes = [];
     foreach ($photos as $photo) {
@@ -791,9 +762,7 @@ function lulavReconcileDayPhotos(array $kid, int $day, array $photos): void
             }
         }
     }
-    $params = [
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
+    $params = lulavCampaignParams() + [
         ':user' => $kid['user_id'],
         ':day' => $day,
     ];
@@ -1295,14 +1264,7 @@ function lulavKidRowsByUserId(array $userIds): array
         "SELECT u.user_id, u.user_serial, u.first, u.last, u.first_he, u.last_he,
                 u.dob, u.gender, u.school_id, u.class_id, u.mobile_pic, u.user_photo_id,
                 c.class_grade, c.class_sub, s.school_name,
-                (SELECT r.rank_name
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
-                  WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT rm.rank_ord
-                   FROM rank_marks rm
-                  WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
+                " . lulavRankColumns('u') . "
          FROM users u
          JOIN schools s ON s.school_id = u.school_id
          LEFT JOIN classes c ON c.class_id = u.class_id
@@ -1434,14 +1396,7 @@ function lulavLeaderboard(int $schoolId): array
     $params[':school'] = $schoolId;
     $stmt = $MASHPIA_DB->prepare(
         "SELECT u.user_id, u.first, u.last, SUM(mark.done_qty) AS total,
-                (SELECT r.rank_name
-                   FROM rank_marks rm JOIN ranks r USING (rank_ord)
-                  WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_name,
-                (SELECT rm.rank_ord
-                   FROM rank_marks rm
-                  WHERE rm.user_id = u.user_id
-                  ORDER BY rm.rank_ord DESC LIMIT 1) AS rank_ord
+                " . lulavRankColumns('u') . "
          FROM date_tasks_marks mark
          JOIN users u ON u.user_id = mark.user_id
          WHERE mark.date_task_id IN ($taskIn)
@@ -1545,11 +1500,9 @@ function lulavClassLeaderboard(int $schoolId): array
 function lulavHandleKidLogin(): void
 {
     global $MASHPIA_DB;
-    // Before the credentials are even looked at: closed is closed.
-    lulavRequireKidLoginOpen();
-    lulavRateLimit('kid-login', 12, 900);
     $input = lulavInput();
     $serial = trim((string) ($input['serial'] ?? $input['id'] ?? ''));
+    lulavRateLimit('kid-login', 12, 900);
     $dob = trim((string) ($input['dob'] ?? ''));
     if (!$serial || !preg_match('/^\d+$/', $serial) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
         lulavError('Serial number and date of birth are required.', 422);
@@ -1566,6 +1519,8 @@ function lulavHandleKidLogin(): void
     }
     $kid = lulavKidBySerial($serial);
     lulavRequireEligibleSchool((int) $kid['school_id']);
+    // Only now, with the school known: it opens at that community's tzeis.
+    lulavRequireKidLoginOpen($serial, (int) $kid['school_id']);
     $token = lulavIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
     lulavJson(['token' => $token, 'expiresIn' => (int) (lulavEnv('LULAV_TOKEN_TTL') ?: 43200), 'soldier' => lulavSerializeKid($kid)]);
 }
@@ -1581,13 +1536,10 @@ function lulavHandleKidLogin(): void
  */
 function lulavHandleParentHandoff(): void
 {
-    // Refused here, not only at /soldier/handoff, so the parent sees why on the
-    // parent site instead of being sent to an app that turns them away.
-    lulavRequireKidLoginOpen();
     lulavRateLimit('parent-handoff', 60, 900);
     $input = lulavInput();
-    $parentToken = trim((string) ($input['parent'] ?? ''));
     $childId = (string) ($input['child'] ?? '');
+    $parentToken = trim((string) ($input['parent'] ?? ''));
     if (!$parentToken || !preg_match('/^\d+$/', $childId)) {
         lulavError('A parent session and a child are required.', 422);
     }
@@ -1600,6 +1552,9 @@ function lulavHandleParentHandoff(): void
 
     $kid = lulavKidBySerial(reset($serials));
     lulavRequireEligibleSchool((int) $kid['school_id']);
+    // Refused here, not only at /soldier/handoff, so the parent sees why on the
+    // parent site instead of being sent to an app that turns them away.
+    lulavRequireKidLoginOpen((string) $kid['user_serial'], (int) $kid['school_id']);
     lulavJson([
         'code' => lulavIssueHandoffCode((int) $kid['user_id']),
         'expiresIn' => LULAV_HANDOFF_TTL,
@@ -1643,17 +1598,17 @@ function lulavHandleParentChildren(): void
  */
 function lulavHandleKidHandoff(): void
 {
-    lulavRequireKidLoginOpen();
-    lulavRateLimit('kid-handoff', 30, 900);
     $input = lulavInput();
     $code = trim((string) ($input['code'] ?? ''));
     $payload = $code ? lulavVerifySignedPayload($code) : null;
+    lulavRateLimit('kid-handoff', 30, 900);
     if (!$payload || $payload['type'] !== 'handoff') {
         lulavError('This sign-in link has expired. Please tap the button again.', 401);
     }
 
     $kid = lulavKidByUserId((int) $payload['id']);
     lulavRequireEligibleSchool((int) $kid['school_id']);
+    lulavRequireKidLoginOpen((string) $kid['user_serial'], (int) $kid['school_id']);
     $token = lulavIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
     lulavJson([
         'token' => $token,
@@ -1696,15 +1651,12 @@ function lulavHandlePhotoReview(string $publicId, string $decision): void
     global $MASHPIA_DB;
     $actor = lulavRequireActor(['admin']);
     lulavRequireTables(['lulav_photos']);
-    $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
         'SELECT * FROM lulav_photos
          WHERE public_id = :id AND mivtzoim_id = :campaign AND school_year = :school_year'
     );
-    $stmt->execute([
+    $stmt->execute(lulavCampaignParams() + [
         ':id' => $publicId,
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
     ]);
     $photo = $stmt->fetch();
     if (!$photo) {
@@ -1734,15 +1686,12 @@ function lulavHandlePhotoDelete(string $publicId): void
     global $MASHPIA_DB;
     $actor = lulavRequireActor(['admin']);
     lulavRequireTables(['lulav_photos']);
-    $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
         'SELECT * FROM lulav_photos
          WHERE public_id = :id AND mivtzoim_id = :campaign AND school_year = :school_year'
     );
-    $stmt->execute([
+    $stmt->execute(lulavCampaignParams() + [
         ':id' => $publicId,
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
     ]);
     $photo = $stmt->fetch();
     if (!$photo) {
@@ -1763,6 +1712,16 @@ function lulavHandlePhotoDelete(string $publicId): void
     lulavForgetUserPhotos((int) $photo['user_id']);
     lulavCacheFlush();
     lulavJson(['id' => $publicId, 'deleted' => true]);
+}
+
+/**
+ * $text made safe as a file name: anything a file system refuses (slashes,
+ * colons, quotes, control characters and the like) becomes a space, and runs of
+ * spaces become one. Returns '' when nothing usable is left.
+ */
+function lulavSafeFilename(string $text): string
+{
+    return trim(preg_replace('/\s+/', ' ', preg_replace('#[\\\\/:*?"<>|\x00-\x1f]+#', ' ', $text)));
 }
 
 // How long a photo-download link works, in seconds: long enough to start the
@@ -1786,7 +1745,6 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
 {
     global $MASHPIA_DB;
     lulavRequireTables(['lulav_photos']);
-    $campaign = lulavCampaign();
     $stmt = $MASHPIA_DB->prepare(
         "SELECT user_id, day_number, file_name, mime_type,
                 UNIX_TIMESTAMP(created_at) AS uploaded_at
@@ -1795,9 +1753,7 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
            AND school_id = :school AND status = 'approved'
          ORDER BY user_id, day_number, photo_id"
     );
-    $stmt->execute([
-        ':campaign' => $campaign['mivtzoim_id'],
-        ':school_year' => lulavCurrentSchoolYear(),
+    $stmt->execute(lulavCampaignParams() + [
         ':school' => $schoolId,
     ]);
     $photos = $stmt->fetchAll();
@@ -1808,7 +1764,6 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
     // One query each for the hidden flags and the names, not one per photo.
     $marks = lulavLoadDayMarks($schoolId, null);
     $kids = lulavKidRowsByUserId(array_column($photos, 'user_id'));
-    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
 
     $groups = [];
     foreach ($photos as $photo) {
@@ -1827,13 +1782,12 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
         }
         $kid = $kids[$userId] ?? null;
         $who = $kid ? trim($kid['first'] . ' ' . $kid['last']) : 'Soldier ' . $userId;
-        // Anything a file system refuses in a name becomes a space.
-        $who = trim(preg_replace('/\s+/', ' ', preg_replace('#[\\\\/:*?"<>|\x00-\x1f]+#', ' ', $who))) ?: 'Soldier';
+        $who = lulavSafeFilename($who) ?: 'Soldier';
         $groups[$who . "\0" . $day][] = [
             'path' => $path,
             'who' => $who,
             'day' => $day,
-            'ext' => $extensions[$photo['mime_type']] ?? 'jpg',
+            'ext' => LULAV_PHOTO_EXTENSIONS[$photo['mime_type']] ?? 'jpg',
             'uploaded' => $uploaded,
         ];
     }
@@ -1931,7 +1885,7 @@ function lulavSendPhotoZip(int $schoolId): void
     }
 
     $school = lulavSchoolRows($schoolId)[0]['name'] ?? ('School ' . $schoolId);
-    $filename = trim(preg_replace('#[\\\\/:*?"<>|\x00-\x1f]+#', ' ', $school . ' - Mivtza Lulav photos')) . '.zip';
+    $filename = lulavSafeFilename($school . ' - Mivtza Lulav photos') . '.zip';
     // An ASCII name for old browsers, the real one (Hebrew included) for the rest.
     $ascii = preg_replace('/[^\x20-\x7e]/', '_', $filename);
     header('Content-Type: application/zip');
@@ -1995,15 +1949,12 @@ try {
             || (int) $input['perKidGoal'] > 1000) {
             lulavError('perKidGoal must be between 1 and 1,000.', 422);
         }
-        $campaign = lulavCampaign();
         $stmt = $MASHPIA_DB->prepare(
             'INSERT INTO lulav_campaign_settings (mivtzoim_id, school_year, per_kid_goal)
              VALUES (:campaign, :school_year, :goal)
              ON DUPLICATE KEY UPDATE per_kid_goal = VALUES(per_kid_goal)'
         );
-        $stmt->execute([
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
+        $stmt->execute(lulavCampaignParams() + [
             ':goal' => (int) $input['perKidGoal'],
         ]);
         lulavCacheFlush();
@@ -2030,16 +1981,13 @@ try {
             lulavError('goalOverride must be null or a positive number.', 422);
         }
         $override = $override === null || $override === '' ? null : (int) $override;
-        $campaign = lulavCampaign();
         $stmt = $MASHPIA_DB->prepare(
             "INSERT INTO lulav_school_settings
                 (mivtzoim_id, school_year, school_id, goal_override)
              VALUES (:campaign, :school_year, :school, :goal)
              ON DUPLICATE KEY UPDATE goal_override = VALUES(goal_override)"
         );
-        $stmt->execute([
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
+        $stmt->execute(lulavCampaignParams() + [
             ':school' => $schoolId,
             ':goal' => $override,
         ]);
@@ -2055,7 +2003,6 @@ try {
         lulavRequireEligibleSchool($schoolId);
         lulavRequireTables(['lulav_school_settings']);
         $input = lulavInput();
-        $campaign = lulavCampaign();
         // Only write the motto when the caller actually sent one — an unrelated
         // PATCH used to blank it, because `?? ''` made "absent" and "cleared"
         // indistinguishable.
@@ -2065,9 +2012,7 @@ try {
                  VALUES (:campaign, :school_year, :school, :motto)
                  ON DUPLICATE KEY UPDATE motto = VALUES(motto)"
             );
-            $stmt->execute([
-                ':campaign' => $campaign['mivtzoim_id'],
-                ':school_year' => lulavCurrentSchoolYear(),
+            $stmt->execute(lulavCampaignParams() + [
                 ':school' => $schoolId,
                 ':motto' => trim((string) $input['motto']),
             ]);
@@ -2240,11 +2185,8 @@ try {
              GROUP BY photo.user_id, photo.day_number, u.user_serial
              ORDER BY MAX(photo.created_at) DESC"
         );
-        $campaign = lulavCampaign();
-        $stmt->execute([
+        $stmt->execute(lulavCampaignParams() + [
             ':school' => $schoolId,
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
         ]);
         $queue = $stmt->fetchAll();
         // Batch the roster, marks and photos instead of ~7 queries per queued row.
@@ -2297,16 +2239,15 @@ try {
                AND user_id = :user AND day_number = :day
                AND status = \'pending\''
         );
-        $campaign = lulavCampaign();
-        $update->execute([
+        $update->execute(lulavCampaignParams() + [
             ':status' => $status,
             ':admin' => $actor['id'],
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
             ':user' => $identity['userId'],
             ':day' => $identity['day'],
         ]);
         lulavForgetUserPhotos((int) $identity['userId']);
+        // The public Photos counts just changed.
+        lulavCacheFlush();
         $kid = lulavKidBySerial((string) $user['user_serial']);
         lulavJson(lulavDayReport($kid, $identity['day'], true));
     }
@@ -2316,16 +2257,13 @@ try {
         $schoolId = (int) $match[1];
         lulavRequireSchoolAccess($actor, $schoolId);
         lulavRequireEligibleSchool($schoolId);
-        $campaign = lulavCampaign();
         $countStmt = $MASHPIA_DB->prepare(
             "SELECT COUNT(DISTINCT CONCAT(user_id, ':', day_number))
              FROM lulav_photos
              WHERE mivtzoim_id = :campaign AND school_year = :school_year
                AND school_id = :school AND status = 'pending'"
         );
-        $countStmt->execute([
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
+        $countStmt->execute(lulavCampaignParams() + [
             ':school' => $schoolId,
         ]);
         $count = (int) $countStmt->fetchColumn();
@@ -2335,10 +2273,8 @@ try {
              WHERE mivtzoim_id = :campaign AND school_year = :school_year
                AND school_id = :school AND status = 'pending'"
         );
-        $update->execute([
+        $update->execute(lulavCampaignParams() + [
             ':admin' => $actor['id'],
-            ':campaign' => $campaign['mivtzoim_id'],
-            ':school_year' => lulavCurrentSchoolYear(),
             ':school' => $schoolId,
         ]);
         lulavCacheFlush();
@@ -2417,7 +2353,6 @@ try {
     if ($method === 'GET' && $path === '/stats') {
         lulavJson(lulavCached('stats', static function (): array {
             $schools = lulavSchoolRows();
-            $campaign = lulavCampaign();
             lulavRequireTables(['lulav_photos']);
             global $MASHPIA_DB;
             $stmt = $MASHPIA_DB->prepare(
@@ -2426,10 +2361,7 @@ try {
                    AND school_year = :school_year
                    AND status = 'approved'"
             );
-            $stmt->execute([
-                ':campaign' => $campaign['mivtzoim_id'],
-                ':school_year' => lulavCurrentSchoolYear(),
-            ]);
+            $stmt->execute(lulavCampaignParams());
             return [
                 'totalShakes' => array_sum(array_column($schools, 'total')),
                 'totalGoal' => array_sum(array_column($schools, 'goal')),
