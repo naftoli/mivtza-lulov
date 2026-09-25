@@ -16,17 +16,18 @@ $pass = 0;
 $fail = 0;
 $failures = [];
 
-function req(string $method, string $path, array $body = null, string $actor = ''): array
+function req(string $method, string $path, array $body = null, string $actor = '', array $env = []): array
 {
     global $sandbox;
     $cmd = sprintf(
-        'php %s %s %s %s %s %s 2>&1',
+        'php %s %s %s %s %s %s %s 2>&1',
         escapeshellarg(__DIR__ . '/request.php'),
         escapeshellarg($method),
         escapeshellarg($path),
         escapeshellarg($body === null ? '' : json_encode($body)),
         escapeshellarg($actor),
-        escapeshellarg($sandbox)
+        escapeshellarg($sandbox),
+        escapeshellarg(json_encode((object) $env))
     );
     $raw = shell_exec($cmd);
     // The harness prints one JSON object last; anything before it is PHP noise.
@@ -243,6 +244,97 @@ check('present file: photo is listed', count($present['json']['photos'] ?? []) =
 check('present file: url points at the api', ($present['json']['photos'][0] ?? '') === '/mivtzoim/lulav/api/photos/' . str_repeat('a', 32) . '/file',
     json_encode($present['json']['photos'][0] ?? null));
 @unlink($photoFile);
+
+
+echo "== soldier sign-in gate ==\n";
+
+$closed = ['LULAV_KID_LOGIN_OPENS_AT' => '2099-01-01 00:00 UTC'];
+
+$gatedLogin = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', $closed);
+check('gate: /soldier/login refused while closed', $gatedLogin['status'] === 403, $gatedLogin['body']);
+check('gate: refusal says when it opens', strpos((string) ($gatedLogin['json']['error'] ?? ''), 'opens for soldiers') !== false, $gatedLogin['body']);
+check('gate: refusal carries opensAt', !empty($gatedLogin['json']['opensAt']), $gatedLogin['body']);
+check('gate: no token issued', empty($gatedLogin['json']['token']));
+check('gate: credentials never looked up', ($gatedLogin['queries'] ?? 99) === 0, 'queries=' . ($gatedLogin['queries'] ?? '?'));
+
+$gatedHandoff = req('POST', '/soldier/handoff', ['code' => 'anything'], '', $closed);
+check('gate: /soldier/handoff refused while closed', $gatedHandoff['status'] === 403, $gatedHandoff['body']);
+
+$gatedParent = req('POST', '/parent/handoff', ['parent' => 'tok', 'child' => 9001], '', $closed);
+check('gate: /parent/handoff refused while closed', $gatedParent['status'] === 403, $gatedParent['body']);
+
+$gatedSession = req('GET', '/me/shakes', null, 'kid', $closed);
+check('gate: an existing kid session is refused too', $gatedSession['status'] === 403, $gatedSession['body']);
+
+$gatedSave = req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5], 'kid', $closed);
+check('gate: a kid cannot save while closed', $gatedSave['status'] === 403, $gatedSave['body']);
+check('gate: nothing marked while closed', empty($gatedSave['marked']));
+
+$adminWhileClosed = req('GET', '/schools/61/report-rows', null, 'admin', $closed);
+check('gate: admins unaffected', $adminWhileClosed['status'] === 200, $adminWhileClosed['body']);
+
+$publicWhileClosed = req('GET', '/stats', null, '', $closed);
+check('gate: public pages unaffected', $publicWhileClosed['status'] === 200, $publicWhileClosed['body']);
+
+// No override at all: the real rule, sunset in Crown Heights on 27 Sep 2026.
+$realRule = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', ['LULAV_KID_LOGIN_OPENS_AT' => '']);
+$expectOpen = time() >= strtotime('2026-09-27 18:44:51 America/New_York');
+check('gate: real rule opens at Sun 27 Sep 2026 6:44 PM Eastern',
+    $expectOpen ? $realRule['status'] === 200 : ($realRule['status'] === 403 && strpos((string) $realRule['json']['opensAt'], '2026-09-27T18:44') === 0),
+    $realRule['body']);
+
+echo "== high-number alerts ==\n";
+
+$quiet = req('PUT', '/me/days/2', ['count' => 49, 'minutes' => 179, 'note' => '', 'photos' => []], 'kid');
+check('alert: 49 shakes / 179 minutes sends nothing', $quiet['status'] === 200 && $quiet['mail'] === [], json_encode($quiet['mail']));
+
+$loud = req('PUT', '/me/days/2', ['count' => 60, 'minutes' => 45, 'note' => 'Whole shul', 'photos' => []], 'kid');
+check('alert: 60 shakes saves normally', $loud['status'] === 200, $loud['body']);
+check('alert: 60 shakes sends one email', count($loud['mail']) === 1, json_encode($loud['mail']));
+$mail = $loud['mail'][0] ?? ['to' => [], 'subject' => '', 'body' => ''];
+check('alert: addressed to HQ', in_array('cth@tzivoshashem.org', $mail['to'], true), json_encode($mail['to']));
+check('alert: addressed to Shimmy', in_array('shimmyweinbaum@gmail.com', $mail['to'], true), json_encode($mail['to']));
+check('alert: only HQ and Shimmy in To', count($mail['to']) === 2, json_encode($mail['to']));
+check('alert: Base Commander is Cc', in_array('commander@school61.test', $mail['cc'] ?? [], true), json_encode($mail['cc'] ?? null));
+check('alert: Cc addresses are normalised', !in_array('Commander@School61.test', $mail['cc'] ?? [], true));
+check('alert: a principal who is not a Base Commander is left off', !in_array('principal@school61.test', array_merge($mail['to'], $mail['cc'] ?? []), true), json_encode($mail));
+check('alert: nobody in both To and Cc', array_intersect($mail['to'], $mail['cc'] ?? []) === []);
+check('alert: subject names the soldier and number', strpos($mail['subject'], 'Mendel Cohen reported 60 shakes on day 2') !== false, $mail['subject']);
+check('alert: subject is not tagged with a host', strpos($mail['subject'], 'Mivtza Lulav check:') === 0, $mail['subject']);
+check('alert: link is the live admin screen', strpos($mail['body'], 'https://mashpia.com/mivtzoim/lulav/admin') !== false, $mail['body']);
+foreach (['Mendel Cohen', 'serial 555001', 'Test School 61', 'Sukkos day 2', 'Shakes:   60', 'Minutes:  45', 'Whole shul', '/mivtzoim/lulav/admin'] as $needle) {
+    check('alert: body has ' . $needle, strpos($mail['body'], $needle) !== false, $mail['body']);
+}
+
+$noCommander = req('PUT', '/me/days/2', ['count' => 60, 'minutes' => 45, 'note' => '', 'photos' => []], 'kid', ['LULAV_TEST_NO_BC' => '1']);
+$fallbackCc = $noCommander['mail'][0]['cc'] ?? [];
+check('alert: no Base Commander falls back to the school admins', in_array('commander@school61.test', $fallbackCc, true) && in_array('principal@school61.test', $fallbackCc, true), json_encode($fallbackCc));
+
+$minutesOnly = req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 200, 'note' => '', 'photos' => []], 'kid');
+check('alert: 200 minutes alone sends one', count($minutesOnly['mail']) === 1, json_encode($minutesOnly['mail']));
+check('alert: names the minutes', strpos($minutesOnly['mail'][0]['subject'] ?? '', '200 minutes') !== false, $minutesOnly['mail'][0]['subject'] ?? '');
+
+$boundary = req('PUT', '/me/days/2', ['count' => 50, 'minutes' => 180, 'note' => '', 'photos' => []], 'kid');
+check('alert: exactly 50 / 180 counts', count($boundary['mail']) === 1, json_encode($boundary['mail']));
+check('alert: both reasons listed', strpos($boundary['mail'][0]['subject'] ?? '', '50 shakes and 180 minutes') !== false, $boundary['mail'][0]['subject'] ?? '');
+
+// POST /shakes may leave minutes out: stored minutes (45) are reported, and do not trigger on their own.
+$alias = req('POST', '/shakes', ['day' => 2, 'count' => 75], 'kid');
+check('alert: POST /shakes over threshold alerts', count($alias['mail']) === 1, json_encode($alias['mail']));
+check('alert: absent minutes reported as stored', strpos($alias['mail'][0]['body'] ?? '', 'Minutes:  45') !== false, $alias['mail'][0]['body'] ?? '');
+
+// Already flagged at 60: saving 60 again (a photo, a story) must not mail again,
+// but a different high number must.
+$flagged = ['LULAV_TEST_DAY2_COUNT' => '60'];
+$resave = req('PUT', '/me/days/2', ['count' => 60, 'minutes' => 45, 'note' => 'added a photo', 'photos' => []], 'kid', $flagged);
+check('alert: re-saving an unchanged flagged day sends nothing', $resave['status'] === 200 && $resave['mail'] === [], json_encode($resave['mail']));
+$raised = req('PUT', '/me/days/2', ['count' => 500, 'minutes' => 45, 'note' => '', 'photos' => []], 'kid', $flagged);
+check('alert: 60 -> 500 alerts again', count($raised['mail']) === 1, json_encode($raised['mail']));
+$lowered = req('PUT', '/me/days/2', ['count' => 10, 'minutes' => 45, 'note' => '', 'photos' => []], 'kid', $flagged);
+check('alert: 60 -> 10 sends nothing', $lowered['mail'] === [], json_encode($lowered['mail']));
+
+$blocked = req('PUT', '/me/days/2', ['count' => 60, 'minutes' => 501], 'kid');
+check('alert: a rejected save sends nothing', $blocked['status'] === 422 && $blocked['mail'] === [], json_encode($blocked['mail']));
 
 echo "== not found ==\n";
 $missing = req('GET', '/nope');

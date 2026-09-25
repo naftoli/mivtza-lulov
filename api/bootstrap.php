@@ -13,6 +13,20 @@ const LULAV_FALLBACK_LANG_ID = 1;
 // browser history is dead by the time anyone reads it.
 const LULAV_HANDOFF_TTL = 120;
 
+// No soldier may sign in, or use a session, before sunset in New York on this
+// date: Sunday 27 September 2026, Motzei the second day of Yom Tov (16 Tishrei
+// 5787), which is also the campaign's first day. Sunset is computed for Crown
+// Heights -- 6:44 PM EDT that evening. Admins and the public pages are not
+// affected. Once the date has passed this is inert, so it needs no removal;
+// set it to next year's date (or override with LULAV_KID_LOGIN_OPENS_AT) to
+// use it again.
+//
+// This is a server-side backstop, stricter than src/lib/campaignLock.js, which
+// lets a soldier sign in during Yom Tov and only locks writing, per community.
+const LULAV_KID_LOGIN_OPENS_DATE = '2026-09-27';
+const LULAV_KID_LOGIN_LAT = 40.6694;
+const LULAV_KID_LOGIN_LNG = -73.9422;
+
 define('LULAV_PUBLIC_ROOT', dirname(__DIR__, 3));
 define('LULAV_STORAGE_ROOT', dirname(LULAV_PUBLIC_ROOT) . '/storage/lulav');
 define('LULAV_PHOTO_ROOT', LULAV_STORAGE_ROOT . '/photos');
@@ -257,7 +271,58 @@ function lulavActor(bool $required = true): ?array
     if ($payload['type'] === 'handoff') {
         lulavError('Invalid authentication token.', 401);
     }
+    // A soldier session from before the opening -- a tester's, say -- is
+    // refused as well, so closed means closed rather than "no new logins".
+    if ($payload['type'] === 'kid') {
+        lulavRequireKidLoginOpen();
+    }
     return $payload;
+}
+
+/**
+ * When soldier sign-in opens, as a Unix timestamp: sunset in Crown Heights on
+ * LULAV_KID_LOGIN_OPENS_DATE, unless LULAV_KID_LOGIN_OPENS_AT names a moment
+ * outright (any strtotime() string with a zone, e.g. "2026-09-27 18:45 EDT").
+ */
+function lulavKidLoginOpensAt(): int
+{
+    static $opensAt;
+    if ($opensAt !== null) {
+        return $opensAt;
+    }
+    $override = lulavEnv('LULAV_KID_LOGIN_OPENS_AT');
+    if ($override !== '') {
+        $parsed = strtotime($override);
+        if ($parsed !== false) {
+            return $opensAt = $parsed;
+        }
+        error_log('Lulav API: ignoring unparseable LULAV_KID_LOGIN_OPENS_AT ' . $override);
+    }
+    $noon = new DateTimeImmutable(
+        LULAV_KID_LOGIN_OPENS_DATE . ' 12:00',
+        new DateTimeZone('America/New_York')
+    );
+    $sun = date_sun_info($noon->getTimestamp(), LULAV_KID_LOGIN_LAT, LULAV_KID_LOGIN_LNG);
+    // date_sun_info() reports true/false instead of a time only near the poles;
+    // New York always has a sunset, but fall back to 8 PM rather than open early.
+    $sunset = is_int($sun['sunset'] ?? null) ? $sun['sunset'] : $noon->setTime(20, 0)->getTimestamp();
+    return $opensAt = $sunset;
+}
+
+/** Refuses the request while soldier sign-in is still closed. */
+function lulavRequireKidLoginOpen(): void
+{
+    $opensAt = lulavKidLoginOpensAt();
+    if (time() >= $opensAt) {
+        return;
+    }
+    $when = (new DateTimeImmutable('@' . $opensAt))->setTimezone(new DateTimeZone('America/New_York'));
+    lulavError(
+        'Mivtza Lulav opens for soldiers after Yom Tov, on '
+            . $when->format('l, F j') . ' at ' . $when->format('g:i A') . ' Eastern.',
+        403,
+        ['opensAt' => $when->format(DATE_ATOM)]
+    );
 }
 
 function lulavRequireActor(array $types): array
@@ -897,6 +962,66 @@ function lulavCacheFlush(): void
     foreach ((array) @glob(lulavCacheRoot() . '/c-*.json') as $file) {
         @unlink($file);
     }
+}
+
+/**
+ * Sends one plain-text email through PHP's mail(), the way the rest of Mashpia
+ * does (classes/email.php turns on SMTP debug output, which would land in the
+ * JSON body). Anyone in both $to and $cc is kept in $to only.
+ *
+ * With LULAV_MAIL_CAPTURE set to a file path, the message is appended there as
+ * a JSON line instead of being sent -- for local development and the tests, so
+ * neither mails real people.
+ *
+ * Returns whether the message was handed off; never throws, because no save
+ * should fail over an email.
+ */
+function lulavSendMail(array $to, string $subject, string $body, array $cc = []): bool
+{
+    $clean = static function (array $addresses): array {
+        return array_values(array_unique(array_filter(array_map(static function ($address): string {
+            $address = strtolower(trim((string) $address));
+            return filter_var($address, FILTER_VALIDATE_EMAIL) ? $address : '';
+        }, $addresses))));
+    };
+    $to = $clean($to);
+    $cc = array_values(array_diff($clean($cc), $to));
+    if (!$to && !$cc) {
+        return false;
+    }
+    // mail() needs a To; with none, the first Cc moves up to fill it.
+    if (!$to) {
+        $to = [array_shift($cc)];
+    }
+    // Header injection: nothing user-supplied may carry a line break.
+    $subject = trim(preg_replace('/[\r\n]+/', ' ', $subject));
+
+    $capture = lulavEnv('LULAV_MAIL_CAPTURE');
+    if ($capture !== '') {
+        $line = json_encode(['to' => $to, 'cc' => $cc, 'subject' => $subject, 'body' => $body], JSON_UNESCAPED_UNICODE);
+        return @file_put_contents($capture, $line . "\n", FILE_APPEND | LOCK_EX) !== false;
+    }
+
+    $headers = [
+        'From: Mivtza Lulav <cth@mashpia.com>',
+        'Reply-To: cth@tzivoshashem.org',
+    ];
+    if ($cc) {
+        $headers[] = 'Cc: ' . implode(', ', $cc);
+    }
+    $headers = implode("\r\n", array_merge($headers, [
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+    ]));
+    $encodedSubject = function_exists('mb_encode_mimeheader')
+        ? mb_encode_mimeheader($subject, 'UTF-8', 'B', "\r\n")
+        : $subject;
+    $sent = @mail(implode(', ', $to), $encodedSubject, $body, $headers);
+    if (!$sent) {
+        error_log('Lulav API: mail() refused "' . $subject . '" to ' . implode(', ', array_merge($to, $cc)));
+    }
+    return $sent;
 }
 
 function lulavWithUserLock(int $userId, callable $callback)

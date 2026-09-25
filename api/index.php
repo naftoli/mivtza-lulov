@@ -1053,6 +1053,124 @@ function lulavUpdateDayDescription(array $kid, int $day, string $note): void
     $stmt->execute($params);
 }
 
+// A day's report at or over either number is emailed out for a human to check.
+// Keep these in step with src/lib/highNumber.js, which flags the same entries in
+// the admin screens.
+const LULAV_ALERT_SHAKES = 50;
+const LULAV_ALERT_MINUTES = 180;
+// Who every flagged report is addressed to, whatever the school: HQ and Shimmy.
+// The school's Base Commanders are copied on it, per report.
+const LULAV_ALERT_ALWAYS = ['cth@tzivoshashem.org', 'shimmyweinbaum@gmail.com'];
+
+/**
+ * Why a save should raise an alert, as short phrases -- or [] for no alert.
+ *
+ * A number alerts when it is at or over its threshold AND it just changed. So a
+ * soldier who adds a photo to a day already reported at 60 shakes does not send
+ * the same email again, while 60 -> 500 does, and so does 60 -> 10 -> 60.
+ * $minutes is null when the request left minutes out, which changes nothing.
+ */
+function lulavHighNumberReasons(int $count, ?int $minutes, int $previousCount, int $previousMinutes): array
+{
+    $reasons = [];
+    if ($count >= LULAV_ALERT_SHAKES && $count !== $previousCount) {
+        $reasons[] = $count . ' shakes (' . LULAV_ALERT_SHAKES . ' or more)';
+    }
+    if ($minutes !== null && $minutes >= LULAV_ALERT_MINUTES && $minutes !== $previousMinutes) {
+        $reasons[] = $minutes . ' minutes (' . LULAV_ALERT_MINUTES . ' or more)';
+    }
+    return $reasons;
+}
+
+/**
+ * Who at a school is copied on its flagged reports: its Base Commanders --
+ * school admins whose role is Base Commander, or whose position says so (the
+ * two disagree for a handful of people, so either counts).
+ *
+ * A school with no Base Commander on file falls back to its other active
+ * school admins, so someone there still hears; that is 5 of the 75 schools
+ * registered for 5787. Four have no admin email at all, and only HQ hears.
+ */
+function lulavBaseCommanderEmails(int $schoolId): array
+{
+    global $MASHPIA_DB;
+    $stmt = $MASHPIA_DB->prepare(
+        "SELECT a.admin_email,
+                MAX(COALESCE(r.role_name = 'Base Commander', 0)
+                    OR COALESCE(aa.position = 'Base Commander', 0)) AS is_base_commander
+         FROM admin_auths aa
+         JOIN admins a ON a.admin_id = aa.admin_id
+         LEFT JOIN roles r ON r.role_id = aa.role_id
+         WHERE aa.auth = 'school' AND aa.id = :school
+           AND a.auth <> 'inactive'
+           AND a.admin_email IS NOT NULL AND a.admin_email <> ''
+         GROUP BY a.admin_email"
+    );
+    $stmt->execute([':school' => $schoolId]);
+    $all = [];
+    $commanders = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $all[] = $row['admin_email'];
+        if ((int) $row['is_base_commander'] === 1) {
+            $commanders[] = $row['admin_email'];
+        }
+    }
+    return $commanders ?: $all;
+}
+
+/**
+ * Emails a flagged day report to LULAV_ALERT_ALWAYS, copying the school's
+ * Base Commanders. Best effort: a failure is logged, never thrown, so the
+ * soldier's save stands either way.
+ */
+function lulavSendHighNumberAlert(array $kid, int $day, int $count, int $minutes, string $note, array $reasons): void
+{
+    try {
+        $schoolId = (int) $kid['school_id'];
+        $name = trim($kid['first'] . ' ' . $kid['last']);
+        $school = (string) ($kid['school_name'] ?? ('School ' . $schoolId));
+        $date = '';
+        $jd = (int) (lulavMapFor('day', $day)['start_date'] ?? 0);
+        if ($jd > 0) {
+            $iso = lulavDateFromJd($jd);
+            $date = $iso ? ' -- ' . (new DateTimeImmutable($iso))->format('l, F j, Y') : '';
+        }
+
+        $subject = 'Mivtza Lulav check: ' . $name . ' reported ' . implode(' and ', array_map(static function (string $r): string {
+                return preg_replace('/ \(.*\)$/', '', $r);
+            }, $reasons)) . ' on day ' . $day;
+
+        $lines = [
+            'A Mivtza Lulav report for one day is at or over the review threshold',
+            '(' . LULAV_ALERT_SHAKES . ' shakes or ' . LULAV_ALERT_MINUTES . ' minutes). Please check it with the soldier.',
+            '',
+            'Soldier:  ' . $name . ' (serial ' . $kid['user_serial'] . ')',
+            'School:   ' . $school,
+            'Class:    ' . (lulavGradeLabel($kid) ?: '-'),
+            'Day:      Sukkos day ' . $day . $date,
+            'Shakes:   ' . $count,
+            'Minutes:  ' . $minutes,
+            'Flagged:  ' . implode('; ', $reasons),
+        ];
+        if (trim($note) !== '') {
+            $lines[] = '';
+            $lines[] = 'Their story:';
+            $lines[] = trim($note);
+        }
+        $lines[] = '';
+        $lines[] = 'Review it in the admin screen: https://mashpia.com/mivtzoim/lulav/admin';
+
+        lulavSendMail(
+            LULAV_ALERT_ALWAYS,
+            $subject,
+            implode("\n", $lines) . "\n",
+            lulavBaseCommanderEmails($schoolId)
+        );
+    } catch (Throwable $error) {
+        error_log('Lulav API: high-number alert failed: ' . $error->getMessage());
+    }
+}
+
 function lulavSaveDayReport(array $kid, int $day, array $input): array
 {
     global $MASHPIA_DB;
@@ -1096,20 +1214,41 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         lulavValidatePhotos($photos, 8);
     }
 
-    return lulavWithUserLock((int) $kid['user_id'], static function () use (
+    $alert = null;
+    $report = lulavWithUserLock((int) $kid['user_id'], static function () use (
         $kid,
         $day,
         $count,
         $minutes,
         $note,
         $photos,
-        $MASHPIA_DB
+        $MASHPIA_DB,
+        &$alert
     ): array {
         $mapping = lulavCampaignTaskMap();
         lulavValidateTaskMap($mapping);
         lulavValidateMarkTargets($kid, $mapping);
         $countMap = lulavMapFor('day', $day);
         $minuteMap = lulavMapFor('minutes', $day);
+        // Read under the lock and before the write, so two saves racing each
+        // other are each compared against what the other actually left behind.
+        $previousCount = lulavMappedDayMark((int) $kid['user_id'], 'day', $day);
+        $previousMinutes = (int) lulavMappedDayMark((int) $kid['user_id'], 'minutes', $day)['value'];
+        $reasons = lulavHighNumberReasons(
+            (int) $count,
+            $minutes === null ? null : (int) $minutes,
+            (int) $previousCount['value'],
+            $previousMinutes
+        );
+        if ($reasons) {
+            $alert = [
+                'count' => (int) $count,
+                // Minutes left out of the request stay as stored; report those.
+                'minutes' => $minutes === null ? $previousMinutes : (int) $minutes,
+                'note' => $note ?? (string) ($previousCount['note'] ?? ''),
+                'reasons' => $reasons,
+            ];
+        }
         // What is being saved wins. These numbers used to only ever climb, via
         // max() against the stored mark, which left no way to correct one typed
         // too high -- a mistyped 500 stayed 500 for the rest of Sukkos.
@@ -1136,6 +1275,11 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         lulavCacheFlush();
         return lulavDayReport($kid, $day, true);
     });
+    // Outside the lock: a slow mail server must not hold the soldier's row.
+    if ($alert) {
+        lulavSendHighNumberAlert($kid, $day, $alert['count'], $alert['minutes'], $alert['note'], $alert['reasons']);
+    }
+    return $report;
 }
 
 /** Roster rows for a set of user ids, in one query, keyed by user_id. */
@@ -1401,6 +1545,8 @@ function lulavClassLeaderboard(int $schoolId): array
 function lulavHandleKidLogin(): void
 {
     global $MASHPIA_DB;
+    // Before the credentials are even looked at: closed is closed.
+    lulavRequireKidLoginOpen();
     lulavRateLimit('kid-login', 12, 900);
     $input = lulavInput();
     $serial = trim((string) ($input['serial'] ?? $input['id'] ?? ''));
@@ -1435,6 +1581,9 @@ function lulavHandleKidLogin(): void
  */
 function lulavHandleParentHandoff(): void
 {
+    // Refused here, not only at /soldier/handoff, so the parent sees why on the
+    // parent site instead of being sent to an app that turns them away.
+    lulavRequireKidLoginOpen();
     lulavRateLimit('parent-handoff', 60, 900);
     $input = lulavInput();
     $parentToken = trim((string) ($input['parent'] ?? ''));
@@ -1494,6 +1643,7 @@ function lulavHandleParentChildren(): void
  */
 function lulavHandleKidHandoff(): void
 {
+    lulavRequireKidLoginOpen();
     lulavRateLimit('kid-handoff', 30, 900);
     $input = lulavInput();
     $code = trim((string) ($input['code'] ?? ''));

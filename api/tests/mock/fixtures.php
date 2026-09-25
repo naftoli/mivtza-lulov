@@ -58,7 +58,8 @@ function lulav_test_kids(): array
 function lulav_test_marks(): array
 {
     return [
-        ['user_id' => 9001, 'date_task_id' => T_SHAKE_DAY2, 'done_qty' => 12, 'mark_inactive' => 0,
+        // LULAV_TEST_DAY2_COUNT lets a test start from an already-flagged day.
+        ['user_id' => 9001, 'date_task_id' => T_SHAKE_DAY2, 'done_qty' => (int) (getenv('LULAV_TEST_DAY2_COUNT') ?: 12), 'mark_inactive' => 0,
          'mark_description' => 'We went to the park', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461301],
         ['user_id' => 9001, 'date_task_id' => T_MIN_DAY2, 'done_qty' => 45, 'mark_inactive' => 0,
          'mark_description' => '', 'updated' => '2026-10-05 10:00:00', 'mark_date' => 2461301],
@@ -201,6 +202,17 @@ function lulav_test_patterns(): array
         ['/SELECT auth, first, last, username FROM admins/i', [[
             'auth' => 'super', 'first' => 'Test', 'last' => 'Admin', 'username' => 'testadmin',
         ]]],
+        // The school's admins, for high-number alerts: one Base Commander (in
+        // mixed case, to prove addresses are normalised) and one principal who
+        // is not. LULAV_TEST_NO_BC=1 models a school with no Base Commander.
+        // Placed before the generic admin_auths pattern, which would answer it.
+        ['/SELECT a\.admin_email, MAX\(/i', static function (): array {
+            $noCommander = getenv('LULAV_TEST_NO_BC') === '1';
+            return [
+                ['admin_email' => 'Commander@School61.test', 'is_base_commander' => $noCommander ? 0 : 1],
+                ['admin_email' => 'principal@school61.test', 'is_base_commander' => 0],
+            ];
+        }],
         ['/FROM admin_auths/i', [['school_id' => 61]]],
         ['/FROM admins/i', [[
             'admin_id' => 1, 'auth' => 'super', 'first' => 'Test', 'last' => 'Admin', 'username' => 'testadmin',

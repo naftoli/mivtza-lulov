@@ -90,13 +90,17 @@ admin screens on its own (derived from `count` / `minutes`, thresholds in
 [`src/lib/highNumber.js`](../src/lib/highNumber.js) — currently **≥ 50 shakes** or
 **≥ 180 minutes** for one day). The parts that need the server:
 
-1. **Email/push on write.** On `PUT /api/me/days/:day`, when the saved `count` or
-   `minutes` crosses the threshold, email **the school admin, HQ, and
-   `naftoli@tzivoshashem.org`** with the soldier, school, day, and the numbers.
-   The browser can't send mail or hold a mailing list, so this must live server-side.
-   (Fire it only when the value actually crosses — don't re-notify on an unrelated
-   edit of an already-flagged day.)
-2. **Persist the flag** so it survives and can be cleared. Return `flagged: true`
+1. **Email on write — done.** On `PUT /api/me/days/:day` (and `POST /shakes`),
+   a day saved at **≥ 50 shakes or ≥ 180 minutes** emails HQ
+   (`cth@tzivoshashem.org`) and `shimmyweinbaum@gmail.com`, **Cc the school's
+   Base Commanders** (school admins with the Base Commander role or position;
+   a school with none falls back to its other school admins). It carries the
+   soldier, serial, school, class, day and date, both numbers, and the story.
+   A number alerts only when it is over the line **and just changed**, so
+   re-saving a flagged day to add a photo sends nothing, while 60 → 500 does.
+   Thresholds and recipients are constants at the top of the alert block in
+   `api/index.php`. See `lulavSendHighNumberAlert()`.
+2. **Persist the flag — not done.** So it survives and can be cleared, return `flagged: true`
    and a short `flagReason` on the entry from `GET /api/schools/:id/shakes`
    (admin view). The admin UI **honours `flagged` / `flagReason` when present** and
    falls back to its own threshold otherwise — so once the API sends these, the
@@ -118,7 +122,7 @@ or route secret-key calls through a **small serverless proxy**. Allow **CORS** f
 6. `POST /shakes` in the shape above, hitting the teacher-grid record; public read endpoints in the no-serial shape (G).
 7. Photo endpoints + accepted format and size.
 8. App→API auth (token vs. proxy) and CORS.
-9. High-number flag + notification (§H): email school/HQ/`naftoli@tzivoshashem.org` on an outsized report, and return `flagged` / `flagReason` on admin shake reads.
+9. High-number flag + notification (§H): email on an outsized report is done (HQ and Shimmy, Cc the Base Commanders); returning `flagged` / `flagReason` on admin shake reads is not.
 
 ---
 

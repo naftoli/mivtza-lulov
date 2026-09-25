@@ -40,6 +40,19 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
 7. If the app is hosted on another origin, set `LULAV_ALLOWED_ORIGINS` to a
    comma-separated allowlist. Same-origin requests work without configuration.
 8. Optionally set `LULAV_TOKEN_TTL` in seconds. The default is 43,200 (12 hours).
+9. **Soldier sign-in opens at a fixed moment.** Before sunset in Crown Heights
+   on `LULAV_KID_LOGIN_OPENS_DATE` (in `bootstrap.php`; currently Sunday
+   27 September 2026, 6:44 PM EDT), `/soldier/login`, `/soldier/handoff` and
+   `/parent/handoff` answer 403 with the opening time, and any existing soldier
+   session is refused. Admins and the public pages are unaffected. Set
+   `LULAV_KID_LOGIN_OPENS_AT` to any zoned time (`2000-01-01 00:00 UTC` to open
+   it now) to override — e.g. to try the soldier flow locally before then.
+10. **High-number alerts.** A day saved at 50+ shakes or 180+ minutes is
+    emailed to HQ and Shimmy, Cc the school's Base Commanders (see
+    `LULAV_ALERT_*` and `lulavBaseCommanderEmails()` in `index.php`). Set
+    `LULAV_MAIL_CAPTURE` to a file path to write alerts there as JSON lines
+    instead of sending them; the local `dev:api` router does this by default,
+    since it reads the real database.
 
 Runtime photos, login-rate-limit files and cached public reads are written to
 `mashpia.com/storage/lulav`, outside the public document root. The web-server
