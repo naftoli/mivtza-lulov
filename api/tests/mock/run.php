@@ -251,113 +251,25 @@ check('present file: url points at the api', ($present['json']['photos'][0] ?? '
 @unlink($photoFile);
 
 
-echo "== soldier sign-in gate ==\n";
+echo "== school coordinates ==\n";
 
-$closed = ['LULAV_KID_LOGIN_OPENS_AT' => '2099-01-01 00:00 UTC'];
-
-$gatedLogin = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', $closed);
-check('gate: /soldier/login refused while closed', $gatedLogin['status'] === 403, $gatedLogin['body']);
-check('gate: refusal says when it opens', strpos((string) ($gatedLogin['json']['error'] ?? ''), 'opens for soldiers') !== false, $gatedLogin['body']);
-check('gate: refusal carries opensAt', !empty($gatedLogin['json']['opensAt']), $gatedLogin['body']);
-check('gate: no token issued', empty($gatedLogin['json']['token']));
-
-// The opening depends on the soldier's school, so the credentials come first:
-// a wrong date of birth is refused as wrong, and says nothing about the time.
-$gatedWrongDob = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-06'], '', $closed);
-check('gate: a wrong date of birth is still a 401 while closed', $gatedWrongDob['status'] === 401, $gatedWrongDob['body']);
-check('gate: ...with no opening time', empty($gatedWrongDob['json']['opensAt']), $gatedWrongDob['body']);
-
-$handoffCode = signTest(['v' => 1, 'type' => 'handoff', 'id' => 9001, 'iat' => time(), 'exp' => time() + 120]);
-$gatedHandoff = req('POST', '/soldier/handoff', ['code' => $handoffCode], '', $closed);
-check('gate: /soldier/handoff refused while closed', $gatedHandoff['status'] === 403, $gatedHandoff['body']);
-check('gate: ...and issues no token', empty($gatedHandoff['json']['token']), $gatedHandoff['body']);
-
-$badHandoff = req('POST', '/soldier/handoff', ['code' => 'anything'], '', $closed);
-check('gate: a bad handoff code is still a 401 while closed', $badHandoff['status'] === 401, $badHandoff['body']);
-
-$gatedParent = req('POST', '/parent/handoff', ['parent' => 'parent-token', 'child' => 9001], '', $closed);
-check('gate: /parent/handoff refused while closed', $gatedParent['status'] === 403, $gatedParent['body']);
-check('gate: ...and hands out no code', empty($gatedParent['json']['code']), $gatedParent['body']);
-
-$strangerParent = req('POST', '/parent/handoff', ['parent' => 'tok', 'child' => 9001], '', $closed);
-check('gate: a parent session that fails says so, not when it opens', $strangerParent['status'] === 401 && empty($strangerParent['json']['opensAt']), $strangerParent['body']);
-
-$gatedSession = req('GET', '/me/shakes', null, 'kid', $closed);
-check('gate: an existing kid session is refused too', $gatedSession['status'] === 403, $gatedSession['body']);
-
-$gatedSave = req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5], 'kid', $closed);
-check('gate: a kid cannot save while closed', $gatedSave['status'] === 403, $gatedSave['body']);
-check('gate: nothing marked while closed', empty($gatedSave['marked']));
-
-$adminWhileClosed = req('GET', '/schools/61/report-rows', null, 'admin', $closed);
-check('gate: admins unaffected', $adminWhileClosed['status'] === 200, $adminWhileClosed['body']);
-
-$publicWhileClosed = req('GET', '/stats', null, '', $closed);
-check('gate: public pages unaffected', $publicWhileClosed['status'] === 200, $publicWhileClosed['body']);
-
-// A serial let in early passes every door; everyone else still waits.
-$early = $closed + ['LULAV_KID_LOGIN_EARLY_SERIALS' => '555001'];
-
-$earlyLogin = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', $early);
-check('gate: an early serial signs in while closed', $earlyLogin['status'] === 200 && !empty($earlyLogin['json']['token']), $earlyLogin['body']);
-
-$otherLogin = req('POST', '/soldier/login', ['serial' => '555002', 'dob' => '2014-05-05'], '', $early);
-check('gate: any other serial is still refused', $otherLogin['status'] === 403, $otherLogin['body']);
-
-$earlySession = req('GET', '/me/shakes', null, 'kid', $early);
-check('gate: an early serial keeps its session', $earlySession['status'] === 200, $earlySession['body']);
-
-$earlyHandoff = req('POST', '/soldier/handoff', ['code' => signTest(['v' => 1, 'type' => 'handoff', 'id' => 9001, 'iat' => time(), 'exp' => time() + 120])], '', $early);
-check('gate: an early serial trades a handoff code', $earlyHandoff['status'] === 200 && !empty($earlyHandoff['json']['token']), $earlyHandoff['body']);
-
-$earlyParent = req('POST', '/parent/handoff', ['parent' => 'parent-token', 'child' => 9001], '', $early);
-check('gate: /parent/handoff for an early serial hands out a code', $earlyParent['status'] === 200 && !empty($earlyParent['json']['code']), $earlyParent['body']);
-
-$builtIn = req('POST', '/soldier/login', ['serial' => '7794251', 'dob' => '2014-05-05'], '', $closed);
-check('gate: serial 7794251 is let in early', $builtIn['status'] !== 403, $builtIn['body']);
-
-// No override at all: the real rule, tzeis at the soldier's own school on
-// 27 Sep 2026. 555003's school (269) is in Crown Heights; 555001's (61) is
-// not in school-locations.php, so it waits for Yom Tov to end everywhere.
-$noOverride = ['LULAV_KID_LOGIN_OPENS_AT' => ''];
-$realRule = req('POST', '/soldier/login', ['serial' => '555003', 'dob' => '2014-05-05'], '', $noOverride);
-$expectOpen = time() >= strtotime('2026-09-27 19:27:16 America/New_York');
-check('gate: a Crown Heights school opens at its tzeis, Sun 27 Sep 2026 7:27 PM',
-    $expectOpen ? $realRule['status'] === 200
-        : ($realRule['status'] === 403 && strpos((string) $realRule['json']['opensAt'], '2026-09-27T19:27:16-04:00') === 0
-            && strpos((string) $realRule['json']['error'], '7:27 PM your time') !== false),
-    $realRule['body']);
-
-$unplaced = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', $noOverride);
-$expectOpen = time() >= strtotime('2026-09-28 06:00 UTC');
-check('gate: an unplaced school opens once Yom Tov is over everywhere, Mon 28 Sep 2 AM Eastern',
-    $expectOpen ? $unplaced['status'] === 200
-        : ($unplaced['status'] === 403 && strpos((string) $unplaced['json']['opensAt'], '2026-09-28T02:00:00-04:00') === 0
-            && strpos((string) $unplaced['json']['error'], 'Eastern') !== false),
-    $unplaced['body']);
-
-$realSession = req('GET', '/me/shakes', null, 'kid', $noOverride);
-check('gate: a session follows its own school too',
-    time() >= strtotime('2026-09-28 06:00 UTC') ? $realSession['status'] === 200 : $realSession['status'] === 403,
-    $realSession['body']);
-
-// The sun math itself, which needs no database.
-require_once dirname(__DIR__, 2) . '/tzeis.php';
-$noon = strtotime('2026-09-27 12:00 UTC');
-check('tzeis: Crown Heights, 7:27:16 PM EDT (tzeis.js agrees)',
-    lulavSunEvent($noon, 40.669, -73.942, 8.5) === strtotime('2026-09-27 19:27:16 America/New_York'));
-check('tzeis: Melbourne, its own Sunday evening, 7:00 PM AEST',
-    gmdate('Y-m-d H:i', lulavSunEvent($noon, -37.870, 144.995, 8.5) + 10 * 3600) === '2026-09-27 19:00');
-check('tzeis: none where the sun never gets that low', lulavSunEvent($noon, 89.9, 0.0, 8.5) === null);
-$late = [];
-foreach (require dirname(__DIR__, 2) . '/school-locations.php' as $schoolId => $where) {
-    $tzeis = lulavSunEvent($noon, $where['lat'], $where['lng'], 8.5);
-    if ($tzeis === null || $tzeis >= strtotime('2026-09-28 06:00 UTC')
-        || (new DateTime('@' . $tzeis))->setTimezone(new DateTimeZone($where['tz']))->format('D') !== 'Sun') {
-        $late[] = $schoolId;
-    }
+// /schools sends each school's coordinates from school-locations.php, which
+// campaignLock.js uses to reopen logging at that community's own tzeis.
+array_map('unlink', glob($sandbox . '/storage/lulav/cache/*.json') ?: []);
+$coords = req('GET', '/schools');
+$byId = [];
+foreach ((array) $coords['json'] as $row) {
+    $byId[$row['id'] ?? ''] = $row;
 }
-check('tzeis: every listed school opens on its own Sunday evening, before the fallback', !$late, implode(', ', $late));
+check('coordinates: a placed school (269, Crown Heights) sends lat/lng',
+    ($byId['269']['lat'] ?? null) === 40.669 && ($byId['269']['lng'] ?? null) === -73.942, json_encode($byId['269'] ?? null));
+check('coordinates: an unplaced school (61) sends null',
+    array_key_exists('lat', $byId['61'] ?? []) && $byId['61']['lat'] === null && $byId['61']['lng'] === null, json_encode($byId['61'] ?? null));
+check('coordinates: no timezone or opening time is sent', strpos($coords['body'], '"tz"') === false && strpos($coords['body'], 'opensAt') === false);
+checkClean('coordinates', $coords);
+
+// Soldiers sign in whenever their credentials are right: the API has no clock.
+check('sign-in: a soldier signs in with no gate', req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'])['status'] === 200);
 
 echo "== high-number alerts ==\n";
 

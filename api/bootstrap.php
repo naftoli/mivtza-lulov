@@ -13,30 +13,6 @@ const LULAV_FALLBACK_LANG_ID = 1;
 // browser history is dead by the time anyone reads it.
 const LULAV_HANDOFF_TTL = 120;
 
-// No soldier may sign in, or use a session, before tzeis at their own school on
-// this date: Sunday 27 September 2026, Motzei the second day of Yom Tov (16
-// Tishrei 5787), which is also the campaign's first day. Tzeis is the same
-// moment src/lib/tzeis.js computes (8.5 degrees, a couple of minutes after
-// Chabad's "Holiday Ends"), from the coordinates in school-locations.php, so
-// Melbourne opens first and Los Angeles last -- e.g. 7:27 PM EDT in Crown
-// Heights. Admins and the public pages are not affected. Once the date has
-// passed this is inert, so it needs no removal; set it to next year's date (or
-// override with LULAV_KID_LOGIN_OPENS_AT) to use it again.
-//
-// This is a server-side backstop, stricter than src/lib/campaignLock.js, which
-// lets a soldier sign in during Yom Tov and only locks writing, per community.
-const LULAV_KID_LOGIN_OPENS_DATE = '2026-09-27';
-// A school school-locations.php cannot place opens here instead: after Yom Tov
-// is over everywhere (campaignLock.js's FB_FIRST_END). Every placed school
-// opens before it, so past this moment the gate looks nothing up.
-const LULAV_KID_LOGIN_FALLBACK_AT = '2026-09-28 06:00 UTC';
-// Tzeis hakochavim: the sun this far below the horizon (tzeis.js TZEIS_ANGLE).
-const LULAV_TZEIS_ANGLE = 8.5;
-// Soldiers, by serial, let in before the opening. Their date of birth is still
-// checked; only the clock is waived. LULAV_KID_LOGIN_EARLY_SERIALS (comma-
-// separated) adds to this list.
-const LULAV_KID_LOGIN_EARLY_SERIALS = ['7794251'];
-
 define('LULAV_PUBLIC_ROOT', dirname(__DIR__, 3));
 define('LULAV_STORAGE_ROOT', dirname(LULAV_PUBLIC_ROOT) . '/storage/lulav');
 define('LULAV_PHOTO_ROOT', LULAV_STORAGE_ROOT . '/photos');
@@ -76,7 +52,6 @@ require_once LULAV_PUBLIC_ROOT . '/api/header/db.php';
 require_once LULAV_PUBLIC_ROOT . '/api/auth/classes/Auth.php';
 require_once LULAV_PUBLIC_ROOT . '/class.globalSettings.php';
 require_once dirname(__DIR__, 2) . '/classes/mivtzoim.php';
-require_once __DIR__ . '/tzeis.php';
 
 // Nothing the legacy includes print belongs in a JSON body; log and drop it.
 $lulavStrayOutput = (string) ob_get_clean();
@@ -285,17 +260,10 @@ function lulavActor(bool $required = true): ?array
     if (!in_array($payload['type'], ['kid', 'admin'], true)) {
         lulavError('Invalid authentication token.', 401);
     }
-    // A soldier session from before the opening -- a tester's, say -- is
-    // refused as well, so closed means closed rather than "no new logins". The
-    // school is looked up only while some school may still be closed.
-    if ($payload['type'] === 'kid' && time() < lulavKidLoginLastOpensAt()) {
-        $kid = lulavKidByUserId((int) $payload['id'], false);
-        lulavRequireKidLoginOpen((string) ($payload['serial'] ?? ''), $kid ? (int) $kid['school_id'] : null);
-    }
     return $payload;
 }
 
-/** A school's ['lat', 'lng', 'tz'] from school-locations.php, or null. */
+/** A school's ['lat', 'lng'] from school-locations.php, or null. */
 function lulavSchoolLocation(int $schoolId): ?array
 {
     static $locations;
@@ -303,89 +271,6 @@ function lulavSchoolLocation(int $schoolId): ?array
         $locations = require __DIR__ . '/school-locations.php';
     }
     return $locations[$schoolId] ?? null;
-}
-
-/** LULAV_KID_LOGIN_OPENS_AT as a timestamp, or null when unset or unparseable. */
-function lulavKidLoginOverride(): ?int
-{
-    $override = lulavEnv('LULAV_KID_LOGIN_OPENS_AT');
-    if ($override === '') {
-        return null;
-    }
-    $parsed = strtotime($override);
-    if ($parsed === false) {
-        error_log('Lulav API: ignoring unparseable LULAV_KID_LOGIN_OPENS_AT ' . $override);
-        return null;
-    }
-    return $parsed;
-}
-
-/**
- * When soldier sign-in opens for a school, as a Unix timestamp: tzeis at the
- * school on LULAV_KID_LOGIN_OPENS_DATE, or LULAV_KID_LOGIN_FALLBACK_AT for a
- * school that cannot be placed (or is unknown, null). LULAV_KID_LOGIN_OPENS_AT
- * names one moment for everyone outright (any strtotime() string with a zone,
- * e.g. "2026-09-27 18:45 EDT").
- */
-function lulavKidLoginOpensAt(?int $schoolId): int
-{
-    $override = lulavKidLoginOverride();
-    if ($override !== null) {
-        return $override;
-    }
-    $fallback = (int) strtotime(LULAV_KID_LOGIN_FALLBACK_AT);
-    $where = $schoolId === null ? null : lulavSchoolLocation($schoolId);
-    if (!$where) {
-        return $fallback;
-    }
-    // Noon UTC on the date, as tzeis.js anchors it; the sun math picks the
-    // school's own civil day from there.
-    $tzeis = lulavSunEvent(
-        (int) strtotime(LULAV_KID_LOGIN_OPENS_DATE . ' 12:00 UTC'),
-        (float) $where['lat'],
-        (float) $where['lng'],
-        LULAV_TZEIS_ANGLE
-    );
-    return $tzeis ?? $fallback;
-}
-
-/** The last moment any school opens; from then on the gate is inert. */
-function lulavKidLoginLastOpensAt(): int
-{
-    return lulavKidLoginOverride() ?? (int) strtotime(LULAV_KID_LOGIN_FALLBACK_AT);
-}
-
-/** Whether $serial is one of the soldiers let in before the opening. */
-function lulavKidLoginIsEarly(string $serial): bool
-{
-    if ($serial === '') {
-        return false;
-    }
-    $extra = array_filter(array_map('trim', explode(',', lulavEnv('LULAV_KID_LOGIN_EARLY_SERIALS'))));
-    return in_array($serial, array_merge(LULAV_KID_LOGIN_EARLY_SERIALS, $extra), true);
-}
-
-/**
- * Refuses the request while soldier sign-in is still closed at $schoolId,
- * unless $serial is one of the soldiers let in early. The opening time is
- * worded in the school's own zone, or Eastern where it has none.
- */
-function lulavRequireKidLoginOpen(string $serial, ?int $schoolId): void
-{
-    $opensAt = lulavKidLoginOpensAt($schoolId);
-    if (time() >= $opensAt || lulavKidLoginIsEarly($serial)) {
-        return;
-    }
-    $where = $schoolId === null ? null : lulavSchoolLocation($schoolId);
-    $local = $where && lulavKidLoginOverride() === null;
-    $when = (new DateTimeImmutable('@' . $opensAt))
-        ->setTimezone(new DateTimeZone($local ? $where['tz'] : 'America/New_York'));
-    lulavError(
-        'Mivtza Lulav opens for soldiers after Yom Tov, on '
-            . $when->format('l, F j') . ' at ' . $when->format('g:i A') . ($local ? ' your time.' : ' Eastern.'),
-        403,
-        ['opensAt' => $when->format(DATE_ATOM)]
-    );
 }
 
 function lulavRequireActor(array $types): array

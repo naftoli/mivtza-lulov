@@ -40,26 +40,13 @@ teacher-grid marks. The campaign id is `LULAV_MIVTZOIM_ID` in `bootstrap.php`
 7. If the app is hosted on another origin, set `LULAV_ALLOWED_ORIGINS` to a
    comma-separated allowlist. Same-origin requests work without configuration.
 8. Optionally set `LULAV_TOKEN_TTL` in seconds. The default is 43,200 (12 hours).
-9. **Soldier sign-in opens at each school's own Motzei Yom Tov.** Until tzeis
-   (8.5°, as `src/lib/tzeis.js` computes it) at the school on
-   `LULAV_KID_LOGIN_OPENS_DATE` (in `bootstrap.php`; currently Sunday
-   27 September 2026 -- 7:27 PM EDT in Crown Heights), `/soldier/login`,
-   `/soldier/handoff` and `/parent/handoff` answer 403 with the opening time in
-   the school's own zone, and any existing soldier session is refused. The
-   coordinates come from `school-locations.php`, by school_id; a school missing
-   there waits until `LULAV_KID_LOGIN_FALLBACK_AT` (Monday 28 September, 06:00
-   UTC), after Yom Tov is over everywhere -- so add a school there when it
-   joins. Admins and the public pages are unaffected. Set
-   `LULAV_KID_LOGIN_OPENS_AT` to any zoned time (`2000-01-01 00:00 UTC` to open
-   it now) to open every school at that one moment instead -- e.g. to try the
-   soldier flow locally before then.
-10. **Every Lulav email** ends with Mashpia's standard footer -- HQ's address,
-    the privacy policy and an unsubscribe link -- and carries a
-    `List-Unsubscribe` header, as spam filters expect of mail that is not bulk
-    (`LULAV_MAIL_*` in `bootstrap.php`). Its links go to `privacy_policy.php`
-    and `unsubscribe.php`: the shared footer's own `privacy.html` is an empty
-    page and its `unsubscribe.html` is a 404.
-11. **High-number alerts.** A day saved at 50+ shakes or 180+ minutes is
+9. **Every Lulav email** ends with Mashpia's standard footer -- HQ's address,
+   the privacy policy and an unsubscribe link -- and carries a
+   `List-Unsubscribe` header, as spam filters expect of mail that is not bulk
+   (`LULAV_MAIL_*` in `bootstrap.php`). Its links go to `privacy_policy.php`
+   and `unsubscribe.php`: the shared footer's own `privacy.html` is an empty
+   page and its `unsubscribe.html` is a 404.
+10. **High-number alerts.** A day saved at 50+ shakes or 180+ minutes is
     emailed to HQ and Shimmy, Cc the school's Base Commanders (see
     `LULAV_ALERT_*` and `lulavBaseCommanderEmails()` in `index.php`). Set
     `LULAV_MAIL_CAPTURE` to a file path to write alerts there as JSON lines
@@ -268,8 +255,8 @@ write-lock (checked per community against an independent sunset calculation,
 and that an unplaced school is never less strict than any known one), the
 Sukkos calendar, the high-number flags, photos and formatting. It also holds
 the rules that exist in both languages to the PHP side -- the high-number
-limits, goal percent (both functions run over the same grid) and the sign-in
-gate's date -- so changing one side without the other fails the run.
+limits and goal percent (both functions run over the same grid) -- so
+changing one side without the other fails the run.
 
 `tests/mock` runs the real `bootstrap.php` and `index.php` inside a throwaway
 tree in the system temp directory, against a fake PDO that answers by matching

@@ -11,7 +11,7 @@
 
 // The API files coverage.php measures. school-locations.php is data -- it only
 // returns an array -- so it has no functions or exits to count.
-const LULAV_COVERED_FILES = ['bootstrap.php', 'index.php', 'tzeis.php'];
+const LULAV_COVERED_FILES = ['bootstrap.php', 'index.php'];
 
 function lulav_mock_sandbox(): string
 {
@@ -35,7 +35,6 @@ function lulav_mock_sandbox(): string
     $source = dirname(__DIR__, 2);
     copy($source . '/bootstrap.php', $api . '/bootstrap.php');
     copy($source . '/index.php', $api . '/index.php');
-    copy($source . '/tzeis.php', $api . '/tzeis.php');
     copy($source . '/school-locations.php', $api . '/school-locations.php');
     // coverage.php sets this: mark the copies so the suite can report what it
     // never reached. The real files are never touched.

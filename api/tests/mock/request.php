@@ -27,8 +27,6 @@ putenv('LULAV_TEST_MARKLOG=' . $sandbox . '/marks.json');
 // Alerts are captured, never mailed.
 putenv('LULAV_MAIL_CAPTURE=' . $sandbox . '/mail.jsonl');
 @unlink($sandbox . '/mail.jsonl');
-// Soldier sign-in open by default; the gate's own tests close it.
-$env += ['LULAV_KID_LOGIN_OPENS_AT' => '2000-01-01 00:00 UTC'];
 foreach ($env as $name => $value) {
     putenv($name . '=' . $value);
 }

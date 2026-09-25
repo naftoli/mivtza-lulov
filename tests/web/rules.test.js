@@ -56,15 +56,6 @@ test('5787: Shabbos is the first day, so Lulav is taken on days 2-7', () => {
   assert.equal(ISRU_CHAG, '2026-10-05')
 })
 
-test("the API's sign-in gate opens on the first Lulav day's date", () => {
-  // bootstrap.php opens soldier sign-in at sunset on LULAV_KID_LOGIN_OPENS_DATE,
-  // meant to be the evening the first days of Yom Tov end. When SUKKOS_START is
-  // moved next year this fails until the PHP date moves with it.
-  const start = read('src/lib/succos.js').match(/SUKKOS_START = '([\d-]+)'/)[1]
-  const firstLulavDay = new Date(Date.parse(start + 'T12:00:00Z') + (LULAV_DAYS[0] - 1) * 86400000).toISOString().slice(0, 10)
-  assert.equal(phpConst('api/bootstrap.php', 'LULAV_KID_LOGIN_OPENS_DATE'), firstLulavDay)
-})
-
 test('ordinals', () => {
   const cases = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 11: '11th', 12: '12th', 13: '13th', 21: '21st', 22: '22nd', 101: '101st', 111: '111th' }
   for (const [n, expected] of Object.entries(cases)) assert.equal(ordinal(Number(n)), expected)

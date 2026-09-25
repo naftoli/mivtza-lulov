@@ -34,11 +34,10 @@ never change.
   - **`lat` / `lng`** are optional: the school's coordinates, used to reopen soldier
     logging at that community's own **Motzei Yom Tov** (tzeis is computed client-side
     in [`src/lib/tzeis.js`](../src/lib/tzeis.js); see [`campaignLock.js`](../src/lib/campaignLock.js)).
-    The live API sends them from [`api/school-locations.php`](../api/school-locations.php),
-    which also sets when each school's soldiers may first sign in (the same tzeis, ported
-    to PHP in [`api/tzeis.php`](../api/tzeis.php)). A school missing there sends `null`;
-    the app then maps the `city` string to coordinates for known communities, and any it
-    can't place stays locked until Yom Tov is over worldwide.
+    The live API sends them from [`api/school-locations.php`](../api/school-locations.php).
+    A school missing there sends `null`; the app then maps the `city` string to
+    coordinates for known communities, and any it can't place stays locked until Yom Tov
+    is over worldwide.
 - Classes per school → `[{ id, name, schoolId, kidCount }]`
 - `getKidsForSchool(schoolId)` → `[{ serial, firstName, lastName, hebFirst, hebLast, dob, gender, class, rank, schoolId, photoUrl }]`
   - `rank` is a text label (e.g. "Sergeant"); `photoUrl` is the profile picture.

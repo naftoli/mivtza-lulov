@@ -412,8 +412,8 @@ function lulavSchoolRows(?int $onlyId = null): array
         } elseif ($logoId > 0) {
             $logo = '/file_view.php?id=' . $logoId;
         }
-        // campaignLock.js reopens logging at this spot's tzeis, as the API's
-        // sign-in gate does; null leaves it to the city map or the worldwide unlock.
+        // campaignLock.js reopens logging at this spot's tzeis; null leaves it to
+        // the city map or the worldwide unlock.
         $where = lulavSchoolLocation($schoolId);
         $rows[] = [
             'id' => (string) $schoolId,
@@ -1500,9 +1500,9 @@ function lulavClassLeaderboard(int $schoolId): array
 function lulavHandleKidLogin(): void
 {
     global $MASHPIA_DB;
+    lulavRateLimit('kid-login', 12, 900);
     $input = lulavInput();
     $serial = trim((string) ($input['serial'] ?? $input['id'] ?? ''));
-    lulavRateLimit('kid-login', 12, 900);
     $dob = trim((string) ($input['dob'] ?? ''));
     if (!$serial || !preg_match('/^\d+$/', $serial) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
         lulavError('Serial number and date of birth are required.', 422);
@@ -1519,8 +1519,6 @@ function lulavHandleKidLogin(): void
     }
     $kid = lulavKidBySerial($serial);
     lulavRequireEligibleSchool((int) $kid['school_id']);
-    // Only now, with the school known: it opens at that community's tzeis.
-    lulavRequireKidLoginOpen($serial, (int) $kid['school_id']);
     $token = lulavIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
     lulavJson(['token' => $token, 'expiresIn' => (int) (lulavEnv('LULAV_TOKEN_TTL') ?: 43200), 'soldier' => lulavSerializeKid($kid)]);
 }
@@ -1538,8 +1536,8 @@ function lulavHandleParentHandoff(): void
 {
     lulavRateLimit('parent-handoff', 60, 900);
     $input = lulavInput();
-    $childId = (string) ($input['child'] ?? '');
     $parentToken = trim((string) ($input['parent'] ?? ''));
+    $childId = (string) ($input['child'] ?? '');
     if (!$parentToken || !preg_match('/^\d+$/', $childId)) {
         lulavError('A parent session and a child are required.', 422);
     }
@@ -1552,9 +1550,6 @@ function lulavHandleParentHandoff(): void
 
     $kid = lulavKidBySerial(reset($serials));
     lulavRequireEligibleSchool((int) $kid['school_id']);
-    // Refused here, not only at /soldier/handoff, so the parent sees why on the
-    // parent site instead of being sent to an app that turns them away.
-    lulavRequireKidLoginOpen((string) $kid['user_serial'], (int) $kid['school_id']);
     lulavJson([
         'code' => lulavIssueHandoffCode((int) $kid['user_id']),
         'expiresIn' => LULAV_HANDOFF_TTL,
@@ -1598,17 +1593,16 @@ function lulavHandleParentChildren(): void
  */
 function lulavHandleKidHandoff(): void
 {
+    lulavRateLimit('kid-handoff', 30, 900);
     $input = lulavInput();
     $code = trim((string) ($input['code'] ?? ''));
     $payload = $code ? lulavVerifySignedPayload($code) : null;
-    lulavRateLimit('kid-handoff', 30, 900);
     if (!$payload || $payload['type'] !== 'handoff') {
         lulavError('This sign-in link has expired. Please tap the button again.', 401);
     }
 
     $kid = lulavKidByUserId((int) $payload['id']);
     lulavRequireEligibleSchool((int) $kid['school_id']);
-    lulavRequireKidLoginOpen((string) $kid['user_serial'], (int) $kid['school_id']);
     $token = lulavIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
     lulavJson([
         'token' => $token,
