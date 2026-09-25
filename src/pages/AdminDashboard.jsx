@@ -397,40 +397,40 @@ function PhotoApprovals({ schoolId, shakes, error, onRetry }) {
   )
 }
 
-// Hourly times for the range dropdowns, plus 11:59 PM so "to" can reach the end
-// of a day. Values are 24-hour "HH:MM", labels follow the admin's locale.
-const RANGE_TIMES = [...Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`), '23:59']
-const timeLabel = (hhmm) =>
-  new Date(`2000-01-01T${hhmm}:00`).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 // A timestamp's calendar date in the admin's own timezone, as "YYYY-MM-DD".
 const localDate = (seconds) => {
   const d = new Date(seconds * 1000)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-const dateLabel = (ymd) =>
-  new Date(`${ymd}T00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+// A "YYYY-MM-DDTHH:MM" picker value, read as the admin's local time, in seconds.
+// NaN when the picker is empty or half filled in.
+const pickerSeconds = (value) => Math.floor(new Date(`${value}:00`).getTime() / 1000)
 
 // Download the approved photos uploaded between two dates and times, as one zip.
-// Only shown when the school has approved photos. The choices are the days
-// photos were actually uploaded; times are the admin's local time, turned into
-// exact instants here so the server never has to guess a timezone.
+// Only shown when the school has approved photos. Times are to the minute, in
+// the admin's local time, turned into exact instants here so the server never
+// has to guess a timezone.
 function PhotoDownload({ schoolId, times }) {
-  const dates = useMemo(() => [...new Set(times.map(localDate))], [times])
-  const [fromDate, setFromDate] = useState(null)
-  const [fromTime, setFromTime] = useState('00:00')
-  const [toDate, setToDate] = useState(null)
-  const [toTime, setToTime] = useState('23:59')
+  // The whole range by default: the start of the first upload day to the end of
+  // the last. It also bounds the pickers.
+  const [first, last] = useMemo(() => {
+    const days = times.map(localDate).sort()
+    return [`${days[0]}T00:00`, `${days[days.length - 1]}T23:59`]
+  }, [times])
+  const [fromValue, setFromValue] = useState(null)
+  const [toValue, setToValue] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  // Default to the whole range, and fall back to it if a chosen day drops out
-  // (its last photo removed, say).
-  const from = dates.includes(fromDate) ? fromDate : dates[0]
-  const to = dates.includes(toDate) ? toDate : dates[dates.length - 1]
-  const fromTs = Math.floor(new Date(`${from}T${fromTime}:00`).getTime() / 1000)
-  const toTs = Math.floor(new Date(`${to}T${toTime}:59`).getTime() / 1000) // through the end of that minute
-  const backwards = fromTs > toTs
-  const count = backwards ? 0 : times.filter((t) => t >= fromTs && t <= toTs).length
+  // The default until the admin picks a time. A cleared or half-typed picker
+  // stays as it is rather than snapping back, and just holds the download.
+  const from = fromValue ?? first
+  const to = toValue ?? last
+  const fromTs = pickerSeconds(from)
+  const toTs = pickerSeconds(to) + 59 // through the end of that minute
+  const incomplete = Number.isNaN(fromTs) || Number.isNaN(toTs)
+  const backwards = !incomplete && fromTs > toTs
+  const count = incomplete || backwards ? 0 : times.filter((t) => t >= fromTs && t <= toTs).length
 
   // The server builds the zip from the files on its disk. The download itself is
   // a plain link, which cannot send the admin's token, so first ask for a
@@ -453,29 +453,25 @@ function PhotoDownload({ schoolId, times }) {
     }
   }
 
-  const select = 'min-w-0 flex-1 rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-blue focus:ring-2 focus:ring-blue/25'
-  const row = (name, date, setDate, time, setTime) => (
-    <div>
+  const input = 'mt-1 block w-full min-w-0 rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-blue focus:ring-2 focus:ring-blue/25'
+  const row = (name, value, setValue) => (
+    <label className="block">
       <span className={label}>{name}</span>
-      <div className="mt-1 flex gap-2">
-        <select aria-label={`${name} date`} value={date} onChange={(e) => setDate(e.target.value)} className={select}>
-          {dates.map((d) => <option key={d} value={d}>{dateLabel(d)}</option>)}
-        </select>
-        <select aria-label={`${name} time`} value={time} onChange={(e) => setTime(e.target.value)} className={select}>
-          {RANGE_TIMES.map((t) => <option key={t} value={t}>{timeLabel(t)}</option>)}
-        </select>
-      </div>
-    </div>
+      <input type="datetime-local" value={value} min={first} max={last} step={60}
+        onChange={(e) => setValue(e.target.value)} className={input} />
+    </label>
   )
 
   return (
     <Section title="Download Photos">
       <p className="mb-4 text-xs text-muted">Approved photos, by when they were uploaded. They download as one zip, named by soldier and day.</p>
       <div className="space-y-3">
-        {row('From', from, setFromDate, fromTime, setFromTime)}
-        {row('To', to, setToDate, toTime, setToTime)}
+        {row('From', from, setFromValue)}
+        {row('To', to, setToValue)}
       </div>
-      {backwards
+      {incomplete
+        ? <p role="alert" className="mt-3 text-sm font-semibold text-red">Pick a date and time for both “From” and “To”.</p>
+        : backwards
         ? <p role="alert" className="mt-3 text-sm font-semibold text-red">“From” must be before “To”.</p>
         : <p className="mt-3 text-sm text-navy"><strong>{count}</strong> of {times.length} approved photo{times.length === 1 ? '' : 's'} in this range</p>}
       {error && <p role="alert" className="mt-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
