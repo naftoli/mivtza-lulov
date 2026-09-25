@@ -12,7 +12,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { sunsetUTC, tzeisUTC } from '../../src/lib/tzeis.js'
-import { soldierLocked, reopenAt, lockReopenText } from '../../src/lib/campaignLock.js'
+import { soldierLocked, kidLocked, reopenAt, lockReopenText } from '../../src/lib/campaignLock.js'
 
 // Sunset, end of civil twilight (6 deg) and end of nautical twilight (12 deg),
 // UTC ms, from PHP's date_sun_info() -- a separate implementation -- on the three
@@ -203,4 +203,13 @@ test('every known community reopens well after its own sunset on Motzei Yom Tov'
 
 test('the reopen notice names a day and a time', () => {
   assert.match(lockReopenText(brooklyn, ny('2026-09-27 12:00')), /Sunday.*\d:\d\d/)
+})
+
+test('serial 7794251 may log while his community is locked; everyone else waits', () => {
+  const duringYomTov = ny('2026-09-27 12:00')
+  assert.equal(kidLocked({ id: '7794251' }, brooklyn, duringYomTov), false, 'the exception')
+  assert.equal(kidLocked({ id: 7794251 }, brooklyn, duringYomTov), false, 'a numeric serial too')
+  assert.equal(kidLocked({ id: '555001' }, brooklyn, duringYomTov), true, 'anyone else')
+  assert.equal(kidLocked(null, brooklyn, duringYomTov), true, 'no soldier at all')
+  assert.equal(kidLocked({ id: '555001' }, brooklyn, ny('2026-09-30 12:00')), false, 'Chol Hamoed is open for all')
 })

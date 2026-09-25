@@ -91,6 +91,17 @@ export function soldierLocked(school, now = Date.now()) {
   return now < b.firstEnd || (now >= b.lastStart && now < b.lastEnd)
 }
 
+// Soldiers, by serial, who may log shakes even while their community is locked.
+const LOG_ANY_TIME_SERIALS = new Set(['7794251'])
+
+// Whether this soldier is locked out of logging right now: soldierLocked() for
+// their school, unless they are on LOG_ANY_TIME_SERIALS. The form and the write
+// guard in api.js both ask this, so they always agree.
+export function kidLocked(kid, school, now = Date.now()) {
+  if (LOG_ANY_TIME_SERIALS.has(String(kid?.id ?? ''))) return false
+  return soldierLocked(school, now)
+}
+
 // The UTC instant logging reopens next, given "now": Motzei the first days while
 // still in that window, otherwise Motzei Simchas Torah. (Only meaningful when
 // locked; harmless otherwise.)

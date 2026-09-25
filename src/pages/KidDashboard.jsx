@@ -8,7 +8,7 @@ import { celebrate } from '../lib/celebrate.js'
 import { playShake, isMuted, setMuted } from '../lib/sound.js'
 import { asset } from '../lib/asset.js'
 import { rankIcon } from '../lib/rankIcon.js'
-import { soldierLocked, lockReopenText } from '../lib/campaignLock.js'
+import { kidLocked, lockReopenText } from '../lib/campaignLock.js'
 import { isHighInput } from '../lib/highNumber.js'
 import { LULAV_DAYS, SHABBOS_DAY, ordinal } from '../lib/succos.js'
 import { Button, Card, Field, Input, Textarea, Spinner, SectionHeader, SchoolLogo, Avatar, ErrorNote, LulavIcon } from '../components/ui.jsx'
@@ -46,8 +46,8 @@ export default function KidDashboard() {
 
   // Read-only for soldiers until their community's Motzei Yom Tov (per-school
   // tzeis): the ID card, stats and report still show, but the log form is closed.
-  // (The write is guarded too — api.js.)
-  const locked = soldierLocked(school)
+  // (The write is guarded too — api.js.) A few soldiers may log any time.
+  const locked = kidLocked(kid, school)
 
   const myTotal = (myShakes || []).reduce((s, x) => s + x.count, 0)
   const myMinutes = (myShakes || []).reduce((n, s) => n + (s.minutes || 0), 0)
