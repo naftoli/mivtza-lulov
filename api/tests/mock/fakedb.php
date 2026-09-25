@@ -13,14 +13,20 @@ class FakeStatement extends PDOStatement
 {
     /** @var array<int,array<string,mixed>> */
     private $rows = [];
+    /** @var callable|null answers at execute time, with the bound parameters */
+    private $answer;
     private $cursor = 0;
     public $sql = '';
     public $params = [];
 
-    public function __construct(string $sql, array $rows)
+    public function __construct(string $sql, $rows)
     {
         $this->sql = $sql;
-        $this->rows = $rows;
+        if (is_callable($rows)) {
+            $this->answer = $rows;
+        } else {
+            $this->rows = $rows;
+        }
     }
 
     #[\ReturnTypeWillChange]
@@ -28,7 +34,34 @@ class FakeStatement extends PDOStatement
     {
         $this->params = $params ?? [];
         $this->cursor = 0;
+        // LULAV_TEST_PDO_FAIL=<SQLSTATE> makes a matching statement fail the way
+        // MySQL would (LULAV_TEST_PDO_FAIL_MATCH, a regex, says which; default
+        // any), for the API's schema-error handling.
+        $state = getenv('LULAV_TEST_PDO_FAIL');
+        // "RUNTIME" throws something that is not a database error at all, for
+        // the router's last-resort handler.
+        if ($state === 'RUNTIME' && preg_match(getenv('LULAV_TEST_PDO_FAIL_MATCH') ?: '/./', $this->sql)) {
+            throw new RuntimeException('simulated internal failure: secret detail');
+        }
+        if ($state && preg_match(getenv('LULAV_TEST_PDO_FAIL_MATCH') ?: '/./', $this->sql)) {
+            $error = new PDOException("SQLSTATE[$state]: simulated failure");
+            $error->errorInfo = [$state, 0, 'simulated failure'];
+            throw $error;
+        }
+        // A fixture callable sees the statement and its parameters, so it can
+        // answer for the serial, id or date of birth actually asked about.
+        if ($this->answer) {
+            $this->rows = array_values((array) call_user_func($this->answer, $this->sql, $this->params));
+        }
         FakeDb::$log[] = ['sql' => $this->sql, 'params' => $this->params];
+        // LULAV_TEST_SQL_LOG: append each statement and its parameter names, so a
+        // refactor can be checked for sending the database exactly the same SQL.
+        $logFile = getenv('LULAV_TEST_SQL_LOG');
+        if ($logFile) {
+            $names = array_keys($this->params);
+            sort($names);
+            file_put_contents($logFile, $this->sql . '  {' . implode(',', $names) . "}\n", FILE_APPEND | LOCK_EX);
+        }
         return true;
     }
 
@@ -93,7 +126,7 @@ class FakeDb extends PDO
         $flat = trim(preg_replace('/\s+/', ' ', (string) $sql));
         foreach (self::$patterns as [$pattern, $rows]) {
             if (preg_match($pattern, $flat)) {
-                return new FakeStatement($flat, is_callable($rows) ? $rows($flat) : $rows);
+                return new FakeStatement($flat, $rows);
             }
         }
         self::$unmatched[] = $flat;

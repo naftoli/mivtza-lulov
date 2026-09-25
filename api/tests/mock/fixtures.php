@@ -16,7 +16,11 @@ const T_MIN_DAY3 = 203;
 function lulav_test_task_map(): array
 {
     $rows = [];
+    $missing = (int) getenv('LULAV_TEST_MAP_MISSING_DAY');
     foreach ([2, 3, 4, 5, 6, 7] as $day) {
+        if ($day === $missing) {
+            continue;
+        }
         $rows[] = [
             'field_name' => 'day', 'day_number' => $day,
             'date_task_id' => 100 + $day, 'grid_id' => 11,
@@ -97,28 +101,40 @@ function lulav_test_patterns(): array
 
     return [
         // --- schema guards -------------------------------------------------
-        ['/FROM information_schema\.tables/i', [['COUNT(*)' => 1]]],
+        // LULAV_TEST_NO_TABLES=1: the Lulav tables were never installed.
+        ['/FROM information_schema\.tables/i', static function (): array {
+            return [['COUNT(*)' => getenv('LULAV_TEST_NO_TABLES') === '1' ? 0 : 1]];
+        }],
         ['/FROM information_schema\.columns/i', [['COUNT(*)' => 1]]],
 
         // --- campaign + settings -------------------------------------------
-        ['/FROM mivtzoim WHERE mivtzoim_id/i', [[
-            'mivtzoim_id' => 10, 'name' => 'Mivtza Lulav',
-            'start' => 2461311, 'end' => 2461316,
-        ]]],
+        // LULAV_TEST_NO_CAMPAIGN=1: no campaign row.
+        ['/FROM mivtzoim WHERE mivtzoim_id/i', static function (): array {
+            return getenv('LULAV_TEST_NO_CAMPAIGN') === '1' ? [] : [[
+                'mivtzoim_id' => 10, 'name' => 'Mivtza Lulav',
+                'start' => 2461311, 'end' => 2461316,
+            ]];
+        }],
         ['/FROM lulav_campaign_settings/i', [['per_kid_goal' => 3]]],
         ['/INSERT INTO lulav_campaign_settings/i', []],
-        ['/FROM lulav_api_task_map map/i', lulav_test_task_map()],
-        ['/FROM lulav_api_task_map WHERE/i', lulav_test_task_map()],
+        // LULAV_TEST_MAP_MISSING_DAY=<n>: the teacher-grid map lacks day n.
+        ['/FROM lulav_api_task_map map/i', 'lulav_test_task_map'],
+        ['/FROM lulav_api_task_map WHERE/i', 'lulav_test_task_map'],
         ['/FROM lulav_school_settings/i', []],
         ['/INSERT INTO lulav_school_settings|UPDATE lulav_school_settings/i', []],
 
         // --- the child's Mivtzoim track, and the grid cells a save may target ---
-        ['/SELECT u\.school_type_id, u\.lang_id, ut\.level/i', [[
-            'school_type_id' => 1, 'lang_id' => 1, 'level' => 3,
-        ]]],
+        // LULAV_TEST_NO_TRACK=1: the child has no Mivtzoim track.
+        ['/SELECT u\.school_type_id, u\.lang_id, ut\.level/i', static function (): array {
+            return getenv('LULAV_TEST_NO_TRACK') === '1' ? [] : [['school_type_id' => 1, 'lang_id' => 1, 'level' => 3]];
+        }],
         ['/SELECT task\.grid_id, task\.quantity, mission\.start_date/i', static function (): array {
             // One quantity cell per mapped grid, spanning every campaign day, so
             // lulavValidateMarkTargets() finds a target for each mapped cell.
+            // LULAV_TEST_NO_GRID=1: no cell matches the child's track.
+            if (getenv('LULAV_TEST_NO_GRID') === '1') {
+                return [];
+            }
             $rows = [];
             foreach ([11, 21] as $gridId) {
                 foreach ([2, 3, 4, 5, 6, 7] as $day) {
@@ -133,7 +149,10 @@ function lulav_test_patterns(): array
         }],
 
         // --- locks ----------------------------------------------------------
-        ['/GET_LOCK/i', [['GET_LOCK' => 1]]],
+        // LULAV_TEST_LOCK_BUSY=1: another save holds the child's lock.
+        ['/GET_LOCK/i', static function (): array {
+            return [['GET_LOCK' => getenv('LULAV_TEST_LOCK_BUSY') === '1' ? 0 : 1]];
+        }],
         ['/RELEASE_LOCK/i', [['RELEASE_LOCK' => 1]]],
 
         // --- schools --------------------------------------------------------
@@ -145,8 +164,14 @@ function lulav_test_patterns(): array
              'logo' => '', 'school_logo_id' => 0, 'school_logo_kiosk_id' => 0,
              'soldier_count' => 1, 'motto' => '', 'color' => null, 'goal_override' => null],
         ]],
-        ['/FROM school_registrations|EXISTS \(\s*SELECT 1 FROM school_registrations/i', [['1' => 1]]],
-        ['/SELECT 1 FROM schools WHERE school_id/i', [['1' => 1]]],
+        // LULAV_TEST_NOT_ELIGIBLE=1: the school is not registered this year.
+        ['/FROM school_registrations|EXISTS \(\s*SELECT 1 FROM school_registrations/i', static function (): array {
+            return getenv('LULAV_TEST_NOT_ELIGIBLE') === '1' ? [] : [['1' => 1]];
+        }],
+        // LULAV_TEST_NO_SCHOOL=1: no such school.
+        ['/SELECT 1 FROM schools WHERE school_id/i', static function (): array {
+            return getenv('LULAV_TEST_NO_SCHOOL') === '1' ? [] : [['1' => 1]];
+        }],
 
         // --- the combined shakes/minutes totals ------------------------------
         ['/SUM\(CASE WHEN m\.date_task_id IN .* THEN m\.done_qty/is', [
@@ -160,6 +185,12 @@ function lulav_test_patterns(): array
         ]],
         ['/SELECT COUNT\(\*\) FROM lulav_photos/i', [['COUNT(*)' => 1]]],
         ['/COUNT\(DISTINCT CONCAT\(user_id/i', [['c' => 2]]],
+        // The duplicate check before a photo is stored: new by default;
+        // LULAV_TEST_PHOTO_EXISTS=rejected|approved models a re-upload.
+        ['/SELECT photo_id, status FROM lulav_photos/i', static function (): array {
+            $status = getenv('LULAV_TEST_PHOTO_EXISTS');
+            return $status ? [['photo_id' => 7, 'status' => $status]] : [];
+        }],
         ['/UPDATE lulav_photos/i', []],
         ['/DELETE FROM lulav_photos/i', []],
         ['/INSERT INTO lulav_photos/i', []],
@@ -183,7 +214,10 @@ function lulav_test_patterns(): array
                 ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-missing.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-28 12:00 America/New_York')],
             ];
         }],
-        ['/SELECT \* FROM lulav_photos/i', lulav_test_photo_rows()],
+        // LULAV_TEST_NO_PHOTO=1: no photo with that id.
+        ['/SELECT \* FROM lulav_photos/i', static function (): array {
+            return getenv('LULAV_TEST_NO_PHOTO') === '1' ? [] : lulav_test_photo_rows();
+        }],
 
         // --- marks -------------------------------------------------------------
         ['/FROM date_tasks_marks m\b(?!ark)/i', static function (string $sql) {
@@ -204,11 +238,26 @@ function lulav_test_patterns(): array
             return $k['school_id'] === 61;
         }))],
         ['/FROM users u.*u\.user_id IN/is', $kids],
-        ['/FROM users u.*(u\.user_serial|u\.user_id) = :value/is', [$kids[0]]],
-        ['/SELECT 1 FROM users WHERE user_serial = :serial AND dob/i', [['1' => 1]]],
-        ['/SELECT user_serial, school_id FROM users/i', [[
-            'user_serial' => 555001, 'school_id' => 61,
-        ]]],
+        // One child by serial or by id: whoever was actually asked for.
+        ['/FROM users u.*(u\.user_serial|u\.user_id) = :value/is', static function (string $sql, array $params) use ($kids): array {
+            $column = strpos($sql, 'u.user_serial = :value') !== false ? 'user_serial' : 'user_id';
+            return array_filter($kids, static function (array $kid) use ($column, $params): bool {
+                return (string) $kid[$column] === (string) ($params[':value'] ?? '');
+            });
+        }],
+        // Sign-in: the serial and date of birth have to belong together.
+        ['/SELECT 1 FROM users WHERE user_serial = :serial AND dob/i', static function (string $sql, array $params) use ($kids): array {
+            foreach ($kids as $kid) {
+                if ((string) $kid['user_serial'] === (string) $params[':serial'] && $kid['dob'] === $params[':dob']) {
+                    return [['1' => 1]];
+                }
+            }
+            return [];
+        }],
+        ['/SELECT user_serial, school_id FROM users/i', static function (string $sql, array $params) use ($byId): array {
+            $kid = $byId[(int) ($params[':user'] ?? 0)] ?? null;
+            return $kid ? [['user_serial' => $kid['user_serial'], 'school_id' => $kid['school_id']]] : [];
+        }],
         ['/FROM classes c/i', [
             ['class_id' => 7, 'class_grade' => 5, 'class_sub' => 'Boys', 'kid_count' => 2],
         ]],
@@ -216,9 +265,31 @@ function lulav_test_patterns(): array
         ['/FROM users/i', [$kids[0]]],
 
         // --- admin --------------------------------------------------------------
-        ['/SELECT auth, first, last, username FROM admins/i', [[
-            'auth' => 'super', 'first' => 'Test', 'last' => 'Admin', 'username' => 'testadmin',
-        ]]],
+        // LULAV_TEST_ADMIN: missing | inactive | school (administers school 61
+        // only) | none (administers nothing); HQ ('super') by default.
+        ['/SELECT auth, first, last, username FROM admins/i', static function (): array {
+            $kind = getenv('LULAV_TEST_ADMIN') ?: 'hq';
+            if ($kind === 'missing') {
+                return [];
+            }
+            $auth = ['inactive' => 'inactive', 'school' => '', 'none' => ''][$kind] ?? 'super';
+            return [['auth' => $auth, 'first' => 'Test', 'last' => 'Admin', 'username' => 'testadmin']];
+        }],
+        // A parent's children: parent 501 (the "parent-token" session) has
+        // Mendel and Levi; anyone else, none.
+        ['/SELECT u\.user_id, u\.user_serial FROM admin_auths aa JOIN users u/i', static function (string $sql, array $params) use ($kids): array {
+            if ((int) ($params[':admin'] ?? 0) !== 501) {
+                return [];
+            }
+            $rows = [];
+            foreach ($kids as $kid) {
+                if (in_array($kid['user_id'], [9001, 9002], true)
+                    && (!isset($params[':user']) || (int) $params[':user'] === $kid['user_id'])) {
+                    $rows[] = ['user_id' => $kid['user_id'], 'user_serial' => $kid['user_serial']];
+                }
+            }
+            return $rows;
+        }],
         // The school's admins, for high-number alerts: one Base Commander (in
         // mixed case, to prove addresses are normalised) and one principal who
         // is not. LULAV_TEST_NO_BC=1 models a school with no Base Commander.
@@ -230,7 +301,9 @@ function lulav_test_patterns(): array
                 ['admin_email' => 'principal@school61.test', 'is_base_commander' => 0],
             ];
         }],
-        ['/FROM admin_auths/i', [['school_id' => 61]]],
+        ['/FROM admin_auths/i', static function (): array {
+            return getenv('LULAV_TEST_ADMIN') === 'none' ? [] : [['school_id' => 61]];
+        }],
         ['/FROM admins/i', [[
             'admin_id' => 1, 'auth' => 'super', 'first' => 'Test', 'last' => 'Admin', 'username' => 'testadmin',
         ]]],

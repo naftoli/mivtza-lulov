@@ -24,7 +24,7 @@ function req(string $method, string $path, array $body = null, string $actor = '
         escapeshellarg(__DIR__ . '/request.php'),
         escapeshellarg($method),
         escapeshellarg($path),
-        escapeshellarg($body === null ? '' : json_encode($body)),
+        escapeshellarg($body === null ? '' : (isset($body['@file']) ? '@' . $body['@file'] : json_encode($body))),
         escapeshellarg($actor),
         escapeshellarg($sandbox),
         escapeshellarg(json_encode((object) $env))
@@ -77,6 +77,11 @@ check('/schools is a list of 2', is_array($schools['json']) && count($schools['j
 $first = $schools['json'][0] ?? [];
 check('/schools carries total', ($first['total'] ?? null) === 19, json_encode($first));
 check('/schools carries totalMinutes', ($first['totalMinutes'] ?? null) === 65, json_encode($first));
+$byId = array_column((array) $schools['json'], null, 'id');
+check('/schools places a listed school for campaignLock.js',
+    ($byId['269']['lat'] ?? null) === 40.669 && ($byId['269']['lng'] ?? null) === -73.942, json_encode($byId['269'] ?? null));
+check('/schools leaves an unlisted school unplaced',
+    array_key_exists('lat', $byId['61'] ?? []) && $byId['61']['lat'] === null, json_encode($byId['61'] ?? null));
 check('/schools carries totalPhotos', ($first['totalPhotos'] ?? null) === 1, json_encode($first));
 check('/schools percent uncapped above goal (19 of 6)', ($first['percent'] ?? null) === 317, json_encode($first['percent'] ?? null));
 check('/schools goalReached', ($first['goalReached'] ?? null) === true);
@@ -255,13 +260,27 @@ check('gate: /soldier/login refused while closed', $gatedLogin['status'] === 403
 check('gate: refusal says when it opens', strpos((string) ($gatedLogin['json']['error'] ?? ''), 'opens for soldiers') !== false, $gatedLogin['body']);
 check('gate: refusal carries opensAt', !empty($gatedLogin['json']['opensAt']), $gatedLogin['body']);
 check('gate: no token issued', empty($gatedLogin['json']['token']));
-check('gate: credentials never looked up', ($gatedLogin['queries'] ?? 99) === 0, 'queries=' . ($gatedLogin['queries'] ?? '?'));
 
-$gatedHandoff = req('POST', '/soldier/handoff', ['code' => 'anything'], '', $closed);
+// The opening depends on the soldier's school, so the credentials come first:
+// a wrong date of birth is refused as wrong, and says nothing about the time.
+$gatedWrongDob = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-06'], '', $closed);
+check('gate: a wrong date of birth is still a 401 while closed', $gatedWrongDob['status'] === 401, $gatedWrongDob['body']);
+check('gate: ...with no opening time', empty($gatedWrongDob['json']['opensAt']), $gatedWrongDob['body']);
+
+$handoffCode = signTest(['v' => 1, 'type' => 'handoff', 'id' => 9001, 'iat' => time(), 'exp' => time() + 120]);
+$gatedHandoff = req('POST', '/soldier/handoff', ['code' => $handoffCode], '', $closed);
 check('gate: /soldier/handoff refused while closed', $gatedHandoff['status'] === 403, $gatedHandoff['body']);
+check('gate: ...and issues no token', empty($gatedHandoff['json']['token']), $gatedHandoff['body']);
 
-$gatedParent = req('POST', '/parent/handoff', ['parent' => 'tok', 'child' => 9001], '', $closed);
+$badHandoff = req('POST', '/soldier/handoff', ['code' => 'anything'], '', $closed);
+check('gate: a bad handoff code is still a 401 while closed', $badHandoff['status'] === 401, $badHandoff['body']);
+
+$gatedParent = req('POST', '/parent/handoff', ['parent' => 'parent-token', 'child' => 9001], '', $closed);
 check('gate: /parent/handoff refused while closed', $gatedParent['status'] === 403, $gatedParent['body']);
+check('gate: ...and hands out no code', empty($gatedParent['json']['code']), $gatedParent['body']);
+
+$strangerParent = req('POST', '/parent/handoff', ['parent' => 'tok', 'child' => 9001], '', $closed);
+check('gate: a parent session that fails says so, not when it opens', $strangerParent['status'] === 401 && empty($strangerParent['json']['opensAt']), $strangerParent['body']);
 
 $gatedSession = req('GET', '/me/shakes', null, 'kid', $closed);
 check('gate: an existing kid session is refused too', $gatedSession['status'] === 403, $gatedSession['body']);
@@ -276,12 +295,69 @@ check('gate: admins unaffected', $adminWhileClosed['status'] === 200, $adminWhil
 $publicWhileClosed = req('GET', '/stats', null, '', $closed);
 check('gate: public pages unaffected', $publicWhileClosed['status'] === 200, $publicWhileClosed['body']);
 
-// No override at all: the real rule, sunset in Crown Heights on 27 Sep 2026.
-$realRule = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', ['LULAV_KID_LOGIN_OPENS_AT' => '']);
-$expectOpen = time() >= strtotime('2026-09-27 18:44:51 America/New_York');
-check('gate: real rule opens at Sun 27 Sep 2026 6:44 PM Eastern',
-    $expectOpen ? $realRule['status'] === 200 : ($realRule['status'] === 403 && strpos((string) $realRule['json']['opensAt'], '2026-09-27T18:44') === 0),
+// A serial let in early passes every door; everyone else still waits.
+$early = $closed + ['LULAV_KID_LOGIN_EARLY_SERIALS' => '555001'];
+
+$earlyLogin = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', $early);
+check('gate: an early serial signs in while closed', $earlyLogin['status'] === 200 && !empty($earlyLogin['json']['token']), $earlyLogin['body']);
+
+$otherLogin = req('POST', '/soldier/login', ['serial' => '555002', 'dob' => '2014-05-05'], '', $early);
+check('gate: any other serial is still refused', $otherLogin['status'] === 403, $otherLogin['body']);
+
+$earlySession = req('GET', '/me/shakes', null, 'kid', $early);
+check('gate: an early serial keeps its session', $earlySession['status'] === 200, $earlySession['body']);
+
+$earlyHandoff = req('POST', '/soldier/handoff', ['code' => signTest(['v' => 1, 'type' => 'handoff', 'id' => 9001, 'iat' => time(), 'exp' => time() + 120])], '', $early);
+check('gate: an early serial trades a handoff code', $earlyHandoff['status'] === 200 && !empty($earlyHandoff['json']['token']), $earlyHandoff['body']);
+
+$earlyParent = req('POST', '/parent/handoff', ['parent' => 'parent-token', 'child' => 9001], '', $early);
+check('gate: /parent/handoff for an early serial hands out a code', $earlyParent['status'] === 200 && !empty($earlyParent['json']['code']), $earlyParent['body']);
+
+$builtIn = req('POST', '/soldier/login', ['serial' => '7794251', 'dob' => '2014-05-05'], '', $closed);
+check('gate: serial 7794251 is let in early', $builtIn['status'] !== 403, $builtIn['body']);
+
+// No override at all: the real rule, tzeis at the soldier's own school on
+// 27 Sep 2026. 555003's school (269) is in Crown Heights; 555001's (61) is
+// not in school-locations.php, so it waits for Yom Tov to end everywhere.
+$noOverride = ['LULAV_KID_LOGIN_OPENS_AT' => ''];
+$realRule = req('POST', '/soldier/login', ['serial' => '555003', 'dob' => '2014-05-05'], '', $noOverride);
+$expectOpen = time() >= strtotime('2026-09-27 19:27:16 America/New_York');
+check('gate: a Crown Heights school opens at its tzeis, Sun 27 Sep 2026 7:27 PM',
+    $expectOpen ? $realRule['status'] === 200
+        : ($realRule['status'] === 403 && strpos((string) $realRule['json']['opensAt'], '2026-09-27T19:27:16-04:00') === 0
+            && strpos((string) $realRule['json']['error'], '7:27 PM your time') !== false),
     $realRule['body']);
+
+$unplaced = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', $noOverride);
+$expectOpen = time() >= strtotime('2026-09-28 06:00 UTC');
+check('gate: an unplaced school opens once Yom Tov is over everywhere, Mon 28 Sep 2 AM Eastern',
+    $expectOpen ? $unplaced['status'] === 200
+        : ($unplaced['status'] === 403 && strpos((string) $unplaced['json']['opensAt'], '2026-09-28T02:00:00-04:00') === 0
+            && strpos((string) $unplaced['json']['error'], 'Eastern') !== false),
+    $unplaced['body']);
+
+$realSession = req('GET', '/me/shakes', null, 'kid', $noOverride);
+check('gate: a session follows its own school too',
+    time() >= strtotime('2026-09-28 06:00 UTC') ? $realSession['status'] === 200 : $realSession['status'] === 403,
+    $realSession['body']);
+
+// The sun math itself, which needs no database.
+require_once dirname(__DIR__, 2) . '/tzeis.php';
+$noon = strtotime('2026-09-27 12:00 UTC');
+check('tzeis: Crown Heights, 7:27:16 PM EDT (tzeis.js agrees)',
+    lulavSunEvent($noon, 40.669, -73.942, 8.5) === strtotime('2026-09-27 19:27:16 America/New_York'));
+check('tzeis: Melbourne, its own Sunday evening, 7:00 PM AEST',
+    gmdate('Y-m-d H:i', lulavSunEvent($noon, -37.870, 144.995, 8.5) + 10 * 3600) === '2026-09-27 19:00');
+check('tzeis: none where the sun never gets that low', lulavSunEvent($noon, 89.9, 0.0, 8.5) === null);
+$late = [];
+foreach (require dirname(__DIR__, 2) . '/school-locations.php' as $schoolId => $where) {
+    $tzeis = lulavSunEvent($noon, $where['lat'], $where['lng'], 8.5);
+    if ($tzeis === null || $tzeis >= strtotime('2026-09-28 06:00 UTC')
+        || (new DateTime('@' . $tzeis))->setTimezone(new DateTimeZone($where['tz']))->format('D') !== 'Sun') {
+        $late[] = $schoolId;
+    }
+}
+check('tzeis: every listed school opens on its own Sunday evening, before the fallback', !$late, implode(', ', $late));
 
 echo "== high-number alerts ==\n";
 
@@ -487,6 +563,220 @@ check('sample: footer address', strpos($sent, "792 Eastern Pkwy, Brooklyn, NY 11
 check('sample: footer privacy policy', strpos($sent, "Privacy Policy: https://mashpia.com/privacy_policy.php\n") !== false, substr($sent, -250));
 check('sample: footer unsubscribe', strpos($sent, "To unsubscribe from these emails, visit https://mashpia.com/unsubscribe.php\n") !== false, substr($sent, -250));
 check('sample: no link to the pages that are broken', strpos($sent, 'unsubscribe.html') === false && strpos($sent, 'privacy.html') === false);
+
+
+// ---------------------------------------------------------------------------
+// Coverage gaps: every route, function and error exit coverage.php reported as
+// never reached, except the few only a broken server can reach (see README).
+// ---------------------------------------------------------------------------
+
+/** A day entry's public id, signed as lulavDayReportId() signs it. */
+function entryId(int $user, int $day): string
+{
+    return 'day-' . $user . '-' . $day . '-'
+        . substr(hash_hmac('sha256', 'lulav-day:5787:' . $user . ':' . $day, 'lulav-test-signing-secret-at-least-32-chars'), 0, 20);
+}
+function clearCache(): void
+{
+    global $sandbox;
+    array_map('unlink', glob($sandbox . '/storage/lulav/cache/*.json') ?: []);
+}
+function cacheFiles(): int
+{
+    global $sandbox;
+    return count(glob($sandbox . '/storage/lulav/cache/c-*.json') ?: []);
+}
+
+echo "== admin login ==\n";
+check('admin login: missing fields is 422', req('POST', '/admin/login', ['username' => '', 'password' => ''])['status'] === 422);
+check('admin login: wrong password is 401', req('POST', '/admin/login', ['username' => 'testadmin', 'password' => 'wrong'])['status'] === 401);
+$noSchool = req('POST', '/admin/login', ['username' => 'testadmin', 'password' => 'secret'], '', ['LULAV_TEST_ADMIN' => 'none']);
+check('admin login: an account that administers nothing is refused', $noSchool['status'] === 403, $noSchool['body']);
+$adminIn = req('POST', '/admin/login', ['username' => 'testadmin', 'password' => 'secret']);
+check('admin login: success returns a token', $adminIn['status'] === 200 && !empty($adminIn['json']['token']), $adminIn['body']);
+check('admin login: HQ has no single school', array_key_exists('schoolId', (array) ($adminIn['json']['admin'] ?? [])) && $adminIn['json']['admin']['schoolId'] === null, $adminIn['body']);
+checkClean('admin login', $adminIn);
+check('admin login: the token it issues works', req('GET', '/settings', null, 'bearer:' . ($adminIn['json']['token'] ?? ''))['status'] === 200);
+
+echo "== the parent site ==\n";
+check('parent children: no session is 422', req('POST', '/parent/soldiers', [])['status'] === 422);
+check('parent children: an expired session is 401', req('POST', '/parent/soldiers', ['parent' => 'expired'])['status'] === 401);
+$family = req('POST', '/parent/soldiers', ['parent' => 'parent-token']);
+check('parent children: lists the family', $family['status'] === 200 && count($family['json'] ?? []) === 2, $family['body']);
+check('parent children: serials, never a date of birth', strpos($family['body'], '555002') !== false && strpos($family['body'], 'dob') === false, $family['body']);
+checkClean('parent children', $family);
+
+check('parent handoff: no child is 422', req('POST', '/parent/handoff', ['parent' => 'parent-token'])['status'] === 422);
+check("parent handoff: someone else's child is 404", req('POST', '/parent/handoff', ['parent' => 'parent-token', 'child' => 9003])['status'] === 404);
+$code = req('POST', '/parent/handoff', ['parent' => 'parent-token', 'child' => 9002]);
+check('parent handoff: issues a two-minute code', $code['status'] === 200 && !empty($code['json']['code']) && ($code['json']['expiresIn'] ?? null) === 120, $code['body']);
+$levi = req('POST', '/soldier/handoff', ['code' => (string) ($code['json']['code'] ?? '')]);
+check('parent handoff: the code signs that child in', $levi['status'] === 200 && !empty($levi['json']['token']) && strpos($levi['body'], 'Levi') !== false, $levi['body']);
+checkClean('soldier handoff', $levi);
+check('soldier handoff: a bad code is 401', req('POST', '/soldier/handoff', ['code' => 'nope'])['status'] === 401);
+check('soldier handoff: a code is not a session', req('GET', '/me/shakes', null, 'bearer:' . (string) ($code['json']['code'] ?? ''))['status'] === 401);
+
+echo "== soldier sign-in refusals ==\n";
+check('soldier login: missing fields is 422', req('POST', '/soldier/login', ['serial' => '', 'dob' => ''])['status'] === 422);
+check('soldier login: wrong date of birth is 401', req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2000-01-01'])['status'] === 401);
+check('soldier login: unknown serial is 401', req('POST', '/soldier/login', ['serial' => '999999', 'dob' => '2014-05-05'])['status'] === 401);
+
+echo "== school admin screens ==\n";
+$motto = req('PATCH', '/schools/61', ['motto' => '  Shake it!  '], 'admin');
+check('motto: an admin can set it', $motto['status'] === 200 && ($motto['json']['id'] ?? null) === '61', $motto['body']);
+checkClean('motto', $motto);
+$soldiers = req('GET', '/schools/61/soldiers', null, 'admin');
+check("soldier list: the school's children", $soldiers['status'] === 200 && count($soldiers['json'] ?? []) === 2, $soldiers['body']);
+checkClean('soldier list', $soldiers);
+check('soldier list: not for a soldier', req('GET', '/schools/61/soldiers', null, 'kid')['status'] === 403);
+
+$own = req('GET', '/soldier/555001/shakes', null, 'kid');
+check('history: a soldier reads their own', $own['status'] === 200 && is_array($own['json']), $own['body']);
+checkClean('history', $own);
+$other = req('GET', '/soldier/555002/shakes', null, 'kid');
+check("history: not another soldier's", $other['status'] === 403 && strpos($other['body'], 'another soldier') !== false, $other['body']);
+check('history: an admin reads any in their school', req('GET', '/soldier/555002/shakes', null, 'admin')['status'] === 200);
+check('history: an unknown soldier is 404', req('GET', '/soldier/999999/shakes', null, 'admin')['status'] === 404);
+
+$classes = req('GET', '/schools/61/class-leaderboard');
+check('class leaderboard: public, one row per class', $classes['status'] === 200 && isset($classes['json'][0]['goal'], $classes['json'][0]['percent']), $classes['body']);
+checkClean('class leaderboard', $classes);
+
+echo "== hiding an entry, and one entry's photos ==\n";
+$entry = entryId(9001, 2);
+clearCache();
+req('GET', '/stats');
+$hide = req('PATCH', '/shakes/' . $entry, ['hidden' => true], 'admin');
+check('hide: an admin can hide an entry', $hide['status'] === 200, $hide['body']);
+check('hide: it clears the public cache', cacheFiles() === 0, (string) cacheFiles());
+checkClean('hide', $hide);
+check('hide: a tampered id is 404', req('PATCH', '/shakes/day-9001-2-' . str_repeat('0', 20), ['hidden' => true], 'admin')['status'] === 404);
+check('hide: a real id for no soldier is 404', req('PATCH', '/shakes/' . entryId(999999, 2), ['hidden' => true], 'admin')['status'] === 404);
+check('hide: not for a soldier', req('PATCH', '/shakes/' . $entry, ['hidden' => true], 'kid')['status'] === 403);
+check('hide: a gap in the teacher-grid map is 503', req('PATCH', '/shakes/' . $entry, ['hidden' => true], 'admin', ['LULAV_TEST_MAP_MISSING_DAY' => '2'])['status'] === 503);
+
+clearCache();
+req('GET', '/stats');
+$approveEntry = req('POST', '/shakes/' . $entry . '/photos/approve', [], 'admin');
+check("entry photos: approve", $approveEntry['status'] === 200, $approveEntry['body']);
+check('entry photos: approving clears the public cache', cacheFiles() === 0, (string) cacheFiles());
+checkClean('entry photos', $approveEntry);
+check('entry photos: reject', req('POST', '/shakes/' . $entry . '/photos/reject', [], 'admin')['status'] === 200);
+check('entry photos: a tampered id is 404', req('POST', '/shakes/day-9001-2-' . str_repeat('0', 20) . '/photos/approve', [], 'admin')['status'] === 404);
+check('entry photos: a real id for no soldier is 404', req('POST', '/shakes/' . entryId(999999, 2) . '/photos/approve', [], 'admin')['status'] === 404);
+
+$servedDir = $sandbox . '/storage/lulav/photos';
+@mkdir($servedDir, 0750, true);
+file_put_contents($servedDir . '/' . str_repeat('a', 32) . '.jpg', 'approved photo bytes');
+$served = req('GET', '/photos/' . str_repeat('a', 32) . '/file');
+check('photo file: an approved photo is served', $served['status'] === 200 && $served['body'] === 'approved photo bytes', $served['body']);
+check('photo file: an unknown one is 404', req('GET', '/photos/' . str_repeat('a', 32) . '/file', null, '', ['LULAV_TEST_NO_PHOTO' => '1'])['status'] === 404);
+check('photo review: an unknown photo is 404', req('POST', '/photos/' . str_repeat('c', 32) . '/approve', [], 'admin', ['LULAV_TEST_NO_PHOTO' => '1'])['status'] === 404);
+check('photo delete: an unknown photo is 404', req('DELETE', '/photos/' . str_repeat('c', 32), null, 'admin', ['LULAV_TEST_NO_PHOTO' => '1'])['status'] === 404);
+
+echo "== photo uploads ==\n";
+$pngBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+$png = 'data:image/png;base64,' . base64_encode($pngBytes);
+$upload = static function (array $photos, array $env = []) {
+    return req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5, 'note' => '', 'photos' => $photos], 'kid', $env);
+};
+$before = glob($servedDir . '/*.png') ?: [];
+$stored = $upload([$png]);
+$newFiles = array_values(array_diff(glob($servedDir . '/*.png') ?: [], $before));
+check('upload: a PNG is accepted', $stored['status'] === 200, $stored['body']);
+check('upload: one file written, under a random 32-character name', count($newFiles) === 1 && preg_match('#/[a-f0-9]{32}\.png$#', $newFiles[0] ?? ''), json_encode($newFiles));
+check('upload: the bytes are the photo', count($newFiles) === 1 && file_get_contents($newFiles[0]) === $pngBytes);
+checkClean('upload', $stored);
+$before = glob($servedDir . '/*.png') ?: [];
+check('upload: a re-upload of a rejected photo is restored, not stored again',
+    $upload([$png], ['LULAV_TEST_PHOTO_EXISTS' => 'rejected'])['status'] === 200 && count(glob($servedDir . '/*.png') ?: []) === count($before));
+check('upload: an existing photo URL is kept', $upload(['/mivtzoim/lulav/api/photos/' . str_repeat('b', 32) . '/file'])['status'] === 200);
+check('upload: nine photos is too many', $upload(array_fill(0, 9, $png))['status'] === 422);
+check('upload: a non-string is refused', $upload([123])['status'] === 422);
+check('upload: a GIF is refused', $upload(['data:image/gif;base64,R0lGODlhAQABAAAAACw='])['status'] === 422);
+check('upload: some other URL is refused', $upload(['/elsewhere/photo.jpg'])['status'] === 422);
+check('upload: an empty image is refused', $upload(['data:image/png;base64,'])['status'] === 422);
+check('upload: broken base64 is refused', $upload(['data:image/png;base64,!!!!'])['status'] === 422);
+$bigBody = $sandbox . '/big.json';
+file_put_contents($bigBody, json_encode(['count' => 5, 'minutes' => 5, 'note' => '', 'photos' => ['data:image/png;base64,' . str_repeat('A', 7 * 1024 * 1024 + 4)]]));
+$big = req('PUT', '/me/days/2', ['@file' => $bigBody], 'kid');
+check('upload: over 5 MB is refused', $big['status'] === 422 && strpos($big['body'], '5 MB') !== false, $big['body']);
+unlink($bigBody);
+// Photo storage broken: the directory is a file, then it is read-only.
+rename($servedDir, $servedDir . '.aside');
+file_put_contents($servedDir, 'not a directory');
+check('upload: no photo storage is 503', $upload(['data:image/png;base64,' . base64_encode($pngBytes . 'x')])['status'] === 503);
+unlink($servedDir);
+rename($servedDir . '.aside', $servedDir);
+chmod($servedDir, 0500);
+check('upload: storage that cannot be written is 500', $upload(['data:image/png;base64,' . base64_encode($pngBytes . 'y')])['status'] === 500);
+chmod($servedDir, 0750);
+
+echo "== saving a day: refusals ==\n";
+check('day: Sukkos day 1 is not a campaign day (read)', req('GET', '/me/days/1', null, 'kid')['status'] === 422);
+check('day: Sukkos day 1 is not a campaign day (save)', req('PUT', '/me/days/1', ['count' => 5, 'minutes' => 5], 'kid')['status'] === 422);
+$empty = req('GET', '/me/days/4', null, 'kid');
+check('day: a day with nothing saved reads as zero', $empty['status'] === 200 && ($empty['json']['count'] ?? null) === 0, $empty['body']);
+check('day: a story over 10,000 characters is refused', req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5, 'note' => str_repeat('a', 10001)], 'kid')['status'] === 422);
+check('day: photos that are not a list are refused', req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5, 'photos' => 'x'], 'kid')['status'] === 422);
+check('day: no Mivtzoim track is 422', req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5], 'kid', ['LULAV_TEST_NO_TRACK' => '1'])['status'] === 422);
+check('day: no matching teacher-grid cell is 422', req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5], 'kid', ['LULAV_TEST_NO_GRID' => '1'])['status'] === 422);
+check('day: a save already running is 409', req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5], 'kid', ['LULAV_TEST_LOCK_BUSY' => '1'])['status'] === 409);
+check('day: an incomplete teacher-grid map is 503', req('PUT', '/me/days/2', ['count' => 5, 'minutes' => 5], 'kid', ['LULAV_TEST_MAP_MISSING_DAY' => '5'])['status'] === 503);
+
+echo "== admins who may not ==\n";
+$schoolAdmin = ['LULAV_TEST_ADMIN' => 'school'];
+check('school admin: their own school', req('GET', '/schools/61/report-rows', null, 'admin', $schoolAdmin)['status'] === 200);
+check('school admin: not another school', req('GET', '/schools/269/report-rows', null, 'admin', $schoolAdmin)['status'] === 403);
+check('school admin: not HQ settings (read)', req('GET', '/settings', null, 'admin', $schoolAdmin)['status'] === 403);
+check('school admin: not HQ settings (write)', req('PATCH', '/settings', ['perKidGoal' => 5], 'admin', $schoolAdmin)['status'] === 403);
+check('school admin: not goal overrides', req('PATCH', '/schools/61/goal', ['goalOverride' => 40], 'admin', $schoolAdmin)['status'] === 403);
+check('admin: a deleted account is 401', req('GET', '/schools/61/report-rows', null, 'admin', ['LULAV_TEST_ADMIN' => 'missing'])['status'] === 401);
+check('admin: an inactive account is 403', req('GET', '/schools/61/report-rows', null, 'admin', ['LULAV_TEST_ADMIN' => 'inactive'])['status'] === 403);
+check('HQ: a per-child goal of 0 is refused', req('PATCH', '/settings', ['perKidGoal' => 0], 'admin')['status'] === 422);
+check('HQ: a goal override that is not a number is refused', req('PATCH', '/schools/61/goal', ['goalOverride' => 'x'], 'admin')['status'] === 422);
+check('HQ: a goal for no such school is 404', req('PATCH', '/schools/61/goal', ['goalOverride' => 40], 'admin', ['LULAV_TEST_NO_SCHOOL' => '1'])['status'] === 404);
+
+echo "== when something underneath fails ==\n";
+clearCache();
+check('no campaign row is 503', req('GET', '/stats', null, '', ['LULAV_TEST_NO_CAMPAIGN' => '1'])['status'] === 503);
+clearCache();
+check('no school year is 503', req('GET', '/schools', null, '', ['LULAV_TEST_YEAR' => '0'])['status'] === 503);
+check('a school not registered this year is 404', req('GET', '/schools/61/leaderboard', null, '', ['LULAV_TEST_NOT_ELIGIBLE' => '1'])['status'] === 404);
+check('Lulav tables not installed is 503', req('GET', '/schools/61/photos/pending', null, 'admin', ['LULAV_TEST_NO_TABLES' => '1'])['status'] === 503);
+$missingTable = req('GET', '/schools/61/leaderboard', null, '', ['LULAV_TEST_PDO_FAIL' => '42S02', 'LULAV_TEST_PDO_FAIL_MATCH' => '/date_tasks_marks/']);
+check('a missing table or column is a 503 naming the schema', $missingTable['status'] === 503 && strpos($missingTable['body'], 'schema') !== false, $missingTable['body']);
+$otherSql = req('GET', '/schools/61/leaderboard', null, '', ['LULAV_TEST_PDO_FAIL' => 'HY000', 'LULAV_TEST_PDO_FAIL_MATCH' => '/date_tasks_marks/']);
+check('any other database error is a plain 500', $otherSql['status'] === 500 && strpos($otherSql['body'], 'SQLSTATE') === false, $otherSql['body']);
+$internal = req('GET', '/schools/61/leaderboard', null, '', ['LULAV_TEST_PDO_FAIL' => 'RUNTIME', 'LULAV_TEST_PDO_FAIL_MATCH' => '/date_tasks_marks/']);
+check('an unexpected error is a plain 500 that leaks nothing', $internal['status'] === 500 && strpos($internal['body'], 'secret detail') === false, $internal['body']);
+check('a signing secret under 32 characters is 503', req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'], '', ['LULAV_TOKEN_SECRET' => 'too-short'])['status'] === 503);
+check('a garbage token is 401', req('GET', '/me/shakes', null, 'bearer:garbage.token')['status'] === 401);
+check('a JSON request with no JSON is 400', req('POST', '/soldier/login', null, '', ['CONTENT_TYPE' => 'application/json'])['status'] === 400);
+$emptyRange = req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest(['from' => strtotime('2030-01-01'), 'to' => strtotime('2030-01-02')] + $good)));
+check('zip: a signed range with nothing in it is 404', $emptyRange['status'] === 404, $emptyRange['body']);
+
+echo "== login rate limit ==\n";
+$storage = $sandbox . '/storage/lulav';
+array_map('unlink', glob($storage . '/rate-*.json') ?: []);
+$statuses = [];
+for ($i = 1; $i <= 13; $i++) {
+    $statuses[] = req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2000-01-01'])['status'];
+}
+check('rate limit: twelve wrong tries are answered', array_slice($statuses, 0, 12) === array_fill(0, 12, 401), json_encode($statuses));
+check('rate limit: the thirteenth is 429', $statuses[12] === 429, json_encode($statuses));
+array_map('unlink', glob($storage . '/rate-*.json') ?: []);
+// The counter file cannot be opened.
+$rateFile = $storage . '/rate-' . hash('sha256', 'kid-login|127.0.0.1') . '.json';
+mkdir($rateFile);
+check('rate limit: a counter that cannot be opened is 503', req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'])['status'] === 503);
+rmdir($rateFile);
+// No storage directory at all.
+rename($storage, $storage . '.aside');
+file_put_contents($storage, 'not a directory');
+check('rate limit: no storage is 503', req('POST', '/soldier/login', ['serial' => '555001', 'dob' => '2014-05-05'])['status'] === 503);
+unlink($storage);
+rename($storage . '.aside', $storage);
 
 echo "== not found ==\n";
 $missing = req('GET', '/nope');

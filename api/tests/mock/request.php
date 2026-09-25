@@ -35,8 +35,17 @@ foreach ($env as $name => $value) {
 
 // lulavInput() falls back to $_POST when the content type is not JSON, so the
 // body goes there rather than through a php://input stream wrapper.
+// "@<file>" reads the body from a file: one command-line argument tops out
+// around 128 KB, and the photo-size tests need several megabytes.
+if (strpos($body, '@') === 0) {
+    $body = (string) file_get_contents(substr($body, 1));
+}
 if ($body !== '') {
     $_POST = json_decode($body, true) ?: [];
+}
+// A test may declare a content type, e.g. JSON with no body at all.
+if (isset($env['CONTENT_TYPE'])) {
+    $_SERVER['CONTENT_TYPE'] = $env['CONTENT_TYPE'];
 }
 
 ob_start();
@@ -59,6 +68,18 @@ register_shutdown_function(static function () {
         'mail' => $mail,
     ]));
 });
+
+// Coverage marks from an instrumented sandbox (coverage.php); a no-op otherwise.
+function lulav_cov(string $id): void
+{
+    static $seen = [];
+    $file = getenv('LULAV_TEST_COVERAGE');
+    if (!$file || isset($seen[$id])) {
+        return;
+    }
+    $seen[$id] = true;
+    file_put_contents($file, $id . "\n", FILE_APPEND | LOCK_EX);
+}
 
 // bootstrap.php first: it wires the fake PDO and defines lulavIssueToken, so a
 // token can be signed with the very secret the route will verify against.

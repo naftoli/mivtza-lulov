@@ -12,6 +12,10 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "test": "npm run test:mock && npm run test:web",
+    "test:mock": "php api/tests/mock/run.php",
+    "test:web": "node --test 'tests/web/*.test.js'",
+    "test:coverage": "php api/tests/mock/coverage.php",
     "test:api": "php api/tests/run.php"
   },
   "dependencies": {
