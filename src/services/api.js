@@ -584,6 +584,18 @@ export async function setShakeHidden(shakeId, hidden) {
   return clone(s)
 }
 
+// Delete a day's entry outright — the day goes back to 0 and the row is removed,
+// so the soldier can log it again as a fresh entry. (Contrast setShakeHidden,
+// which only hid it.) Live needs DELETE /shakes/:id — see docs/mashpia-integration.md.
+export async function deleteShake(shakeId) {
+  if (!IS_DEMO) return mashpia.deleteShake(shakeId)
+  await delay()
+  const shakes = read(KEYS.shakes, [])
+  const next = shakes.filter((x) => x.id !== shakeId)
+  write(KEYS.shakes, next)
+  return { id: shakeId, deleted: true }
+}
+
 export async function updateSchool(schoolId, patch) {
   if (!IS_DEMO) return mashpia.updateSchool(schoolId, patch)
   await delay()

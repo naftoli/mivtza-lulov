@@ -198,6 +198,11 @@ export const deletePhoto = (photoId) =>
   write(`/photos/${photoId}`, { method: 'DELETE', as: 'admin' })
 export const setShakeHidden = (shakeId, hidden) =>
   write(`/shakes/${shakeId}`, { method: 'PATCH', body: { hidden }, as: 'admin' })
+// Delete a day's entry outright: the server clears the day back to 0 (value, story
+// and photos) and un-hides it, so the soldier can log it again fresh. Needs the
+// DELETE /shakes/:id route (see docs/mashpia-integration.md).
+export const deleteShake = (shakeId) =>
+  write(`/shakes/${shakeId}`, { method: 'DELETE', as: 'admin' })
 export const updateSchool = (schoolId, patch) =>
   write(`/schools/${schoolId}`, { method: 'PATCH', body: patch, as: 'admin' })
 

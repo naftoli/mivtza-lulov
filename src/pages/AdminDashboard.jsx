@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   getSchools, getSchool, getShakes, getKidsForSchool,
-  setShakeHidden, resetDemoData, getSchoolReportRows,
+  deleteShake, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink, getApprovedPhotoTimes,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
@@ -596,34 +596,33 @@ const MOD_SORTS = {
   oldest: { label: 'Oldest', fn: (a, b) => new Date(a.createdAt) - new Date(b.createdAt) },
 }
 
-// One moderation row. Removing hides the entry (drops it from the goal and the
-// public page) — it is not a hard delete, so it stays listed as "Restore". The
-// row owns its busy/error state and confirms before removing, so a slow or
-// rejected request tells the admin instead of silently doing nothing.
+// One moderation row. Deleting clears the day back to 0 and removes the entry;
+// the soldier can simply log that day again with the right number (no confusing
+// hide/restore). The row owns its busy/error state and confirms first, so a slow
+// or rejected request tells the admin instead of silently doing nothing.
 function ModEntry({ s }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [confirming, setConfirming] = useState(false)
   const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
-  const flagged = !s.hidden && isHighEntry(s)
+  const flagged = isHighEntry(s)
+  const name = s.kidFullName || s.kidName
 
-  async function apply(hidden) {
+  async function remove() {
     setConfirming(false)
     setBusy(true)
     setError(null)
     try {
-      // On success the list reloads (emit) and this same row re-renders as the
-      // opposite action (Remove ⇄ Restore).
-      await setShakeHidden(s.id, hidden)
+      // On success the entry is gone; the list reloads (emit) and this row unmounts.
+      await deleteShake(s.id)
     } catch (e) {
-      setError(`Could not ${hidden ? 'remove' : 'restore'} this entry — ${e.message}`)
-    } finally {
-      setBusy(false) // always clear, so the button never sticks on "Removing…"
+      setError(`Could not delete this entry — ${e.message}`)
+      setBusy(false) // stayed on screen — let the admin retry
     }
   }
 
   return (
-    <div className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : flagged ? 'bg-gold/12 ring-1 ring-gold/45' : 'bg-white/55'}`}>
+    <div className={`flex items-start gap-3 rounded-2xl p-3 ${flagged ? 'bg-gold/12 ring-1 ring-gold/45' : 'bg-white/55'}`}>
       {/* No thumbnail here: this list is for finding an entry by child, and the
           pictures are reviewed in Photo Approvals above. The count still says how
           many an entry carries. */}
@@ -632,7 +631,7 @@ function ModEntry({ s }) {
             a time. kidFullName is the moderator's view; public rows carry only the
             initial in kidName. */}
         <p className="text-sm font-semibold text-navy">
-          {s.kidFullName || s.kidName} · {fmt(s.count)} shakes
+          {name} · {fmt(s.count)} shakes
           {flagged && (
             <span title={highReasons(s).join(' · ')}
               className="ml-2 inline-flex items-center rounded-full bg-gold/30 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-[0.06em] text-gold-dark">
@@ -648,22 +647,20 @@ function ModEntry({ s }) {
         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
         {error && <p role="alert" className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs font-semibold text-red">{error}</p>}
       </div>
-      {/* Restore is safe and immediate; Remove affects the goal, so it confirms first. */}
-      <Button variant={s.hidden ? 'outline' : 'red'} className={s.hidden ? smallBtn : dangerBtn}
-        disabled={busy} onClick={() => (s.hidden ? apply(false) : setConfirming(true))}>
-        {busy ? (s.hidden ? 'Restoring…' : 'Removing…') : s.hidden ? 'Restore' : 'Remove'}
+      <Button variant="red" className={dangerBtn} disabled={busy} onClick={() => setConfirming(true)}>
+        {busy ? 'Deleting…' : 'Delete'}
       </Button>
       <ConfirmDialog
         open={confirming}
-        title="Remove this entry?"
-        confirmLabel="Remove entry"
-        cancelLabel="Keep it"
+        title="Delete this entry?"
+        confirmLabel="Delete entry"
+        cancelLabel="Cancel"
         busy={busy}
         onCancel={() => setConfirming(false)}
-        onConfirm={() => apply(true)}
+        onConfirm={remove}
       >
-        <p>Hide {s.kidFullName || s.kidName}’s entry of <strong>{fmt(s.count)} shakes</strong>?</p>
-        <p>It stops counting toward the goal and won’t show on the public page. You can Restore it anytime — nothing is deleted.</p>
+        <p>Delete {name}’s entry of <strong>{fmt(s.count)} shakes</strong> for this day?</p>
+        <p>This clears the day back to <strong>0</strong> and removes the entry. The soldier can log that day again with the correct number.</p>
       </ConfirmDialog>
     </div>
   )
@@ -675,8 +672,8 @@ function Moderation({ shakes, error, onRetry }) {
   const [limit, setLimit] = useState(10)
   const [flaggedOnly, setFlaggedOnly] = useState(false)
 
-  // Flagged (high-number) entries still on record — drives the count and toggle.
-  const flaggedCount = (shakes || []).filter((s) => !s.hidden && isHighEntry(s)).length
+  // Flagged (high-number) entries on record — drives the count and toggle.
+  const flaggedCount = (shakes || []).filter((s) => isHighEntry(s)).length
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -693,11 +690,11 @@ function Moderation({ shakes, error, onRetry }) {
   const remaining = filtered.length - shown.length
 
   return (
-    <Section title="Remove Mivtza Lulov Entry"
+    <Section title="Delete a Mivtza Lulov Entry"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2">
           {flaggedCount > 0 && <Pill className="!bg-gold-dark !text-white">⚠ {flaggedCount} flagged</Pill>}
-          <span className="text-xs text-muted">Hidden entries don’t count toward the goal or show publicly</span>
+          <span className="text-xs text-muted">Deleting clears that day back to 0 — the soldier can log it again</span>
         </div>
       }>
       {!shakes ? (
