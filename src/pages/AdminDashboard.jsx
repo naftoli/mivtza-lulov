@@ -596,6 +596,79 @@ const MOD_SORTS = {
   oldest: { label: 'Oldest', fn: (a, b) => new Date(a.createdAt) - new Date(b.createdAt) },
 }
 
+// One moderation row. Removing hides the entry (drops it from the goal and the
+// public page) — it is not a hard delete, so it stays listed as "Restore". The
+// row owns its busy/error state and confirms before removing, so a slow or
+// rejected request tells the admin instead of silently doing nothing.
+function ModEntry({ s }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [confirming, setConfirming] = useState(false)
+  const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
+  const flagged = !s.hidden && isHighEntry(s)
+
+  async function apply(hidden) {
+    setConfirming(false)
+    setBusy(true)
+    setError(null)
+    try {
+      // On success the list reloads (emit) and this same row re-renders as the
+      // opposite action (Remove ⇄ Restore).
+      await setShakeHidden(s.id, hidden)
+    } catch (e) {
+      setError(`Could not ${hidden ? 'remove' : 'restore'} this entry — ${e.message}`)
+    } finally {
+      setBusy(false) // always clear, so the button never sticks on "Removing…"
+    }
+  }
+
+  return (
+    <div className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : flagged ? 'bg-gold/12 ring-1 ring-gold/45' : 'bg-white/55'}`}>
+      {/* No thumbnail here: this list is for finding an entry by child, and the
+          pictures are reviewed in Photo Approvals above. The count still says how
+          many an entry carries. */}
+      <div className="min-w-0 flex-1">
+        {/* Child and shakes lead the row in one weight; the rest follows a line at
+            a time. kidFullName is the moderator's view; public rows carry only the
+            initial in kidName. */}
+        <p className="text-sm font-semibold text-navy">
+          {s.kidFullName || s.kidName} · {fmt(s.count)} shakes
+          {flagged && (
+            <span title={highReasons(s).join(' · ')}
+              className="ml-2 inline-flex items-center rounded-full bg-gold/30 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-[0.06em] text-gold-dark">
+              ⚠ High
+            </span>
+          )}
+        </p>
+        <p className="text-xs text-muted">
+          {s.grade ? `${s.grade} · ` : ''}{fmt(s.minutes || 0)} minutes
+          {imgs.length > 0 && ` · ${imgs.length} photo${imgs.length === 1 ? '' : 's'}`}
+        </p>
+        {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
+        {error && <p role="alert" className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs font-semibold text-red">{error}</p>}
+      </div>
+      {/* Restore is safe and immediate; Remove affects the goal, so it confirms first. */}
+      <Button variant={s.hidden ? 'outline' : 'red'} className={s.hidden ? smallBtn : dangerBtn}
+        disabled={busy} onClick={() => (s.hidden ? apply(false) : setConfirming(true))}>
+        {busy ? (s.hidden ? 'Restoring…' : 'Removing…') : s.hidden ? 'Restore' : 'Remove'}
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        title="Remove this entry?"
+        confirmLabel="Remove entry"
+        cancelLabel="Keep it"
+        busy={busy}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => apply(true)}
+      >
+        <p>Hide {s.kidFullName || s.kidName}’s entry of <strong>{fmt(s.count)} shakes</strong>?</p>
+        <p>It stops counting toward the goal and won’t show on the public page. You can Restore it anytime — nothing is deleted.</p>
+      </ConfirmDialog>
+    </div>
+  )
+}
+
 function Moderation({ shakes, error, onRetry }) {
   const [sort, setSort] = useState('shakes')
   const [q, setQ] = useState('')
@@ -655,41 +728,7 @@ function Moderation({ shakes, error, onRetry }) {
             <p className="py-6 text-center text-sm text-muted">No entries match “{q}”.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {shown.map((s) => {
-                const imgs = s.photos?.length ? s.photos : s.photo ? [s.photo] : []
-                const flagged = !s.hidden && isHighEntry(s)
-                return (
-                  <div key={s.id} className={`flex items-start gap-3 rounded-2xl p-3 ${s.hidden ? 'bg-race-red/12 ring-1 ring-race-red/45' : flagged ? 'bg-gold/12 ring-1 ring-gold/45' : 'bg-white/55'}`}>
-                    {/* No thumbnail here: this list is for finding an entry by
-                        child, and the pictures are reviewed in Photo Approvals
-                        above. The count still says how many an entry carries. */}
-                    <div className="min-w-0 flex-1">
-                      {/* Child and shakes lead the row in one weight; the rest of
-                          the entry follows a line at a time. kidFullName is the
-                          moderator's view of the name; public rows only ever
-                          carry the initial in kidName. */}
-                      <p className="text-sm font-semibold text-navy">
-                        {s.kidFullName || s.kidName} · {fmt(s.count)} shakes
-                        {flagged && (
-                          <span title={highReasons(s).join(' · ')}
-                            className="ml-2 inline-flex items-center rounded-full bg-gold/30 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-[0.06em] text-gold-dark">
-                            ⚠ High
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {s.grade ? `${s.grade} · ` : ''}{fmt(s.minutes || 0)} minutes
-                        {imgs.length > 0 && ` · ${imgs.length} photo${imgs.length === 1 ? '' : 's'}`}
-                      </p>
-                      {s.note && <p className="truncate text-xs italic text-muted">“{s.note}”</p>}
-                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted/80">{timeAgo(s.createdAt)}</p>
-                    </div>
-                    <Button variant={s.hidden ? 'outline' : 'red'} className={s.hidden ? smallBtn : dangerBtn} onClick={() => setShakeHidden(s.id, !s.hidden)}>
-                      {s.hidden ? 'Restore' : 'Remove'}
-                    </Button>
-                  </div>
-                )
-              })}
+              {shown.map((s) => <ModEntry key={s.id} s={s} />)}
             </div>
           )}
 
