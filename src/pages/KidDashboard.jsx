@@ -21,6 +21,11 @@ const LABEL = 'text-[12px] font-semibold uppercase tracking-[0.08em] text-navy'
 // admin moderation card) when a save or an image failed.
 const SUCCESS_NOTICE = 'animate-pop rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-green'
 const ERROR_NOTICE = 'animate-pop rounded-xl bg-race-red/12 px-3 py-2 text-sm font-semibold text-red ring-1 ring-race-red/45'
+// Photos per day. Mirrors the server's cap (lulavValidatePhotos in api/index.php):
+// the whole day's set is POSTed in one request as base64 data URLs, so without a
+// client cap a big gallery pick built a body large enough for Apache to reject
+// with a 413 before the server's own "too many photos" message could be returned.
+const MAX_PHOTOS_PER_DAY = 8
 
 export default function KidDashboard() {
   const { kid, logoutKid } = useAuth()
@@ -77,14 +82,27 @@ export default function KidDashboard() {
 
   async function onFiles(e) {
     const files = [...(e.target.files || [])]
+    // Reset the picker up front so choosing the same file again still fires
+    // onChange, even on the early returns below.
+    if (fileRef.current) fileRef.current.value = ''
     if (!files.length) return
+    const room = MAX_PHOTOS_PER_DAY - photos.length
+    if (room <= 0) {
+      notify(`You can add up to ${MAX_PHOTOS_PER_DAY} photos a day — remove one to add another.`, true)
+      return
+    }
+    // Take only what fits and say so, rather than sending a batch the server
+    // would reject whole (see MAX_PHOTOS_PER_DAY).
+    const taking = files.slice(0, room)
     try {
-      const urls = await Promise.all(files.map((f) => fileToScaledDataUrl(f)))
+      const urls = await Promise.all(taking.map((f) => fileToScaledDataUrl(f)))
       setPhotos((p) => [...p, ...urls])
+      if (files.length > room) {
+        notify(`Added ${room} photo${room === 1 ? '' : 's'} — that’s the ${MAX_PHOTOS_PER_DAY}-a-day limit. The other ${files.length - room} weren’t added.`, true)
+      }
     } catch {
       notify('Could not read one of those images — try another.', true)
     }
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   async function submit(e) {
@@ -251,13 +269,17 @@ export default function KidDashboard() {
 
                 {/* Big, phone-friendly photo button */}
                 <div>
-                  <span className={`mb-1.5 block ${LABEL}`}>Add photos</span>
-                  <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" id="photoInput" />
-                  <label htmlFor="photoInput"
-                    className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-track bg-white/70 px-4 py-6 text-center transition hover:border-green-mid hover:bg-white">
+                  <span className={`mb-1.5 block ${LABEL}`}>Add photos <span className="font-normal normal-case tracking-normal text-navy/60">({photos.length}/{MAX_PHOTOS_PER_DAY})</span></span>
+                  <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} disabled={photos.length >= MAX_PHOTOS_PER_DAY} className="hidden" id="photoInput" />
+                  <label htmlFor="photoInput" aria-disabled={photos.length >= MAX_PHOTOS_PER_DAY}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-track bg-white/70 px-4 py-6 text-center transition ${photos.length >= MAX_PHOTOS_PER_DAY ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-green-mid hover:bg-white'}`}>
                     <img src={asset('design/icon-camera.png')} alt="" className="h-12 w-auto" />
                     <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-navy">Tap to take or upload photos</span>
-                    <span className="text-xs text-navy/70">Take a new photo or pick from your gallery · add as many as you like</span>
+                    <span className="text-xs text-navy/70">
+                      {photos.length >= MAX_PHOTOS_PER_DAY
+                        ? `That’s the ${MAX_PHOTOS_PER_DAY}-photo limit for one day`
+                        : `Take a new photo or pick from your gallery · up to ${MAX_PHOTOS_PER_DAY} a day`}
+                    </span>
                   </label>
                   {photos.length > 0 && (
                     <div className="mt-3 grid grid-cols-4 gap-2">
