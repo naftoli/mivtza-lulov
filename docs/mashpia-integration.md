@@ -64,7 +64,7 @@ the same `date_tasks_marks` rows used by the teacher checklist.
 
 | Field | Meaning (teacher-checklist column) |
 |---|---|
-| `count` | cumulative number of people helped that day (1–65,535) |
+| `count` | cumulative number of people helped that day (1–500) |
 | `minutes` | cumulative minutes spent on mivtzoim that day (0–500) |
 | `note`, `photos[]` | that day's story + field photos |
 

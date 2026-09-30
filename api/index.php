@@ -1147,8 +1147,8 @@ function lulavSaveDayReport(array $kid, int $day, array $input): array
         lulavError('Invalid Sukkos day.', 422);
     }
     $count = $input['count'] ?? null;
-    if (!is_numeric($count) || (int) $count < 1 || (int) $count > 65535) {
-        lulavError('Count must be between 1 and 65,535.', 422);
+    if (!is_numeric($count) || (int) $count < 1 || (int) $count > 500) {
+        lulavError('Count must be between 1 and 500.', 422);
     }
     // An ABSENT field leaves the stored value alone; an explicitly empty one
     // clears it. Previously both read as "clear", so any caller that omitted

@@ -153,6 +153,11 @@ check('PUT rejects minutes over 500', $tooMany['status'] === 422, $tooMany['body
 $zeroCount = req('PUT', '/me/days/2', ['count' => 0, 'minutes' => 5], 'kid');
 check('PUT rejects count 0', $zeroCount['status'] === 422, $zeroCount['body']);
 
+$tooManyShakes = req('PUT', '/me/days/2', ['count' => 501, 'minutes' => 5], 'kid');
+check('PUT rejects count over 500', $tooManyShakes['status'] === 422, $tooManyShakes['body']);
+$maxShakes = req('PUT', '/me/days/2', ['count' => 500, 'minutes' => 5], 'kid');
+check('PUT accepts count of exactly 500', $maxShakes['status'] === 200, $maxShakes['body']);
+
 $shakeAlias = req('POST', '/shakes', ['day' => 2, 'count' => 4], 'kid');
 check('POST /shakes 200', $shakeAlias['status'] === 200, $shakeAlias['body']);
 $aliasValues = [];
