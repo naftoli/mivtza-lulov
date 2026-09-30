@@ -577,6 +577,35 @@ check('entry photos: reject', req('POST', '/shakes/' . $entry . '/photos/reject'
 check('entry photos: a tampered id is 404', req('POST', '/shakes/day-9001-2-' . str_repeat('0', 20) . '/photos/approve', [], 'admin')['status'] === 404);
 check('entry photos: a real id for no soldier is 404', req('POST', '/shakes/' . entryId(999999, 2) . '/photos/approve', [], 'admin')['status'] === 404);
 
+echo "== deleting an entry ==\n";
+clearCache();
+req('GET', '/stats');
+$deleteEntry = req('DELETE', '/shakes/' . $entry, null, 'admin');
+check('delete: an admin can delete an entry', $deleteEntry['status'] === 200 && ($deleteEntry['json']['deleted'] ?? null) === true, $deleteEntry['body']);
+check('delete: it clears the public cache', cacheFiles() === 0, (string) cacheFiles());
+checkClean('delete', $deleteEntry);
+// markTasks(0) both the count and the minutes task -- the library turns a 0 into
+// a row delete, which clears the day (story included) back to nothing. The mark
+// value is the deepest leaf (grid => user => start => end => value), so read it
+// there rather than over every int (the ids and dates are ints too).
+$deletedLeaves = [];
+foreach ((array) ($deleteEntry['marked'] ?? []) as $call) {
+    foreach ((array) ($call['marks'] ?? []) as $users) {
+        foreach ((array) $users as $starts) {
+            foreach ((array) $starts as $ends) {
+                foreach ((array) $ends as $value) {
+                    $deletedLeaves[] = $value;
+                }
+            }
+        }
+    }
+}
+check('delete: clears both the count and the minutes task to 0', count($deleteEntry['marked'] ?? []) === 2 && count($deletedLeaves) === 2 && $deletedLeaves === [0, 0], json_encode($deleteEntry['marked']));
+check('delete: a tampered id is 404', req('DELETE', '/shakes/day-9001-2-' . str_repeat('0', 20), null, 'admin')['status'] === 404);
+check('delete: a real id for no soldier is 404', req('DELETE', '/shakes/' . entryId(999999, 2), null, 'admin')['status'] === 404);
+check('delete: not for a soldier', req('DELETE', '/shakes/' . $entry, null, 'kid')['status'] === 403);
+check('delete: a gap in the teacher-grid map is 503', req('DELETE', '/shakes/' . $entry, null, 'admin', ['LULAV_TEST_MAP_MISSING_DAY' => '2'])['status'] === 503);
+
 $servedDir = $sandbox . '/storage/lulav/photos';
 @mkdir($servedDir, 0750, true);
 file_put_contents($servedDir . '/' . str_repeat('a', 32) . '.jpg', 'approved photo bytes');

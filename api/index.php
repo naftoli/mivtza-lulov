@@ -2154,6 +2154,53 @@ try {
         $kid = lulavKidBySerial((string) $user['user_serial']);
         lulavJson(lulavDayReport($kid, $day, true));
     }
+    // Delete a day's entry outright: clear it back to 0 so the soldier can log it
+    // again from scratch. markTasks(0) DELETES the count and minutes mark rows --
+    // the story rides on the count mark, so it goes with them -- and the day's
+    // photos are rejected off the wall and the pending queue. A fresh save later
+    // inserts new marks (un-hidden by default), so there is nothing to un-hide.
+    if ($method === 'DELETE' && preg_match('#^/shakes/(day-\d+-[1-7]-[a-f0-9]{20})$#', $path, $match)) {
+        global $MASHPIA_DB;
+        $actor = lulavRequireActor(['admin']);
+        lulavRequireTables(['lulav_api_task_map']);
+        $identity = lulavDayReportIdentity($match[1]);
+        if (!$identity) {
+            lulavError('Shake not found.', 404);
+        }
+        $userId = $identity['userId'];
+        $day = $identity['day'];
+        $stmt = $MASHPIA_DB->prepare(
+            'SELECT user_serial, school_id FROM users
+             WHERE user_id = :user
+               AND ' . lulavEligibleUserCondition('users')
+        );
+        $stmt->execute([':user' => $userId]);
+        $user = $stmt->fetch();
+        if (!$user) {
+            lulavError('Shake not found.', 404);
+        }
+        lulavRequireSchoolAccess($actor, (int) $user['school_id']);
+        lulavRequireEligibleSchool((int) $user['school_id']);
+        $kid = lulavKidBySerial((string) $user['user_serial']);
+        // Resolve the grid maps before taking the lock, so an incomplete task
+        // mapping fails cleanly (503) instead of half-clearing the entry.
+        $countMap = lulavMapFor('day', $day);
+        $minuteMap = lulavMapFor('minutes', $day);
+        lulavWithUserLock($userId, static function () use (
+            $kid,
+            $day,
+            $countMap,
+            $minuteMap
+        ): void {
+            lulavMarkMapValue($kid, $countMap, 0);
+            lulavMarkMapValue($kid, $minuteMap, 0);
+            lulavReconcileDayPhotos($kid, $day, []);
+        });
+        lulavForgetUserMarks($userId);
+        lulavForgetUserPhotos($userId);
+        lulavCacheFlush();
+        lulavJson(['id' => $match[1], 'deleted' => true]);
+    }
     if ($method === 'GET' && preg_match('#^/schools/(\d+)/report-rows$#', $path, $match)) {
         $actor = lulavRequireActor(['admin']);
         $schoolId = (int) $match[1];

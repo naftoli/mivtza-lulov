@@ -293,6 +293,9 @@ lulavAssert('POST /shakes without token is 401', $postShakeAuth['status'] === 40
 $hideAuth = lulavTestRequest($base, 'PATCH', '/shakes/day-1-1-aaaaaaaaaaaaaaaaaaaa', ['hidden' => true]);
 lulavAssert('PATCH /shakes/:id without token is 401', $hideAuth['status'] === 401 && lulavJsonBody($hideAuth), lulavErrorMessage($hideAuth));
 
+$deleteShakeAuth = lulavTestRequest($base, 'DELETE', '/shakes/day-1-1-aaaaaaaaaaaaaaaaaaaa');
+lulavAssert('DELETE /shakes/:id without token is 401', $deleteShakeAuth['status'] === 401 && lulavJsonBody($deleteShakeAuth), lulavErrorMessage($deleteShakeAuth));
+
 $photoFile = lulavTestRequest($base, 'GET', '/photos/' . str_repeat('a', 32) . '/file');
 lulavAssert(
     'GET missing photo file is JSON 404',

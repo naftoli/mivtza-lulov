@@ -171,6 +171,8 @@ current target is reached. `bonusLevel` (0 before the goal) and `bonusGoal`
 - `GET /me/shakes` — child; all current daily reports
 - `GET /schools/:id/shakes` — public; admin may add `?includeHidden=1`
 - `PATCH /shakes/:id` — admin; `{ hidden: true|false }`
+- `DELETE /shakes/:id` — admin; clears the day back to 0 (count, minutes, story
+  and photos) so the soldier can log it again from scratch
 - `GET /schools/:id/report-rows` — authorized school/HQ admin
 
 Each child/day is one cumulative report. Its shakes, minutes, story, inactive
