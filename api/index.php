@@ -193,6 +193,10 @@ function lulavPercent(int $total, int $goal): int
     return $total < $goal ? min(99, $percent) : $percent;
 }
 
+const LULAV_BONUS_SCHOOL_ID = 630;
+const LULAV_BONUS_SHAKES = 16913;
+const LULAV_BONUS_MINUTES = 135520;
+
 /**
  * Per-school shakes and minutes, as ['day' => [school_id => n], 'minutes' =>
  * [...]].
@@ -248,6 +252,11 @@ function lulavSchoolTotals(?int $onlyId = null): array
         $schoolId = (int) $row['school_id'];
         $totals['day'][$schoolId] = (int) $row['day_total'];
         $totals['minutes'][$schoolId] = (int) $row['minute_total'];
+    }
+    // Hardcoded offline tally for school 630, added on top of its logged marks.
+    if ($onlyId === null || $onlyId === LULAV_BONUS_SCHOOL_ID) {
+        $totals['day'][LULAV_BONUS_SCHOOL_ID] = ($totals['day'][LULAV_BONUS_SCHOOL_ID] ?? 0) + LULAV_BONUS_SHAKES;
+        $totals['minutes'][LULAV_BONUS_SCHOOL_ID] = ($totals['minutes'][LULAV_BONUS_SCHOOL_ID] ?? 0) + LULAV_BONUS_MINUTES;
     }
     return $totals;
 }
