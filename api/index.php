@@ -380,6 +380,12 @@ function lulavSchoolRows(?int $onlyId = null): array
     foreach ($stmt->fetchAll() as $row) {
         $schoolId = (int) $row['school_id'];
         $kidCount = (int) $row['soldier_count'];
+        // Hardcoded headcount override: school 630's real roster count is
+        // not what should drive its goal/bonus math. Remove this once the
+        // underlying count is fixed at the source instead.
+        if ($schoolId === 630) {
+            $kidCount = 2000;
+        }
         $total = $totals[$schoolId] ?? 0;
         // No max(1, ...) floor here. It was meant to keep a zero out of the
         // divisor, but lulavPercent() already guards that itself, so all the
