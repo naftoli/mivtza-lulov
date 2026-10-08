@@ -552,6 +552,13 @@ export async function getAllSchoolsPhotoZipLink(range = {}) {
   throw new Error('Photo downloads are available on the live site only.')
 }
 
+// Every story soldiers submitted, across all schools (HQ only). The demo has
+// no HQ reporting, so there is nothing to export there.
+export async function getAllStories() {
+  if (!IS_DEMO) return mashpia.getAllStories()
+  return []
+}
+
 export async function approveAllPhotos(schoolId) {
   if (!IS_DEMO) return mashpia.approveAllPhotos(schoolId)
   await delay()

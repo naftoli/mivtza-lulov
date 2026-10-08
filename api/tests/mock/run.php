@@ -510,6 +510,25 @@ $allBackwards = req('POST', '/photos/download-link', ['from' => $ny('2026-09-29 
 check('all: from after to is refused', $allBackwards['status'] === 422, $allBackwards['body']);
 
 
+// --- All Schools stories (HQ only): the download feed -----------------------
+$stories = req('GET', '/stories', null, 'admin');
+check('stories: HQ gets the list', $stories['status'] === 200, $stories['body']);
+$list = $stories['json']['stories'] ?? null;
+check('stories: one row per non-empty story, by school then name, with the kid details',
+    is_array($list) && count($list) === 2
+    && $list[0]['name'] === 'Mendel Cohen' && $list[0]['school'] === 'Sample Day School'
+    && $list[0]['serial'] === '555001' && $list[0]['rank'] === 'Colonel'
+    && $list[0]['day'] === 2 && $list[0]['story'] === 'We went to the park'
+    && $list[1]['name'] === 'Shmuly Gold' && $list[1]['school'] === 'Sample Talmud Torah'
+    && $list[1]['serial'] === '555003' && $list[1]['day'] === 3 && $list[1]['story'] === 'Big day',
+    json_encode($list));
+check('stories: a soldier with no story (Levi) is left out', is_array($list)
+    && !in_array('Levi Katz', array_column($list, 'name'), true), json_encode($list));
+checkClean('stories', $stories);
+check('stories: a school admin cannot get them', req('GET', '/stories', null, 'admin', ['LULAV_TEST_ADMIN' => 'school'])['status'] === 403);
+check('stories: a soldier cannot get them', req('GET', '/stories', null, 'kid')['status'] === 403);
+
+
 echo "== sample send script ==\n";
 
 // The real mail() path, into a file: headers and footer as a recipient sees them.

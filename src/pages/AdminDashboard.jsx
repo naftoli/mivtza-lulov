@@ -5,7 +5,7 @@ import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   deleteShake, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink, getApprovedPhotoTimes,
-  getAllSchoolsPhotoZipLink, getAllApprovedPhotoTimes,
+  getAllSchoolsPhotoZipLink, getAllApprovedPhotoTimes, getAllStories,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
@@ -102,6 +102,7 @@ export default function AdminDashboard() {
             </div>
           </Section>
           <div className="mt-6"><GlobalGoalSettings /></div>
+          <div className="mt-6"><StoriesDownload /></div>
         </div>
       )}
 
@@ -227,6 +228,59 @@ function GlobalGoalSettings() {
         <Button type="submit" variant="navy">Save</Button>
         {saved && <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-green">✓ Saved</span>}
       </form>
+    </Section>
+  )
+}
+
+// HQ-only: every story soldiers submitted, across all schools, as a CSV. The
+// data is a plain admin read; the spreadsheet is built here (rather than streamed
+// like the photo zip) because it is just text, and a Blob download carries no
+// token worry.
+const csvCell = (value) => {
+  const s = String(value ?? '')
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+function StoriesDownload() {
+  const { data: stories, error, reload } = useLiveData(() => getAllStories(), [])
+  const [busy, setBusy] = useState(false)
+
+  function download() {
+    if (!stories?.length) return
+    setBusy(true)
+    try {
+      const rows = [
+        ['Name', 'Rank', 'School', 'Serial', 'Day', 'Story'],
+        ...stories.map((s) => [s.name, s.rank, s.school, s.serial, s.day, s.story]),
+      ]
+      // A BOM so Excel reads Hebrew and the story text as UTF-8.
+      const csv = '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n')
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'Mivtza Lulav stories.csv'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Section title="Download Stories">
+      <p className="mb-4 text-xs text-muted">Every story soldiers submitted, across all schools, as a spreadsheet (CSV): each soldier’s name, rank, school, serial number and the story.</p>
+      {error ? (
+        <ErrorNote error={error} onRetry={reload} what="the stories" />
+      ) : !stories ? (
+        <Spinner />
+      ) : stories.length === 0 ? (
+        <p className="text-sm text-muted">No stories submitted yet.</p>
+      ) : (
+        <Button variant="navy" className={`${smallBtn} w-full`} disabled={busy} onClick={download}>
+          {busy ? 'Preparing…' : `⬇ Download ${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}`}
+        </Button>
+      )}
     </Section>
   )
 }

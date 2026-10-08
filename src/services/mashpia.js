@@ -193,6 +193,12 @@ export async function getAllApprovedPhotoTimes() {
 }
 export const getAllSchoolsPhotoZipLink = ({ from, to } = {}) =>
   req('/photos/download-link', { method: 'POST', body: { from, to }, as: 'admin' })
+// Every story soldiers submitted, across all schools (HQ only): one row per
+// story with the kid's name, rank, school, serial, day and the story text.
+export async function getAllStories() {
+  const result = await req('/stories', { as: 'admin' })
+  return result.stories
+}
 export const approvePhotos = (shakeId) =>
   write(`/shakes/${shakeId}/photos/approve`, { method: 'POST', as: 'admin' })
 export const rejectPhotos = (shakeId) =>

@@ -1399,6 +1399,61 @@ function lulavSchoolReportRows(int $schoolId): array
     return $rows;
 }
 
+/**
+ * Every story soldiers submitted, across all schools (HQ only), for the
+ * download: the kid's name, rank, school, serial and the story itself.
+ *
+ * The story rides on a day's shake-count mark (its mark_description), so this
+ * walks the same all-schools marks the reports use and keeps the visible,
+ * non-empty ones -- a removed ("hidden") entry's story is left out, as it is
+ * everywhere else. Rows come out ordered by school, then soldier, then day.
+ */
+function lulavAllStories(): array
+{
+    $marks = lulavLoadDayMarks(null, null);
+    $entries = [];
+    foreach ($marks as $userId => $days) {
+        foreach ($days as $day => $fields) {
+            $dayMark = $fields['day'] ?? null;
+            if (!$dayMark || !empty($dayMark['hidden'])) {
+                continue;
+            }
+            $story = trim((string) ($dayMark['note'] ?? ''));
+            if ($story === '') {
+                continue;
+            }
+            $entries[] = ['userId' => (int) $userId, 'day' => (int) $day, 'story' => $story];
+        }
+    }
+    if (!$entries) {
+        return [];
+    }
+
+    $kids = lulavKidRowsByUserId(array_column($entries, 'userId'));
+    $rows = [];
+    foreach ($entries as $entry) {
+        $kid = $kids[$entry['userId']] ?? null;
+        // Only eligible-school kids, as every other admin read gates on.
+        if (!$kid || !lulavSchoolIsEligible((int) $kid['school_id'])) {
+            continue;
+        }
+        $rows[] = [
+            'name' => trim($kid['first'] . ' ' . $kid['last']),
+            'rank' => (string) ($kid['rank_name'] ?: ''),
+            'school' => (string) ($kid['school_name'] ?? ''),
+            'serial' => (string) $kid['user_serial'],
+            'day' => $entry['day'],
+            'story' => $entry['story'],
+        ];
+    }
+    usort($rows, static function (array $a, array $b): int {
+        return strcmp($a['school'], $b['school'])
+            ?: strcmp($a['name'], $b['name'])
+            ?: ($a['day'] <=> $b['day']);
+    });
+    return $rows;
+}
+
 function lulavLeaderboard(int $schoolId): array
 {
     global $MASHPIA_DB;
@@ -2464,6 +2519,15 @@ try {
     }
     if ($method === 'GET' && $path === '/photos/approved.zip') {
         lulavSendPhotoZip(null);
+    }
+    if ($method === 'GET' && $path === '/stories') {
+        // Every soldier's story across all schools (HQ only): the page turns
+        // these into the download spreadsheet.
+        $actor = lulavRequireActor(['admin']);
+        if (!lulavAdminScope((int) $actor['id'])['isHq']) {
+            lulavError('HQ access required.', 403);
+        }
+        lulavJson(['stories' => lulavAllStories()]);
     }
     if ($method === 'DELETE' && preg_match('#^/photos/([a-f0-9]{32})$#', $path, $match)) {
         lulavHandlePhotoDelete($match[1]);
