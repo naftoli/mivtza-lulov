@@ -372,6 +372,7 @@ $photoDir = $sandbox . '/storage/lulav/photos';
 file_put_contents($photoDir . '/zip-mendel-1.jpg', "mendel photo one");
 file_put_contents($photoDir . '/zip-mendel-2.png', "mendel photo two");
 file_put_contents($photoDir . '/zip-levi-1.jpg', "levi photo");
+file_put_contents($photoDir . '/zip-shmuly-1.jpg', "shmuly photo"); // a second school, for All Schools
 
 $link = req('POST', '/schools/61/photos/download-link', [], 'admin');
 check('zip: admin gets a link', $link['status'] === 200, $link['body']);
@@ -462,6 +463,51 @@ check('window: the zip honours the signed window', array_keys($sundayZip) === ['
 // The zip token must never work as a login.
 $asSession = req('GET', '/schools/61/report-rows', null, 'bearer:' . signTest($good));
 check('zip: the download token is not a session', $asSession['status'] === 401, $asSession['body']);
+
+
+// --- All Schools (HQ only): every school in one zip -------------------------
+$allTimes = req('GET', '/photos/approved-times', null, 'admin');
+check('all: HQ gets every school\'s upload times', $allTimes['status'] === 200, $allTimes['body']);
+check('all: one per downloadable photo across schools, oldest first (missing file left out)',
+    ($allTimes['json']['times'] ?? null) === [$ny('2026-09-27 19:30'), $ny('2026-09-28 10:00'), $ny('2026-09-28 20:00'), $ny('2026-09-29 09:00')],
+    $allTimes['body']);
+checkClean('all approved-times', $allTimes);
+check('all: a school admin cannot list them', req('GET', '/photos/approved-times', null, 'admin', ['LULAV_TEST_ADMIN' => 'school'])['status'] === 403);
+check('all: a soldier cannot list them', req('GET', '/photos/approved-times', null, 'kid')['status'] === 403);
+
+$allLink = req('POST', '/photos/download-link', [], 'admin');
+check('all: HQ gets a link', $allLink['status'] === 200, $allLink['body']);
+check('all: the link points at the all-schools zip with a token',
+    strpos((string) ($allLink['json']['url'] ?? ''), '/mivtzoim/lulav/api/photos/approved.zip?token=') === 0, $allLink['body']);
+check('all: count spans both schools, missing file left out', ($allLink['json']['count'] ?? null) === 4, $allLink['body']);
+checkClean('all link', $allLink);
+check('all: a school admin cannot get a link', req('POST', '/photos/download-link', [], 'admin', ['LULAV_TEST_ADMIN' => 'school'])['status'] === 403);
+
+$allZip = zipEntries(req('GET', substr((string) ($allLink['json']['url'] ?? ''), strlen('/mivtzoim/lulav/api'))));
+check('all: each school in its own folder, soldier and day within',
+    array_keys($allZip) === [
+        'Sample Day School/Levi Katz - Day 2.jpg',
+        'Sample Day School/Mendel Cohen - Day 2 - 1.jpg',
+        'Sample Day School/Mendel Cohen - Day 2 - 2.png',
+        'Sample Talmud Torah/Shmuly Gold - Day 3.jpg',
+    ], json_encode(array_keys($allZip)));
+check('all: the second school\'s photo rides along intact', ($allZip['Sample Talmud Torah/Shmuly Gold - Day 3.jpg'][0] ?? '') === 'shmuly photo');
+
+// The all-schools token is its own kind: it must not pass as a single-school one, nor the reverse.
+$allGood = ['v' => 1, 'type' => 'photozip-all', 'id' => 'all', 'admin' => 1, 'iat' => time(), 'exp' => time() + 120];
+check('all: a single-school token is refused on the all-schools zip',
+    req('GET', '/photos/approved.zip?token=' . rawurlencode(signTest(['type' => 'photozip', 'id' => 61] + $allGood)))['status'] === 401);
+check('all: an all-schools token is refused on a single school',
+    req('GET', '/schools/61/photos/approved.zip?token=' . rawurlencode(signTest($allGood)))['status'] === 401);
+check('all: a non-HQ token cannot build the all-schools zip',
+    req('GET', '/photos/approved.zip?token=' . rawurlencode(signTest($allGood)), null, '', ['LULAV_TEST_ADMIN' => 'school'])['status'] === 403);
+
+$allWindow = req('POST', '/photos/download-link', ['from' => $ny('2026-09-29 00:00'), 'to' => $ny('2026-09-29 23:59:59')], 'admin');
+check('all: a window narrows to the school with photos in it', ($allWindow['json']['count'] ?? null) === 1, $allWindow['body']);
+$allWindowZip = zipEntries(req('GET', substr((string) ($allWindow['json']['url'] ?? ''), strlen('/mivtzoim/lulav/api'))));
+check('all: ...and the zip holds exactly that one', array_keys($allWindowZip) === ['Sample Talmud Torah/Shmuly Gold - Day 3.jpg'], json_encode(array_keys($allWindowZip)));
+$allBackwards = req('POST', '/photos/download-link', ['from' => $ny('2026-09-29 00:00'), 'to' => $ny('2026-09-27 00:00')], 'admin');
+check('all: from after to is refused', $allBackwards['status'] === 422, $allBackwards['body']);
 
 
 echo "== sample send script ==\n";

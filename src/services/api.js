@@ -540,6 +540,18 @@ export async function getPhotoZipLink(schoolId, range = {}) {
   throw new Error('Photo downloads are available on the live site only.')
 }
 
+// The same two, across every school at once (HQ only). The demo ships no
+// photos on disk, so there is nothing to list or zip.
+export async function getAllApprovedPhotoTimes() {
+  if (!IS_DEMO) return mashpia.getAllApprovedPhotoTimes()
+  return []
+}
+
+export async function getAllSchoolsPhotoZipLink(range = {}) {
+  if (!IS_DEMO) return mashpia.getAllSchoolsPhotoZipLink(range)
+  throw new Error('Photo downloads are available on the live site only.')
+}
+
 export async function approveAllPhotos(schoolId) {
   if (!IS_DEMO) return mashpia.approveAllPhotos(schoolId)
   await delay()

@@ -5,6 +5,7 @@ import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   deleteShake, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink, getApprovedPhotoTimes,
+  getAllSchoolsPhotoZipLink, getAllApprovedPhotoTimes,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
@@ -153,10 +154,11 @@ function SchoolAdmin({ schoolId, isHQ }) {
       <CampaignSettings school={school} isHQ={isHQ} />
       {/* Photo Approvals above the roster; "Remove entry" moderation right under it. */}
       {/* Download sits to the right of Photo Approvals on wide screens, under it
-          on narrow ones -- and only when there is something to download. */}
-      <div className={hasApproved ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}>
+          on narrow ones -- when this school has something to download, and
+          always for HQ, who can also download every school at once. */}
+      <div className={hasApproved || isHQ ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}>
         <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} />
-        {hasApproved && <PhotoDownload schoolId={schoolId} times={photoTimes} />}
+        {(hasApproved || isHQ) && <PhotoDownload schoolId={schoolId} times={photoTimes || []} isHQ={isHQ} />}
       </div>
       <Moderation shakes={shakes} error={shakesError} onRetry={reloadShakes} />
       <Roster kids={kids || []} />
@@ -407,16 +409,33 @@ const localDate = (seconds) => {
 const pickerSeconds = (value) => Math.floor(new Date(`${value}:00`).getTime() / 1000)
 
 // Download the approved photos uploaded between two dates and times, as one zip.
-// Only shown when the school has approved photos. Times are to the minute, in
-// the admin's local time, turned into exact instants here so the server never
-// has to guess a timezone.
-function PhotoDownload({ schoolId, times }) {
+// Shown when the school has approved photos, and always for HQ -- who also get
+// an "All Schools" switch that downloads every school at once, each school in
+// its own folder, over any date range. Times are to the minute, in the admin's
+// local time, turned into exact instants here so the server never has to guess
+// a timezone.
+function PhotoDownload({ schoolId, times, isHQ }) {
+  const [allSchools, setAllSchools] = useState(false)
+  // Every school's upload times, fetched the first time HQ turns the switch on
+  // (null until then, and while it loads). Only HQ ever sees the switch, and
+  // the server checks the token is HQ's again before it builds the zip.
+  const { data: allTimes, error: allError } = useLiveData(
+    () => (allSchools ? getAllApprovedPhotoTimes() : Promise.resolve(null)),
+    [allSchools],
+  )
+  const loadingAll = allSchools && allTimes == null && !allError
+  const activeTimes = allSchools ? (allTimes ?? []) : times
+
   // The whole range by default: the start of the first upload day to the end of
-  // the last. It also bounds the pickers.
+  // the last. One school also bounds the pickers to that span; All Schools
+  // leaves them open to any dates. Depends on the stable sources, not the
+  // per-render `activeTimes`, so the range is only recomputed when data lands.
   const [first, last] = useMemo(() => {
-    const days = times.map(localDate).sort()
+    const list = allSchools ? (allTimes ?? []) : times
+    if (!list.length) return ['', '']
+    const days = list.map(localDate).sort()
     return [`${days[0]}T00:00`, `${days[days.length - 1]}T23:59`]
-  }, [times])
+  }, [allSchools, allTimes, times])
   const [fromValue, setFromValue] = useState(null)
   const [toValue, setToValue] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -430,7 +449,16 @@ function PhotoDownload({ schoolId, times }) {
   const toTs = pickerSeconds(to) + 59 // through the end of that minute
   const incomplete = Number.isNaN(fromTs) || Number.isNaN(toTs)
   const backwards = !incomplete && fromTs > toTs
-  const count = incomplete || backwards ? 0 : times.filter((t) => t >= fromTs && t <= toTs).length
+  const count = incomplete || backwards ? 0 : activeTimes.filter((t) => t >= fromTs && t <= toTs).length
+
+  // Flipping the switch swaps the whole dataset, so let the range re-default to
+  // the new one rather than keep a value picked against the old span.
+  function toggleAllSchools(on) {
+    setAllSchools(on)
+    setFromValue(null)
+    setToValue(null)
+    setError(null)
+  }
 
   // The server builds the zip from the files on its disk. The download itself is
   // a plain link, which cannot send the admin's token, so first ask for a
@@ -439,7 +467,9 @@ function PhotoDownload({ schoolId, times }) {
     setBusy(true)
     setError(null)
     try {
-      const { url } = await getPhotoZipLink(schoolId, { from: fromTs, to: toTs })
+      const { url } = allSchools
+        ? await getAllSchoolsPhotoZipLink({ from: fromTs, to: toTs })
+        : await getPhotoZipLink(schoolId, { from: fromTs, to: toTs })
       const link = document.createElement('a')
       link.href = url
       link.rel = 'noopener'
@@ -457,27 +487,49 @@ function PhotoDownload({ schoolId, times }) {
   const row = (name, value, setValue) => (
     <label className="block">
       <span className={label}>{name}</span>
-      <input type="datetime-local" value={value} min={first} max={last} step={60}
-        onChange={(e) => setValue(e.target.value)} className={input} />
+      <input type="datetime-local" value={value} min={allSchools ? undefined : first} max={allSchools ? undefined : last}
+        step={60} onChange={(e) => setValue(e.target.value)} className={input} />
     </label>
   )
 
   return (
     <Section title="Download Photos">
-      <p className="mb-4 text-xs text-muted">Approved photos, by when they were uploaded. They download as one zip, named by soldier and day.</p>
-      <div className="space-y-3">
-        {row('From', from, setFromValue)}
-        {row('To', to, setToValue)}
-      </div>
-      {incomplete
-        ? <p role="alert" className="mt-3 text-sm font-semibold text-red">Pick a date and time for both “From” and “To”.</p>
-        : backwards
-        ? <p role="alert" className="mt-3 text-sm font-semibold text-red">“From” must be before “To”.</p>
-        : <p className="mt-3 text-sm text-navy"><strong>{count}</strong> of {times.length} approved photo{times.length === 1 ? '' : 's'} in this range</p>}
-      {error && <p role="alert" className="mt-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
-      <Button variant="navy" className={`${smallBtn} mt-4 w-full`} disabled={busy || count === 0} onClick={download}>
-        {busy ? 'Preparing…' : `⬇ Download ${count} photo${count === 1 ? '' : 's'}`}
-      </Button>
+      <p className="mb-4 text-xs text-muted">
+        Approved photos, by when they were uploaded. They download as one zip
+        {allSchools ? ', sorted into a folder per school, named by soldier and day.' : ', named by soldier and day.'}
+      </p>
+      {isHQ && (
+        <label className="mb-4 flex items-center gap-2 text-sm font-semibold text-navy">
+          <input type="checkbox" checked={allSchools} onChange={(e) => toggleAllSchools(e.target.checked)}
+            className="h-4 w-4 rounded border-line text-blue focus:ring-blue/25" />
+          All Schools
+        </label>
+      )}
+      {loadingAll ? (
+        <Spinner />
+      ) : allSchools && allError ? (
+        <p role="alert" className="rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">Could not load the photo list — {allError.message}</p>
+      ) : activeTimes.length === 0 ? (
+        <p className="text-sm text-muted">
+          {allSchools ? 'No approved photos in any school yet.' : 'This school has no approved photos yet.'}
+        </p>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {row('From', from, setFromValue)}
+            {row('To', to, setToValue)}
+          </div>
+          {incomplete
+            ? <p role="alert" className="mt-3 text-sm font-semibold text-red">Pick a date and time for both “From” and “To”.</p>
+            : backwards
+            ? <p role="alert" className="mt-3 text-sm font-semibold text-red">“From” must be before “To”.</p>
+            : <p className="mt-3 text-sm text-navy"><strong>{count}</strong> of {activeTimes.length} approved photo{activeTimes.length === 1 ? '' : 's'} in this range</p>}
+          {error && <p role="alert" className="mt-3 rounded-xl bg-white/60 px-3 py-2 text-sm font-semibold text-red">{error}</p>}
+          <Button variant="navy" className={`${smallBtn} mt-4 w-full`} disabled={busy || count === 0} onClick={download}>
+            {busy ? 'Preparing…' : `⬇ Download ${count} photo${count === 1 ? '' : 's'}`}
+          </Button>
+        </>
+      )}
     </Section>
   )
 }

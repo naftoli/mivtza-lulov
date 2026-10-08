@@ -1749,28 +1749,41 @@ const LULAV_PHOTO_ZIP_TTL = 120;
  * $from and $to (Unix timestamps, inclusive) keep only photos uploaded in that
  * window. Timestamps, not dates: the admin picks times in their own timezone,
  * the browser turns them into instants, and nothing here has to guess a zone.
+ *
+ * $schoolId null means every school at once (HQ only): the photos then come
+ * back filed under a folder per school -- "School Name/First Last - Day N.jpg"
+ * -- so names never collide across schools and the admin can tell them apart.
  */
-function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = null): array
+function lulavApprovedPhotoFiles(?int $schoolId, ?int $from = null, ?int $to = null): array
 {
     global $MASHPIA_DB;
     lulavRequireTables(['lulav_photos']);
+    $allSchools = $schoolId === null;
+    // All Schools carries school_id on each row so the zip can file it; one
+    // school keeps the tighter, index-driven filter it always had.
+    $columns = "user_id, day_number, file_name, mime_type,
+                UNIX_TIMESTAMP(created_at) AS uploaded_at" . ($allSchools ? ', school_id' : '');
+    $params = lulavCampaignParams();
+    $filter = '';
+    if (!$allSchools) {
+        $filter = ' AND school_id = :school';
+        $params[':school'] = $schoolId;
+    }
     $stmt = $MASHPIA_DB->prepare(
-        "SELECT user_id, day_number, file_name, mime_type,
-                UNIX_TIMESTAMP(created_at) AS uploaded_at
+        "SELECT $columns
          FROM lulav_photos
          WHERE mivtzoim_id = :campaign AND school_year = :school_year
-           AND school_id = :school AND status = 'approved'
-         ORDER BY user_id, day_number, photo_id"
+           AND status = 'approved'$filter
+         ORDER BY " . ($allSchools ? 'school_id, ' : '') . "user_id, day_number, photo_id"
     );
-    $stmt->execute(lulavCampaignParams() + [
-        ':school' => $schoolId,
-    ]);
+    $stmt->execute($params);
     $photos = $stmt->fetchAll();
     if (!$photos) {
         return [];
     }
 
     // One query each for the hidden flags and the names, not one per photo.
+    // Null $schoolId spans every school for both, just like the photo query.
     $marks = lulavLoadDayMarks($schoolId, null);
     $kids = lulavKidRowsByUserId(array_column($photos, 'user_id'));
 
@@ -1792,8 +1805,15 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
         $kid = $kids[$userId] ?? null;
         $who = $kid ? trim($kid['first'] . ' ' . $kid['last']) : 'Soldier ' . $userId;
         $who = lulavSafeFilename($who) ?: 'Soldier';
-        $groups[$who . "\0" . $day][] = [
+        // One folder per school, so the key sorts and groups by school first.
+        $folder = '';
+        if ($allSchools) {
+            $schoolName = (string) ($kid['school_name'] ?? '');
+            $folder = (lulavSafeFilename($schoolName) ?: ('School ' . (int) $photo['school_id'])) . '/';
+        }
+        $groups[$folder . $who . "\0" . $day][] = [
             'path' => $path,
+            'folder' => $folder,
             'who' => $who,
             'day' => $day,
             'ext' => LULAV_PHOTO_EXTENSIONS[$photo['mime_type']] ?? 'jpg',
@@ -1806,7 +1826,7 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
     $used = [];
     foreach ($groups as $group) {
         foreach ($group as $index => $file) {
-            $base = $file['who'] . ' - Day ' . $file['day'] . (count($group) > 1 ? ' - ' . ($index + 1) : '');
+            $base = $file['folder'] . $file['who'] . ' - Day ' . $file['day'] . (count($group) > 1 ? ' - ' . ($index + 1) : '');
             // Two soldiers with the same name on the same day stay apart.
             $name = $base . '.' . $file['ext'];
             for ($n = 2; isset($used[strtolower($name)]); $n++) {
@@ -1820,23 +1840,54 @@ function lulavApprovedPhotoFiles(int $schoolId, ?int $from = null, ?int $to = nu
 }
 
 /**
- * A signed link that downloads one school's approved photos, for a couple of
- * minutes. The upload window travels inside the signature, so it cannot be
- * widened by editing the link.
+ * A signed link that downloads approved photos for a couple of minutes. The
+ * upload window travels inside the signature, so it cannot be widened by
+ * editing the link. $schoolId null means every school at once (HQ only).
  */
-function lulavIssuePhotoZipLink(int $schoolId, int $adminId, ?int $from = null, ?int $to = null): string
+function lulavIssuePhotoZipLink(?int $schoolId, int $adminId, ?int $from = null, ?int $to = null): string
 {
+    $allSchools = $schoolId === null;
     $token = lulavSignPayload([
         'v' => 1,
-        'type' => 'photozip',
-        'id' => $schoolId,
+        'type' => $allSchools ? 'photozip-all' : 'photozip',
+        // A non-empty id so lulavVerifySignedPayload() accepts the token; the
+        // all-schools branch of lulavSendPhotoZip() never reads it back.
+        'id' => $allSchools ? 'all' : $schoolId,
         'admin' => $adminId,
         'from' => $from,
         'to' => $to,
         'iat' => time(),
         'exp' => time() + LULAV_PHOTO_ZIP_TTL,
     ]);
-    return '/mivtzoim/lulav/api/schools/' . $schoolId . '/photos/approved.zip?token=' . rawurlencode($token);
+    return $allSchools
+        ? '/mivtzoim/lulav/api/photos/approved.zip?token=' . rawurlencode($token)
+        : '/mivtzoim/lulav/api/schools/' . $schoolId . '/photos/approved.zip?token=' . rawurlencode($token);
+}
+
+/**
+ * The optional upload window from a download-link request body, as
+ * [$from, $to] Unix timestamps (either end may be null). Errors out on a
+ * non-number or a backwards range -- shared by the per-school and All Schools
+ * download routes, which validate it the same way.
+ */
+function lulavPhotoDownloadWindow(array $input): array
+{
+    $window = [];
+    foreach (['from', 'to'] as $end) {
+        $value = $input[$end] ?? null;
+        if ($value === null || $value === '') {
+            $window[$end] = null;
+            continue;
+        }
+        if (!is_numeric($value) || (int) $value < 0) {
+            lulavError('The date range is not valid.', 422);
+        }
+        $window[$end] = (int) $value;
+    }
+    if ($window['from'] !== null && $window['to'] !== null && $window['from'] > $window['to']) {
+        lulavError('The "from" time must be before the "to" time.', 422);
+    }
+    return [$window['from'], $window['to']];
 }
 
 /**
@@ -1850,16 +1901,30 @@ function lulavIssuePhotoZipLink(int $schoolId, int $adminId, ?int $from = null, 
  * The browser opens this as a plain link, which cannot carry the API's bearer
  * header, so the link carries a short-lived signed token instead, minted by
  * POST .../photos/download-link for an admin of this school.
+ *
+ * $schoolId null is the All Schools zip (HQ only): a different token type, and
+ * the admin must still be HQ, not just have been two minutes ago.
  */
-function lulavSendPhotoZip(int $schoolId): void
+function lulavSendPhotoZip(?int $schoolId): void
 {
+    $allSchools = $schoolId === null;
     $token = (string) ($_GET['token'] ?? '');
     $payload = $token !== '' ? lulavVerifySignedPayload($token) : null;
-    if (!$payload || $payload['type'] !== 'photozip' || (int) $payload['id'] !== $schoolId) {
+    $wantType = $allSchools ? 'photozip-all' : 'photozip';
+    if (!$payload || $payload['type'] !== $wantType
+        || (!$allSchools && (int) $payload['id'] !== $schoolId)) {
         lulavError('This download link has expired. Please press Download again.', 401);
     }
-    // Still an admin of this school -- not just two minutes ago.
-    lulavRequireSchoolAccess(['type' => 'admin', 'id' => (int) ($payload['admin'] ?? 0)], $schoolId);
+    $adminId = (int) ($payload['admin'] ?? 0);
+    if ($allSchools) {
+        // Still HQ -- not just two minutes ago.
+        if (!lulavAdminScope($adminId)['isHq']) {
+            lulavError('HQ access required.', 403);
+        }
+    } else {
+        // Still an admin of this school -- not just two minutes ago.
+        lulavRequireSchoolAccess(['type' => 'admin', 'id' => $adminId], $schoolId);
+    }
 
     if (!class_exists('ZipArchive')) {
         lulavError('Photo downloads are not available on this server.', 503);
@@ -1893,7 +1958,9 @@ function lulavSendPhotoZip(int $schoolId): void
         lulavError('The photo download could not be prepared.', 500);
     }
 
-    $school = lulavSchoolRows($schoolId)[0]['name'] ?? ('School ' . $schoolId);
+    $school = $allSchools
+        ? 'All Schools'
+        : (lulavSchoolRows($schoolId)[0]['name'] ?? ('School ' . $schoolId));
     $filename = lulavSafeFilename($school . ' - Mivtza Lulav photos') . '.zip';
     // An ASCII name for old browsers, the real one (Hebrew included) for the rest.
     $ascii = preg_replace('/[^\x20-\x7e]/', '_', $filename);
@@ -2354,35 +2421,49 @@ try {
         lulavRequireSchoolAccess($actor, $schoolId);
         lulavRequireEligibleSchool($schoolId);
         // An optional upload window, as Unix timestamps; either end may be open.
-        $input = lulavInput();
-        $window = [];
-        foreach (['from', 'to'] as $end) {
-            $value = $input[$end] ?? null;
-            if ($value === null || $value === '') {
-                $window[$end] = null;
-                continue;
-            }
-            if (!is_numeric($value) || (int) $value < 0) {
-                lulavError('The date range is not valid.', 422);
-            }
-            $window[$end] = (int) $value;
-        }
-        if ($window['from'] !== null && $window['to'] !== null && $window['from'] > $window['to']) {
-            lulavError('The "from" time must be before the "to" time.', 422);
-        }
+        [$from, $to] = lulavPhotoDownloadWindow(lulavInput());
         // Counted now, so an empty range gets a message rather than a link to a 404.
-        $count = count(lulavApprovedPhotoFiles($schoolId, $window['from'], $window['to']));
+        $count = count(lulavApprovedPhotoFiles($schoolId, $from, $to));
         if ($count === 0) {
             lulavError('There are no approved photos in that range.', 404);
         }
         lulavJson([
-            'url' => lulavIssuePhotoZipLink($schoolId, (int) $actor['id'], $window['from'], $window['to']),
+            'url' => lulavIssuePhotoZipLink($schoolId, (int) $actor['id'], $from, $to),
             'expiresIn' => LULAV_PHOTO_ZIP_TTL,
             'count' => $count,
         ]);
     }
     if ($method === 'GET' && preg_match('#^/schools/(\d+)/photos/approved\.zip$#', $path, $match)) {
         lulavSendPhotoZip((int) $match[1]);
+    }
+    // --- All Schools downloads (HQ only): every school at once ---------------
+    if ($method === 'GET' && $path === '/photos/approved-times') {
+        $actor = lulavRequireActor(['admin']);
+        if (!lulavAdminScope((int) $actor['id'])['isHq']) {
+            lulavError('HQ access required.', 403);
+        }
+        $times = array_column(lulavApprovedPhotoFiles(null), 'uploaded');
+        sort($times);
+        lulavJson(['times' => $times]);
+    }
+    if ($method === 'POST' && $path === '/photos/download-link') {
+        $actor = lulavRequireActor(['admin']);
+        if (!lulavAdminScope((int) $actor['id'])['isHq']) {
+            lulavError('HQ access required.', 403);
+        }
+        [$from, $to] = lulavPhotoDownloadWindow(lulavInput());
+        $count = count(lulavApprovedPhotoFiles(null, $from, $to));
+        if ($count === 0) {
+            lulavError('There are no approved photos in that range.', 404);
+        }
+        lulavJson([
+            'url' => lulavIssuePhotoZipLink(null, (int) $actor['id'], $from, $to),
+            'expiresIn' => LULAV_PHOTO_ZIP_TTL,
+            'count' => $count,
+        ]);
+    }
+    if ($method === 'GET' && $path === '/photos/approved.zip') {
+        lulavSendPhotoZip(null);
     }
     if ($method === 'DELETE' && preg_match('#^/photos/([a-f0-9]{32})$#', $path, $match)) {
         lulavHandlePhotoDelete($match[1]);

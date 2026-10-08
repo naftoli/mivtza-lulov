@@ -214,6 +214,20 @@ function lulav_test_patterns(): array
                 ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-missing.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-28 12:00 America/New_York')],
             ];
         }],
+        // The All Schools variant (HQ): same shape plus school_id, and a photo
+        // from a second school so the per-school folders can be checked.
+        ['/AS uploaded_at, school_id FROM lulav_photos/i', static function (): array {
+            if (getenv('LULAV_TEST_NO_APPROVED') === '1') {
+                return [];
+            }
+            return [
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-1.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-27 19:30 America/New_York'), 'school_id' => 61],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-mendel-2.png', 'mime_type' => 'image/png', 'uploaded_at' => strtotime('2026-09-28 10:00 America/New_York'), 'school_id' => 61],
+                ['user_id' => 9002, 'day_number' => 2, 'file_name' => 'zip-levi-1.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-28 20:00 America/New_York'), 'school_id' => 61],
+                ['user_id' => 9001, 'day_number' => 2, 'file_name' => 'zip-missing.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-28 12:00 America/New_York'), 'school_id' => 61],
+                ['user_id' => 9003, 'day_number' => 3, 'file_name' => 'zip-shmuly-1.jpg', 'mime_type' => 'image/jpeg', 'uploaded_at' => strtotime('2026-09-29 09:00 America/New_York'), 'school_id' => 269],
+            ];
+        }],
         // LULAV_TEST_NO_PHOTO=1: no photo with that id.
         ['/SELECT \* FROM lulav_photos/i', static function (): array {
             return getenv('LULAV_TEST_NO_PHOTO') === '1' ? [] : lulav_test_photo_rows();

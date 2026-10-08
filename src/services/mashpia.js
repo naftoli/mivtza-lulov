@@ -184,6 +184,15 @@ export async function getApprovedPhotoTimes(schoolId) {
 // not write: asking for a link changes nothing, so nothing needs reloading.
 export const getPhotoZipLink = (schoolId, { from, to } = {}) =>
   req(`/schools/${schoolId}/photos/download-link`, { method: 'POST', body: { from, to }, as: 'admin' })
+// The same two, across every school at once (HQ only): the server checks the
+// token is HQ's before it builds the zip, which files each school in its own
+// folder.
+export async function getAllApprovedPhotoTimes() {
+  const result = await req('/photos/approved-times', { as: 'admin' })
+  return result.times
+}
+export const getAllSchoolsPhotoZipLink = ({ from, to } = {}) =>
+  req('/photos/download-link', { method: 'POST', body: { from, to }, as: 'admin' })
 export const approvePhotos = (shakeId) =>
   write(`/shakes/${shakeId}/photos/approve`, { method: 'POST', as: 'admin' })
 export const rejectPhotos = (shakeId) =>
