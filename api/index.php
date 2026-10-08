@@ -1400,17 +1400,18 @@ function lulavSchoolReportRows(int $schoolId): array
 }
 
 /**
- * Every story soldiers submitted, across all schools (HQ only), for the
- * download: the kid's name, rank, school, serial and the story itself.
+ * The stories soldiers submitted, for the download: each row carries the kid's
+ * name, rank, school, serial and the story itself. $schoolId null is every
+ * school at once (HQ only); a school id keeps just that school's.
  *
  * The story rides on a day's shake-count mark (its mark_description), so this
- * walks the same all-schools marks the reports use and keeps the visible,
- * non-empty ones -- a removed ("hidden") entry's story is left out, as it is
- * everywhere else. Rows come out ordered by school, then soldier, then day.
+ * walks the same marks the reports use and keeps the visible, non-empty ones --
+ * a removed ("hidden") entry's story is left out, as it is everywhere else.
+ * Rows come out ordered by school, then soldier, then day.
  */
-function lulavAllStories(): array
+function lulavStories(?int $schoolId): array
 {
-    $marks = lulavLoadDayMarks(null, null);
+    $marks = lulavLoadDayMarks($schoolId, null);
     $entries = [];
     foreach ($marks as $userId => $days) {
         foreach ($days as $day => $fields) {
@@ -2520,14 +2521,22 @@ try {
     if ($method === 'GET' && $path === '/photos/approved.zip') {
         lulavSendPhotoZip(null);
     }
-    if ($method === 'GET' && $path === '/stories') {
-        // Every soldier's story across all schools (HQ only): the page turns
+    if ($method === 'GET' && preg_match('#^/schools/(\d+)/stories$#', $path, $match)) {
+        // One school's stories: any admin who runs that school. The page turns
         // these into the download spreadsheet.
+        $actor = lulavRequireActor(['admin']);
+        $schoolId = (int) $match[1];
+        lulavRequireSchoolAccess($actor, $schoolId);
+        lulavRequireEligibleSchool($schoolId);
+        lulavJson(['stories' => lulavStories($schoolId)]);
+    }
+    if ($method === 'GET' && $path === '/stories') {
+        // Every soldier's story across all schools (HQ only).
         $actor = lulavRequireActor(['admin']);
         if (!lulavAdminScope((int) $actor['id'])['isHq']) {
             lulavError('HQ access required.', 403);
         }
-        lulavJson(['stories' => lulavAllStories()]);
+        lulavJson(['stories' => lulavStories(null)]);
     }
     if ($method === 'DELETE' && preg_match('#^/photos/([a-f0-9]{32})$#', $path, $match)) {
         lulavHandlePhotoDelete($match[1]);

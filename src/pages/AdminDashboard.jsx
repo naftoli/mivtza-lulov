@@ -5,7 +5,7 @@ import {
   getSchools, getSchool, getShakes, getKidsForSchool,
   deleteShake, resetDemoData, getSchoolReportRows,
   getPendingPhotos, approvePhotos, approveAllPhotos, rejectPhotos, deletePhoto, getPhotoZipLink, getApprovedPhotoTimes,
-  getAllSchoolsPhotoZipLink, getAllApprovedPhotoTimes, getAllStories,
+  getAllSchoolsPhotoZipLink, getAllApprovedPhotoTimes, getStories, getAllStories,
   getSettings, setPerKidGoal, setSchoolGoal, byGoalProgress, IS_DEMO,
 } from '../services/api.js'
 
@@ -102,7 +102,6 @@ export default function AdminDashboard() {
             </div>
           </Section>
           <div className="mt-6"><GlobalGoalSettings /></div>
-          <div className="mt-6"><StoriesDownload /></div>
         </div>
       )}
 
@@ -161,6 +160,7 @@ function SchoolAdmin({ schoolId, isHQ }) {
         <PhotoApprovals schoolId={schoolId} shakes={pending} error={pendingError} onRetry={reloadPending} />
         {(hasApproved || isHQ) && <PhotoDownload schoolId={schoolId} times={photoTimes || []} isHQ={isHQ} />}
       </div>
+      <StoriesDownload schoolId={schoolId} isHQ={isHQ} />
       <Moderation shakes={shakes} error={shakesError} onRetry={reloadShakes} />
       <Roster kids={kids || []} />
       <ReportGrid rows={reportRows || []} />
@@ -232,32 +232,42 @@ function GlobalGoalSettings() {
   )
 }
 
-// HQ-only: every story soldiers submitted, across all schools, as a CSV. The
-// data is a plain admin read; the spreadsheet is built here (rather than streamed
-// like the photo zip) because it is just text, and a Blob download carries no
-// token worry.
+// Every admin can download their school's stories as a CSV; HQ get an "All
+// Schools" switch for every school at once. The data is a plain admin read;
+// the spreadsheet is built here (rather than streamed like the photo zip)
+// because it is just text, and a Blob download carries no token worry.
 const csvCell = (value) => {
   const s = String(value ?? '')
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
-function StoriesDownload() {
-  const { data: stories, error, reload } = useLiveData(() => getAllStories(), [])
+function StoriesDownload({ schoolId, isHQ }) {
+  const [allSchools, setAllSchools] = useState(false)
+  const { data: stories, error, reload } = useLiveData(
+    () => (allSchools ? getAllStories() : getStories(schoolId)),
+    [allSchools, schoolId],
+  )
   const [busy, setBusy] = useState(false)
+  // All Schools names the school in each row; one school already is that school.
+  const columns = allSchools
+    ? ['Name', 'Rank', 'School', 'Serial', 'Day', 'Story']
+    : ['Name', 'Rank', 'Serial', 'Day', 'Story']
 
   function download() {
     if (!stories?.length) return
     setBusy(true)
     try {
       const rows = [
-        ['Name', 'Rank', 'School', 'Serial', 'Day', 'Story'],
-        ...stories.map((s) => [s.name, s.rank, s.school, s.serial, s.day, s.story]),
+        columns,
+        ...stories.map((s) => (allSchools
+          ? [s.name, s.rank, s.school, s.serial, s.day, s.story]
+          : [s.name, s.rank, s.serial, s.day, s.story])),
       ]
       // A BOM so Excel reads Hebrew and the story text as UTF-8.
       const csv = '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n')
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = 'Mivtza Lulav stories.csv'
+      link.download = allSchools ? 'Mivtza Lulav stories - All Schools.csv' : 'Mivtza Lulav stories.csv'
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -269,7 +279,18 @@ function StoriesDownload() {
 
   return (
     <Section title="Download Stories">
-      <p className="mb-4 text-xs text-muted">Every story soldiers submitted, across all schools, as a spreadsheet (CSV): each soldier’s name, rank, school, serial number and the story.</p>
+      <p className="mb-4 text-xs text-muted">
+        {allSchools
+          ? 'Every story soldiers submitted, across all schools, as a spreadsheet (CSV): each soldier’s name, rank, school, serial number and the story.'
+          : 'The stories this school’s soldiers submitted, as a spreadsheet (CSV): each soldier’s name, rank, serial number and the story.'}
+      </p>
+      {isHQ && (
+        <label className="mb-4 flex items-center gap-2 text-sm font-semibold text-navy">
+          <input type="checkbox" checked={allSchools} onChange={(e) => setAllSchools(e.target.checked)}
+            className="h-4 w-4 rounded border-line text-blue focus:ring-blue/25" />
+          All Schools
+        </label>
+      )}
       {error ? (
         <ErrorNote error={error} onRetry={reload} what="the stories" />
       ) : !stories ? (

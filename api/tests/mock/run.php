@@ -525,8 +525,26 @@ check('stories: one row per non-empty story, by school then name, with the kid d
 check('stories: a soldier with no story (Levi) is left out', is_array($list)
     && !in_array('Levi Katz', array_column($list, 'name'), true), json_encode($list));
 checkClean('stories', $stories);
-check('stories: a school admin cannot get them', req('GET', '/stories', null, 'admin', ['LULAV_TEST_ADMIN' => 'school'])['status'] === 403);
+check('stories: a school admin cannot get every school', req('GET', '/stories', null, 'admin', ['LULAV_TEST_ADMIN' => 'school'])['status'] === 403);
 check('stories: a soldier cannot get them', req('GET', '/stories', null, 'kid')['status'] === 403);
+
+// Per school: any admin who runs it, scoped to that school's soldiers.
+$school61 = req('GET', '/schools/61/stories', null, 'admin');
+check('stories: one school returns only its own', $school61['status'] === 200
+    && is_array($school61['json']['stories'] ?? null)
+    && count($school61['json']['stories']) === 1
+    && $school61['json']['stories'][0]['name'] === 'Mendel Cohen'
+    && $school61['json']['stories'][0]['serial'] === '555001', $school61['body']);
+checkClean('school stories', $school61);
+$school269 = req('GET', '/schools/269/stories', null, 'admin');
+check('stories: the other school returns only its own', $school269['status'] === 200
+    && count($school269['json']['stories'] ?? []) === 1
+    && ($school269['json']['stories'][0]['name'] ?? '') === 'Shmuly Gold', $school269['body']);
+$ownSchool = req('GET', '/schools/61/stories', null, 'admin', ['LULAV_TEST_ADMIN' => 'school']);
+check('stories: a school admin gets their own school', $ownSchool['status'] === 200, $ownSchool['body']);
+$otherSchool = req('GET', '/schools/269/stories', null, 'admin', ['LULAV_TEST_ADMIN' => 'school']);
+check('stories: a school admin cannot read another school', $otherSchool['status'] === 403, $otherSchool['body']);
+check('stories: a soldier cannot read a school', req('GET', '/schools/61/stories', null, 'kid')['status'] === 403);
 
 
 echo "== sample send script ==\n";

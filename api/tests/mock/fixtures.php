@@ -234,10 +234,20 @@ function lulav_test_patterns(): array
         }],
 
         // --- marks -------------------------------------------------------------
-        ['/FROM date_tasks_marks m\b(?!ark)/i', static function (string $sql) {
+        ['/FROM date_tasks_marks m\b(?!ark)/i', static function (string $sql, array $params) {
             $rows = lulav_test_marks();
-            if (preg_match('/m\.user_id = :user/', $sql)) {
-                return $rows; // the harness narrows by fixture, not by SQL
+            // A school-scoped load (lulavLoadDayMarks with a school id) joins
+            // users and filters u.school_id; mirror that real filtering so a
+            // per-school read sees only that school's marks.
+            if (strpos($sql, 'u.school_id = :school') !== false && isset($params[':school'])) {
+                $school = (int) $params[':school'];
+                $byUser = [];
+                foreach (lulav_test_kids() as $kid) {
+                    $byUser[$kid['user_id']] = (int) $kid['school_id'];
+                }
+                $rows = array_values(array_filter($rows, static function (array $m) use ($byUser, $school): bool {
+                    return ($byUser[$m['user_id']] ?? null) === $school;
+                }));
             }
             return $rows;
         }],

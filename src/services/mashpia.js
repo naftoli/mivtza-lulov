@@ -193,8 +193,13 @@ export async function getAllApprovedPhotoTimes() {
 }
 export const getAllSchoolsPhotoZipLink = ({ from, to } = {}) =>
   req('/photos/download-link', { method: 'POST', body: { from, to }, as: 'admin' })
-// Every story soldiers submitted, across all schools (HQ only): one row per
-// story with the kid's name, rank, school, serial, day and the story text.
+// The stories soldiers submitted: one row per story with the kid's name, rank,
+// school, serial, day and the story text. Per school for any admin of it, or
+// across all schools (HQ only).
+export async function getStories(schoolId) {
+  const result = await req(`/schools/${schoolId}/stories`, { as: 'admin' })
+  return result.stories
+}
 export async function getAllStories() {
   const result = await req('/stories', { as: 'admin' })
   return result.stories
